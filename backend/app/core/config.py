@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "海龟汤社区平台"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
+    APP_URL: Optional[str] = "http://localhost:5173"  # 前端地址
     
     # 数据库配置
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/turtle_soup"
@@ -26,12 +27,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # 邮件配置
+    # 邮件配置 (SMTP)
     SMTP_HOST: str = "smtp.example.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@example.com"
+    VERIFICATION_CODE_EXPIRE_MINUTES: int = 30
     EMAIL_DOMAIN_WHITELIST: Optional[List[str]] = None  # 邮箱域名白名单
     
     # 对象存储配置
