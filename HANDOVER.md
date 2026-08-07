@@ -30,7 +30,7 @@
 - [x] 邮件服务配置
 - [x] 环境变量管理 (.env)
 
-#### 2. 数据模型 (15+ 张表)
+#### 2. 数据模型 (15+ 张表) - `backend/app/models/models.py`
 - [x] 用户表 (users) - 含角色、状态、积分
 - [x] 处罚表 (punishments) - 支持撤销与审计
 - [x] 帖子表 (posts)
@@ -51,19 +51,21 @@
 - [x] 操作日志表 (audit_logs)
 - [x] 签到表 (daily_signins)
 
-#### 3. API 路由模块
-- [x] `auth.py` - 注册/登录/JWT/刷新令牌
-- [x] `users.py` - 用户信息/签到/主页
-- [x] `posts.py` - 帖子 CRUD/评论/点赞/收藏
-- [x] `turtle_soups.py` - 海龟汤发布/评分/排行榜
-- [x] `competitions.py` - 比赛创建/作品收录/排名
-- [x] `social.py` - 关注/拉黑
-- [x] `messages.py` - 私信收发
-- [x] `achievements.py` - 成就定义/进度追踪
-- [x] `admin.py` - 用户管理/处罚/举报处理
-- [x] `search.py` - 全文搜索
+#### 3. API 路由模块 - `backend/app/api/`
+| 文件 | 大小 | 功能 |
+|------|------|------|
+| `auth.py` | 9.1KB | 注册/登录/JWT/刷新令牌 |
+| `users.py` | 10.5KB | 用户信息/签到/主页 |
+| `posts.py` | 3.6KB | 帖子 CRUD/评论/点赞/收藏 |
+| `turtle_soups.py` | 15.5KB | 海龟汤发布/评分/排行榜 |
+| `competitions.py` | 3.3KB | 比赛创建/作品收录/排名 |
+| `social.py` | 5.6KB | 关注/拉黑 |
+| `messages.py` | 5.4KB | 私信收发 |
+| `achievements.py` | 4.2KB | 成就定义/进度追踪 |
+| `admin.py` | 9.4KB | 用户管理/处罚/举报处理 |
+| `search.py` | 3.7KB | 全文搜索 |
 
-#### 4. 工具函数
+#### 4. 工具函数 - `backend/app/utils.py`
 - [x] 贝叶斯平均评分算法
 - [x] JWT 令牌生成与验证
 - [x] 密码哈希与验证
@@ -75,36 +77,36 @@
 ```
 frontend/
 ├── src/
-│   ├── api/           # API 调用封装
+│   ├── api/           # API 调用封装 (3 个文件)
 │   │   ├── http.ts    # Axios 实例与拦截器
 │   │   ├── auth.ts    # 认证相关 API
 │   │   └── soup.ts    # 海龟汤相关 API
 │   ├── assets/        # 静态资源
 │   │   └── main.css   # Tailwind + 自定义样式
-│   ├── components/    # 可复用组件
-│   │   ├── NavBar.vue       # 导航栏
+│   ├── components/    # 可复用组件 (3 个)
+│   │   ├── NavBar.vue       # 导航栏 (8KB)
 │   │   ├── Footer.vue       # 页脚
 │   │   └── ToastContainer.vue # 全局提示
 │   ├── router/        # 路由配置
-│   │   └── index.ts   # 路由守卫与权限
-│   ├── stores/        # Pinia 状态管理
+│   │   └── index.ts   # 路由守卫与权限 (3.6KB)
+│   ├── stores/        # Pinia 状态管理 (2 个)
 │   │   ├── auth.ts    # 认证状态
 │   │   └── soup.ts    # 海龟汤状态
 │   ├── types/         # TypeScript 类型定义
 │   │   └── index.ts   # 完整接口定义
 │   ├── utils/         # 工具函数
 │   └── views/         # 页面组件
-│       ├── HomeView.vue         # 首页
-│       ├── LoginView.vue        # 登录页
-│       ├── RegisterView.vue     # 注册页
-│       ├── LeaderboardView.vue  # 排行榜
+│       ├── HomeView.vue         # 首页 (7.4KB) ✅
+│       ├── LoginView.vue        # 登录页 (7.1KB) ✅
+│       ├── RegisterView.vue     # 注册页 (6KB) ✅
+│       ├── LeaderboardView.vue  # 排行榜 (4.7KB) ✅
 │       ├── soup/                # 海龟汤模块
-│       │   ├── SoupListView.vue
-│       │   ├── SoupCreateView.vue
-│       │   └── SoupDetailView.vue
-│       ├── post/                # 论坛模块
-│       ├── competition/         # 比赛模块
-│       └── admin/               # 管理后台
+│       │   ├── SoupListView.vue ✅ (10KB)
+│       │   ├── SoupCreateView.vue ⏳ (待实现)
+│       │   └── SoupDetailView.vue ⏳ (待实现)
+│       ├── post/                # 论坛模块 ⏳ (目录已建)
+│       ├── competition/         # 比赛模块 ⏳ (目录已建)
+│       └── admin/               # 管理后台 ⏳ (目录已建)
 ├── index.html
 ├── package.json
 ├── tsconfig.json
@@ -112,12 +114,23 @@ frontend/
 └── tailwind.config.js
 ```
 
-#### 2. 已实现页面
-- [x] 首页 (HomeView) - Hero 区域/特色展示/热门海龟汤
-- [x] 登录页 (LoginView) - 表单验证/错误提示
-- [x] 注册页 (RegisterView) - 密码强度验证
-- [x] 海龟汤列表页 (SoupListView) - 筛选/排序/分页
-- [x] 排行榜页 (LeaderboardView) - 贝叶斯/平均分切换
+#### 2. 已实现页面 (详细)
+| 页面 | 文件 | 大小 | 状态 | 功能 |
+|------|------|------|------|------|
+| 首页 | HomeView.vue | 7.4KB | ✅ | Hero 区域/特色展示/热门海龟汤 |
+| 登录 | LoginView.vue | 7.1KB | ✅ | 表单验证/错误提示/记住我 |
+| 注册 | RegisterView.vue | 6KB | ✅ | 密码强度验证/邮箱格式 |
+| 排行榜 | LeaderboardView.vue | 4.7KB | ✅ | 贝叶斯/平均分切换/前 100 名 |
+| 海龟汤列表 | SoupListView.vue | 10KB | ✅ | 筛选/排序/分页/标签 |
+| 海龟汤详情 | SoupDetailView.vue | - | ⏳ | 待实现 (汤底隐藏逻辑) |
+| 海龟汤发布 | SoupCreateView.vue | - | ⏳ | 待实现 (富文本编辑器) |
+| 个人主页 | ProfileView.vue | - | ⏳ | 待实现 |
+| 消息中心 | MessageView.vue | - | ⏳ | 待实现 |
+| 通知中心 | NotificationView.vue | - | ⏳ | 待实现 |
+| 论坛列表 | PostListView.vue | - | ⏳ | 待实现 |
+| 比赛列表 | CompetitionListView.vue | - | ⏳ | 待实现 |
+| 搜索 | SearchView.vue | - | ⏳ | 待实现 |
+| 设置 | SettingsView.vue | - | ⏳ | 待实现 |
 
 #### 3. 核心功能
 - [x] 路由守卫与权限控制
@@ -181,18 +194,37 @@ frontend/
 
 ## 🔄 运行逻辑
 
-### 1. 启动流程
+### 1. 启动流程 (PowerShell/Shell)
 
 ```bash
-# 一键启动脚本 (setup.sh / setup.bat)
+# 一键启动脚本 (setup.ps1 / setup.sh)
 1. 检查环境 (Python/Node.js)
 2. 创建虚拟环境并安装依赖
 3. 生成.env 配置文件
 4. 选择启动模式:
    - 仅后端 (FastAPI :8000)
    - 仅前端 (Vite :3000)
-   - 同时启动
+   - 同时启动 (推荐)
+   - 打开 API 文档
 ```
+
+### Windows PowerShell 使用说明
+
+1. **首次运行需要解除执行策略限制**:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\setup.ps1
+```
+
+2. **或者右键点击** `setup.ps1` 选择 "使用 PowerShell 运行"
+
+3. 脚本功能:
+   - ✅ 自动检测 Python 和 Node.js 版本
+   - ✅ 创建 Python 虚拟环境 (backend/venv)
+   - ✅ 安装前后端所有依赖
+   - ✅ 生成 .env 配置文件
+   - ✅ 提供交互式启动菜单
+   - ✅ 支持独立启动前后端服务
 
 ### 2. 请求处理流程
 
@@ -472,5 +504,21 @@ redis-cli ping
 ---
 
 **最后更新时间**: 2024-01-XX  
-**文档版本**: v1.0.0  
+**文档版本**: v1.1.0 (新增 PowerShell 启动脚本)  
 **维护者**: [待填写]
+
+## 📝 更新日志
+
+### v1.1.0 - 2024-01-XX
+- ✅ 新增 Windows PowerShell 启动脚本 (setup.ps1)
+- ✅ 修复 BAT 脚本编码问题
+- ✅ 完善启动脚本交互菜单
+- ✅ 更新 README 和交接文档
+- ✅ 前端 Vue 3 模块化架构完成
+- ✅ 后端 15+ 数据表模型定义完成
+- ✅ 10 个 API 路由模块框架完成
+
+### v1.0.0 - 2024-01-XX
+- ✅ 项目初始化
+- ✅ 基础架构搭建
+- ✅ 核心数据模型设计
