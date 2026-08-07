@@ -3,9 +3,10 @@
 包含所有核心数据表：用户、帖子、海龟汤、评论、评分、社交关系、比赛、成就、消息等
 """
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
+from sqlalchemy import JSON, Column
 
 # ==================== 枚举类型 ====================
 class UserRole(str, Enum):
@@ -102,7 +103,10 @@ class User(SQLModel, table=True):
     points: int = Field(default=0)
     last_signin: Optional[datetime] = None
     consecutive_signin_days: int = Field(default=0)
-    notification_prefs: dict = Field(default_factory=dict, sa_column_kwargs={"server_default": "{}"})
+    notification_prefs: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON())
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -133,7 +137,10 @@ class Post(SQLModel, table=True):
     content: str
     section: str = Field(default="general")
     post_type: PostType = Field(default=PostType.NORMAL)
-    tags: list = Field(default_factory=list, sa_column_kwargs={"server_default": "[]"})
+    tags: List[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
     status: str = Field(default="published")
     view_count: int = Field(default=0)
     like_count: int = Field(default=0)
@@ -166,7 +173,10 @@ class Soup(SQLModel, table=True):
     title: str
     puzzle: str
     solution: str
-    tags: list = Field(default_factory=list, sa_column_kwargs={"server_default": "[]"})
+    tags: List[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
     avg_rating: float = Field(default=0.0)
     rating_count: int = Field(default=0)
     bayesian_rating: float = Field(default=0.0)
@@ -234,10 +244,16 @@ class Competition(SQLModel, table=True):
     description: str
     start_time: datetime
     end_time: datetime
-    required_tags: list = Field(default_factory=list, sa_column_kwargs={"server_default": "[]"})
+    required_tags: List[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
     score_type: CompetitionScoreType = Field(default=CompetitionScoreType.AVERAGE)
     top_n: int = Field(default=10)
-    custom_page_config: dict = Field(default_factory=dict, sa_column_kwargs={"server_default": "{}"})
+    custom_page_config: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON())
+    )
     status: CompetitionStatus = Field(default=CompetitionStatus.PENDING)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     settled_at: Optional[datetime] = None
@@ -264,7 +280,10 @@ class Achievement(SQLModel, table=True):
     icon_url: Optional[str] = None
     title_id: Optional[int] = Field(default=None, foreign_key="titles.id")
     condition_type: AchievementConditionType
-    condition_params: dict = Field(default_factory=dict, sa_column_kwargs={"server_default": "{}"})
+    condition_params: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON())
+    )
     is_repeatable: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -336,11 +355,17 @@ class OperationLog(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     operator_uid: int = Field(foreign_key="users.uid", index=True)
-    operator_roles: list = Field(default_factory=list, sa_column_kwargs={"server_default": "[]"})
+    operator_roles: Optional[List[str]] = Field(
+        default_factory=list,
+        sa_column=JSON()
+    )
     action_type: str
     target_type: str
     target_id: Optional[int] = None
-    details: dict = Field(default_factory=dict, sa_column_kwargs={"server_default": "{}"})
+    details: Optional[dict] = Field(
+        default_factory=dict,
+        sa_column=JSON()
+    )
     ip_address: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
