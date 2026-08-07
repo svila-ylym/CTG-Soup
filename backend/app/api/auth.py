@@ -72,7 +72,7 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
     
-    user = db.query(User).filter(User.id == token_data.user_id).first()
+    user = db.query(User).filter(User.uid == token_data.user_id).first()
     if user is None:
         raise credentials_exception
     
@@ -201,11 +201,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     # 生成令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "username": user.username, "role": user.role},
+        data={"sub": user.uid, "username": user.username, "role": user.role},
         expires_delta=access_token_expires
     )
     refresh_token = create_refresh_token(
-        data={"sub": user.id, "username": user.username}
+        data={"sub": user.uid, "username": user.username}
     )
     
     # 更新最后登录时间等
@@ -237,7 +237,7 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.uid == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -254,11 +254,11 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
     # 生成新的访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "username": user.username, "role": user.role},
+        data={"sub": user.uid, "username": user.username, "role": user.role},
         expires_delta=access_token_expires
     )
     new_refresh_token = create_refresh_token(
-        data={"sub": user.id, "username": user.username}
+        data={"sub": user.uid, "username": user.username}
     )
     
     return {

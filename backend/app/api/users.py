@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta
 
-from app.models.database import get_db, User, Post, Comment, TurtleSoup, Like, Collection, Follow
+from app.models.database import get_db, User, Post, Comment, Soup as TurtleSoup, Like, Favorite as Collection, Follow
 from app.schemas import UserUpdate, UserResponse, PostResponse, CommentResponse, TurtleSoupResponse, PageResponse
 from app.api.auth import get_current_active_user, get_current_user
 from app.core.enums import AccountStatus
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
     """获取用户信息"""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.uid == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     return user
@@ -70,7 +70,7 @@ async def get_my_posts(
     offset = (page - 1) * page_size
     
     query = db.query(Post).filter(
-        Post.author_id == current_user.id,
+        Post.author_uid == current_user.uid,
         Post.status == "published"
     ).order_by(Post.created_at.desc())
     
@@ -79,6 +79,7 @@ async def get_my_posts(
     
     items = []
     for post in posts:
+        author = db.query(User).filter(User.uid == post.author_uid).first()
         items.append({
             "id": post.id,
             "title": post.title,
@@ -86,16 +87,16 @@ async def get_my_posts(
             "section": post.section,
             "post_type": post.post_type,
             "tags": post.tags,
-            "author_id": post.author_id,
-            "author_username": current_user.username,
-            "author_nickname": current_user.nickname,
+            "author_id": post.author_uid,
+            "author_username": author.username if author else "Unknown",
+            "author_nickname": author.nickname if author else "Unknown",
             "status": post.status,
             "like_count": post.like_count,
-            "collect_count": post.collect_count,
+            "collect_count": post.favorite_count,
             "comment_count": post.comment_count,
             "view_count": post.view_count,
-            "is_pinned": post.is_pinned,
-            "is_featured": post.is_featured,
+            "is_pinned": getattr(post, 'is_pinned', False),
+            "is_featured": getattr(post, 'is_featured', False),
             "created_at": post.created_at,
             "updated_at": post.updated_at,
         })
@@ -120,7 +121,7 @@ async def get_my_turtle_soups(
     offset = (page - 1) * page_size
     
     query = db.query(TurtleSoup).filter(
-        TurtleSoup.author_id == current_user.id,
+        TurtleSoup.author_uid == current_user.uid,
         TurtleSoup.status == "published"
     ).order_by(TurtleSoup.created_at.desc())
     
@@ -135,15 +136,15 @@ async def get_my_turtle_soups(
             "puzzle": soup.puzzle,
             "solution": soup.solution,
             "tags": soup.tags,
-            "author_id": soup.author_id,
+            "author_id": soup.author_uid,
             "author_username": current_user.username,
             "author_nickname": current_user.nickname,
-            "average_score": soup.average_score,
+            "average_score": soup.avg_rating,
             "rating_count": soup.rating_count,
             "like_count": soup.like_count,
-            "collect_count": soup.collect_count,
+            "collect_count": soup.favorite_count,
             "view_count": soup.view_count,
-            "is_revealed": soup.is_revealed,
+            "is_revealed": getattr(soup, 'is_revealed', False),
             "status": soup.status,
             "created_at": soup.created_at,
             "updated_at": soup.updated_at,
@@ -169,7 +170,7 @@ async def get_my_collections(
     """获取我的收藏"""
     offset = (page - 1) * page_size
     
-    query = db.query(Collection).filter(Collection.user_id == current_user.id)
+    query = db.query(Collection).filter(Collection.user_uid == current_user.uid)
     
     if target_type:
         query = query.filter(Collection.target_type == target_type)
@@ -182,7 +183,7 @@ async def get_my_collections(
     items = []
     for collection in collections:
         item_type = collection.target_type
-        item_id = collection.post_id if item_type == "post" else collection.turtle_soup_id
+        item_id = collection.target_id
         
         items.append({
             "id": collection.id,
