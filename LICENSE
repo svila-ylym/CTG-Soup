@@ -1,21 +1,95 @@
-MIT License
+SULL V1 [SkyUnreal Lab. LICENSE] 
 
-Copyright (c) 2026 unreal
+（以下简称"本协议"）
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+版本 1.0 
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+版权所有 (C) 2026 SkyUnreal(Svila-ylym) 
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+原仓库地址：https://github.com/svila-ylym/CTG-Soup
+
+=======================================================================
+
+1. 定义
+
+"本软件"指随附本协议的全部源代码、二进制文件、文档及相关资源，无论其存储形式如何。
+
+"原仓库"指本软件首次公开发布所使用的代码仓库，其 URL 应在本协议头部或软件所附版权声明中标明。
+
+"原作者"指原仓库所记载的版权所有者（即根仓库的创建者与权利人）。
+
+"您"指依照本协议取得本软件的任何个人或法律实体。
+
+"书面授权"指由原作者或原仓库明确签发、签署（含经确认的电子文本或邮件）的书面许可文件。
+
+"加密源码"指本软件中经过密码、混淆、加壳、专有编码等技术手段保护，使其不能直接以人类可读形式阅读的源代码部分。
+
+2. 默认许可范围
+
+除非您已事先取得原作者的书面授权，本协议仅授予您有限、非排他、不可转让的权利，允许您：
+
+(a) 查看、阅读本软件的源代码，且仅限于个人学习、研究或评估之目的；
+
+除此之外，您**严格禁止**从事下列任何行为，亦不得协助或促使他人从事：
+
+(b) 修改、改编、翻译或制作本软件的衍生作品；
+
+(c) 以任何形式复制、分发、出租、出售、许可、传播或以其他方式提供本软件或其衍生作品；
+
+(d) 将本软件或其任何部分用于商业目的或商业环境中；
+
+(e) 对本软件的全部或部分进行逆向工程、反编译、反汇编、解密、提取或破解，尤其是针对加密源码；
+
+(f) 以任何不正当手段获取、泄露或绕过本软件中包含的技术保护措施。
+
+3. 书面授权及其必须遵守的条件
+
+即使您已获得原作者的书面授权，可从事第 2 条中一项或多项原本禁止的行为，该授权并不免除您遵守以下条件的义务：
+
+(a) 在任何一份由您制作或分发的本软件副本或衍生作品中，您必须在显著位置（例如项目首页、说明文件或界面中）清楚地标注：
+
+- 原仓库的完整 URL；
+
+- 原作者姓名或名称；
+
+且不得对以上信息进行任何删除、篡改或遮掩。
+
+(b) 您对经过修改的本软件（衍生作品）进行分析、分发或公开时，**必须**同样以本协议（SULL V1）作为该衍生作品的整体许可协议，并保持本协议全文完整无缺。本条件的效力及于任何后续接收者。
+
+(c) 书面授权仅针对被授权人本人，不可转让、不可再许可，除非授权书中明确声明允许转让。
+
+4. 加密源码的特别限制
+
+本软件中可能包含加密源码。无论您是否已经依据第 3 条获得对软件的修改、分发等授权，您均不得对加密源码进行任何形式的破解、解密、反向推导或提取。
+
+对加密源码的任何破解行为，**必须且只能**由原作者（根仓库权利者）另行签发一份单独、明确的书面授权，其中须清晰载明"允许破解加密源码"或同等效力的表述。任何未经该特定授权的破解行为，均构成本协议的实质违反，原作者保留追究法律责任的全部权利。
+
+5. 许可的变更
+
+本软件的版权所有者（即原仓库的持有者）有权随时决定将本软件的全部许可更换为另一份许可协议（"新协议"）。此项许可变更：
+
+(a) 不得违反本协议（SULL V1）的条款；
+
+(b) 不得违反新协议本身的条款；
+
+(c) 不影响在许可变更之前，您依据本协议已经合法取得、且当时仍然有效的任何授权。该等既有授权继续受本协议条款约束，直至其依约终止。
+
+6. 免责声明
+
+本软件以"现状"提供，不附带任何形式的明示或默示担保，包括但不限于对适销性、特定用途的适用性、权利无瑕疵或不侵权的担保。在任何情况下，原作者或版权持有人对于因使用本软件或与本协议相关而产生的任何直接、间接、附带、特殊、惩罚性或后果性损害赔偿（包括但不限于数据丢失、业务中断或利润损失），概不承担任何责任，即便已被告知此类损害的可能性。
+
+7. 终止
+
+若您违反本协议的任何条款，您基于本协议所获得的一切权利将自动立即终止，无需另行通知。终止后，您必须立即停止使用本软件，并永久删除、销毁您持有或控制的所有本软件副本及衍生作品。本协议中按其性质应当在终止后存续的条款（包括但不限于免责声明、责任限制、原作者署名义务）应继续有效。
+
+8. 其他
+
+本协议未明确授予的一切权利均由原作者保留。
+
+本协议任何条款被有管辖权的法院或行政机关判定为无效或不可执行的，不影响其余条款的效力，且应在法律允许的最大范围内对该无效条款进行修改，以最接近其原始意图的方式使之有效。
+
+本协议适用原作者所在地法律，因本协议引起的争议由原作者所在地有管辖权法院专属管辖。
+
+=======================================================================
+
+使用本软件即表示您同意并接受本协议的全部条款。
