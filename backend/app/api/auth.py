@@ -9,7 +9,7 @@ import re
 from app.models.database import get_db, User
 from app.schemas import UserCreate, UserLogin, Token, UserResponse, TokenData
 from app.core.config import get_settings
-from app.core.enums import UserRole, AccountStatus
+from app.core.enums import UserRole, AccountStatus as UserAccountStatus
 
 router = APIRouter()
 
@@ -77,7 +77,7 @@ async def get_current_user(
         raise credentials_exception
     
     # 检查用户状态
-    if user.status == AccountStatus.BANNED:
+    if user.status == UserAccountStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
@@ -90,7 +90,7 @@ async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前活跃用户"""
-    if current_user.status not in [AccountStatus.ACTIVE]:
+    if current_user.status not in [UserAccountStatus.ACTIVE]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户未激活"
@@ -160,7 +160,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         email=user_data.email,
         hashed_password=hashed_password,
         role=UserRole.USER,
-        status=AccountStatus.PENDING_EMAIL,  # 待邮箱验证
+        status=UserAccountStatus.PENDING_EMAIL,  # 待邮箱验证
     )
     
     db.add(db_user)
@@ -188,14 +188,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 检查账户状态
-    if user.status == AccountStatus.BANNED:
+    if user.status == UserAccountStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
         )
     
-    if user.status == AccountStatus.PENDING_EMAIL:
+    if user.status == UserAccountStatus.PENDING_EMAIL:
         # 允许登录但提示验证邮箱
         pass
     
@@ -246,7 +245,7 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if user.status == AccountStatus.BANNED:
+    if user.status == UserAccountStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
