@@ -83,29 +83,8 @@ init_database() {
     
     # 创建 .env 文件
     if [ ! -f "backend/.env" ]; then
-        cat > backend/.env << EOF
-# 数据库配置
-DATABASE_URL=postgresql://user:password@localhost:5432/turtle_soup
-
-# Redis 配置
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# JWT 配置
-SECRET_KEY=your-secret-key-change-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# 邮件配置
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=your-email@example.com
-SMTP_PASSWORD=your-password
-
-# Elasticsearch 配置
-ELASTICSEARCH_HOST=localhost
-ELASTICSEARCH_PORT=9200
-EOF
+        cp backend/.env.example backend/.env
+        chmod 600 backend/.env
         echo -e "${GREEN}✓ 配置文件 backend/.env 已创建${NC}"
         echo -e "${YELLOW}⚠ 请编辑 backend/.env 文件配置数据库和其他服务${NC}"
     else
@@ -133,30 +112,30 @@ start_services() {
             echo -e "${GREEN}启动后端服务...${NC}"
             cd backend
             source venv/bin/activate
-            uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+            uvicorn app.main:app --reload --host 0.0.0.0 --port 10001
             ;;
         2)
             echo -e "${GREEN}启动前端服务...${NC}"
             cd frontend
-            npm run dev
+            npm run dev -- --host 0.0.0.0 --port 10000
             ;;
         3)
             echo -e "${GREEN}同时启动前后端服务...${NC}"
-            echo "后端将在 http://localhost:8000 运行"
-            echo "前端将在 http://localhost:5173 运行"
+            echo "后端将在 http://localhost:10001 运行"
+            echo "前端将在 http://localhost:10000 运行"
             echo ""
             echo "按 Ctrl+C 停止所有服务"
             
             # 启动后端（后台）
             cd backend
             source venv/bin/activate
-            uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+            uvicorn app.main:app --reload --host 0.0.0.0 --port 10001 &
             BACKEND_PID=$!
             cd ..
             
             # 启动前端
             cd frontend
-            npm run dev &
+            npm run dev -- --host 0.0.0.0 --port 10000 &
             FRONTEND_PID=$!
             cd ..
             

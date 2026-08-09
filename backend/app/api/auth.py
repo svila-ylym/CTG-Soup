@@ -1,45 +1,77 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
+from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 import re
 
-from app.models.database import get_db, User
-from app.schemas import UserCreate, UserLogin, Token, UserResponse, TokenData
+from app.models.database import EmailVerification, get_db, User, UserStatus
+from app.schemas import (
+    EmailVerificationRequest,
+    EmailVerificationResendRequest,
+    ChangePasswordRequest,
+    MessageResponse,
+    RefreshTokenRequest,
+    Token,
+    TokenData,
+    UserCreate,
+    UserResponse,
+)
 from app.core.config import get_settings
-from app.core.enums import UserRole, AccountStatus as UserAccountStatus
+from app.models.database import UserRole
+from app.services.email_verification import (
+    hash_verification_token,
+    new_verification_token,
+    verification_expiry,
+)
+from app.services.rate_limiter import rate_limiter
+from app.utils.email import get_smtp_service
 
 router = APIRouter()
 
 settings = get_settings()
 
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2方案
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login",
+    auto_error=False,
+)
+smtp_service = get_smtp_service()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """获取密码哈希"""
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        raise ValueError("密码不能超过72字节")
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     """创建访问令牌"""
     to_encode = data.copy()
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "token_type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -47,17 +79,15 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
 def create_refresh_token(data: dict) -> str:
     """创建刷新令牌"""
     to_encode = data.copy()
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "token_type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> User:
-    """获取当前用户"""
+def decode_token(token: str, expected_type: str) -> dict:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无法验证凭据",
@@ -65,32 +95,69 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        if payload.get("token_type") != expected_type or payload.get("sub") is None:
             raise credentials_exception
-        token_data = TokenData(user_id=user_id)
-    except JWTError:
-        raise credentials_exception
+        return payload
+    except JWTError as exc:
+        raise credentials_exception from exc
+
+
+def _resolve_user_from_token(token: str, db: Session) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无法验证凭据",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    payload = decode_token(token, expected_type="access")
+    try:
+        token_data = TokenData(user_id=int(payload["sub"]))
+    except (TypeError, ValueError) as exc:
+        raise credentials_exception from exc
     
-    user = db.query(User).filter(User.id == token_data.user_id).first()
+    user = db.query(User).filter(User.uid == token_data.user_id).first()
     if user is None:
+        raise credentials_exception
+    if payload.get("ver") != user.token_version:
         raise credentials_exception
     
     # 检查用户状态
-    if user.status == UserAccountStatus.BANNED:
+    if user.status == UserStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
         )
+    if user.status == UserStatus.PENDING_EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先完成邮箱验证",
+        )
     
     return user
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """获取当前用户"""
+    return _resolve_user_from_token(token, db)
+
+
+async def get_optional_current_user(
+    token: Optional[str] = Depends(optional_oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Return an authenticated user when a bearer token was supplied."""
+    if token is None:
+        return None
+    return _resolve_user_from_token(token, db)
 
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前活跃用户"""
-    if current_user.status not in [UserAccountStatus.ACTIVE]:
+    if current_user.status not in [UserStatus.ACTIVE]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户未激活"
@@ -114,10 +181,15 @@ async def get_current_root_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前根用户"""
+    if current_user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ACCOUNT_INACTIVE", "message": "账户未激活"},
+        )
     if current_user.role != UserRole.ROOT:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="需要根用户权限"
+            detail={"code": "ROOT_REQUIRED", "message": "需要根用户权限"},
         )
     return current_user
 
@@ -131,12 +203,69 @@ def validate_email_domain(email: str) -> bool:
     return domain in settings.EMAIL_DOMAIN_WHITELIST
 
 
+def _create_verification(
+    db: Session,
+    user: User,
+    now: datetime,
+) -> str:
+    active_records = db.query(EmailVerification).filter(
+        EmailVerification.user_uid == user.uid,
+        EmailVerification.used_at.is_(None),
+    ).all()
+    for record in active_records:
+        record.used_at = now
+
+    token = new_verification_token()
+    db.add(
+        EmailVerification(
+            user_uid=user.uid,
+            token_hash=hash_verification_token(token),
+            expires_at=verification_expiry(
+                now,
+                settings.VERIFICATION_CODE_EXPIRE_MINUTES,
+            ),
+        )
+    )
+    return token
+
+
+def _request_ip(request: Optional[Request]) -> str:
+    if request is None or request.client is None:
+        return "unknown"
+    return request.client.host
+
+
+def _allow_verification_email(ip_address: str, email: str) -> bool:
+    checks = (
+        ("email-ip", ip_address, settings.EMAIL_VERIFICATION_IP_LIMIT, settings.EMAIL_VERIFICATION_IP_WINDOW_SECONDS),
+        ("email-address", email, settings.EMAIL_VERIFICATION_EMAIL_LIMIT, settings.EMAIL_VERIFICATION_EMAIL_WINDOW_SECONDS),
+        ("email-global", "all", settings.EMAIL_VERIFICATION_GLOBAL_LIMIT, settings.EMAIL_VERIFICATION_GLOBAL_WINDOW_SECONDS),
+    )
+    return all(
+        rate_limiter.allow(scope, key, limit, window_seconds)
+        for scope, key, limit, window_seconds in checks
+    )
+
+
+def _send_verification_email(email: str, username: str, token: str) -> bool:
+    for _ in range(settings.SMTP_VERIFICATION_RETRY_ATTEMPTS):
+        if smtp_service.send_verification_email(email, username, token):
+            return True
+    return False
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    request: Request = None,
+):
     """用户注册"""
     # 检查用户名是否已存在
+    username = user_data.username.strip()
+    email = user_data.email.lower()
     existing_user = db.query(User).filter(
-        (User.username == user_data.username) | (User.email == user_data.email)
+        (User.username == username) | (User.email == email)
     ).first()
     
     if existing_user:
@@ -146,31 +275,131 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         )
     
     # 验证邮箱域名白名单
-    if not validate_email_domain(user_data.email):
+    if not validate_email_domain(email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="邮箱域名不在允许列表中"
+        )
+
+    if not _allow_verification_email(_request_ip(request), email):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="请求过于频繁，请稍后再试",
         )
     
     # 创建新用户
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
-        username=user_data.username,
+        username=username,
         nickname=user_data.nickname,
-        email=user_data.email,
+        email=email,
         hashed_password=hashed_password,
         role=UserRole.USER,
-        status=UserAccountStatus.PENDING_EMAIL,  # 待邮箱验证
+        status=UserStatus.PENDING_EMAIL,
     )
-    
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    # TODO: 发送验证邮件
-    # await send_verification_email(db_user.email, db_user.uid)
+
+    try:
+        db.add(db_user)
+        db.flush()
+        token = _create_verification(db, db_user, datetime.utcnow())
+        db.commit()
+        db.refresh(db_user)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名或邮箱已被注册",
+        ) from exc
+
+    if not _send_verification_email(db_user.email, db_user.username, token):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="账号已创建，但验证邮件发送失败，请稍后重新发送",
+        )
     
     return db_user
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(
+    request: EmailVerificationRequest,
+    db: Session = Depends(get_db),
+):
+    now = datetime.utcnow()
+    verification = db.query(EmailVerification).filter(
+        EmailVerification.token_hash == hash_verification_token(request.token),
+    ).with_for_update().first()
+    if verification is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "VERIFICATION_INVALID", "message": "验证链接无效"},
+        )
+
+    user = db.query(User).filter(User.uid == verification.user_uid).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "VERIFICATION_INVALID", "message": "验证链接无效"},
+        )
+
+    if verification.used_at is not None:
+        if user.status == UserStatus.ACTIVE:
+            return {"message": "邮箱已验证"}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "VERIFICATION_INVALID", "message": "验证链接无效"},
+        )
+
+    if verification.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VERIFICATION_EXPIRED",
+                "message": "验证链接已过期，请重新发送",
+            },
+        )
+
+    verification.used_at = now
+    user.status = UserStatus.ACTIVE
+    db.commit()
+    return {"message": "邮箱验证成功，请登录"}
+
+
+@router.post("/send-verification", response_model=MessageResponse)
+async def resend_verification_email(
+    request: EmailVerificationResendRequest,
+    db: Session = Depends(get_db),
+    http_request: Request = None,
+):
+    generic_message = "如果该邮箱存在且尚未验证，系统将发送验证邮件"
+    user = db.query(User).filter(User.email == request.email.lower()).first()
+    if user is None or user.status != UserStatus.PENDING_EMAIL:
+        return {"message": generic_message}
+
+    if not _allow_verification_email(_request_ip(http_request), user.email):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="请求过于频繁，请稍后再试",
+        )
+
+    now = datetime.utcnow()
+    latest = db.query(EmailVerification).filter(
+        EmailVerification.user_uid == user.uid,
+    ).order_by(EmailVerification.created_at.desc()).first()
+    if latest and (now - latest.created_at).total_seconds() < 60:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="请求过于频繁，请稍后再试",
+        )
+
+    token = _create_verification(db, user, now)
+    db.commit()
+    if not _send_verification_email(user.email, user.username, token):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="验证邮件发送失败，请稍后再试",
+        )
+    return {"message": generic_message}
 
 
 @router.post("/login", response_model=Token)
@@ -188,24 +417,34 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if user.status == UserAccountStatus.BANNED:
+    if user.status == UserStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
         )
-    
-    if user.status == UserAccountStatus.PENDING_EMAIL:
-        # 允许登录但提示验证邮箱
-        pass
+    if user.status == UserStatus.PENDING_EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先完成邮箱验证",
+        )
     
     # 生成令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "username": user.username, "role": user.role},
+        data={
+            "sub": user.uid,
+            "username": user.username,
+            "role": user.role.value,
+            "ver": user.token_version,
+        },
         expires_delta=access_token_expires
     )
     refresh_token = create_refresh_token(
-        data={"sub": user.id, "username": user.username}
+        data={
+            "sub": user.uid,
+            "username": user.username,
+            "ver": user.token_version,
+        }
     )
     
     # 更新最后登录时间等
@@ -219,46 +458,60 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
+async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
     """刷新令牌"""
     try:
-        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的刷新令牌",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except JWTError:
+        payload = decode_token(request.refresh_token, expected_type="refresh")
+        user_id = int(payload["sub"])
+    except (HTTPException, TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的刷新令牌",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.uid == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的刷新令牌",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
-    if user.status == UserAccountStatus.BANNED:
+    if user.status == UserStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被封禁"
+        )
+    if user.status == UserStatus.PENDING_EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先完成邮箱验证",
         )
     
     # 生成新的访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "username": user.username, "role": user.role},
+        data={
+            "sub": user.uid,
+            "username": user.username,
+            "role": user.role.value,
+            "ver": user.token_version,
+        },
         expires_delta=access_token_expires
     )
     new_refresh_token = create_refresh_token(
-        data={"sub": user.id, "username": user.username}
+        data={
+            "sub": user.uid,
+            "username": user.username,
+            "ver": user.token_version,
+        }
     )
     
     return {
@@ -272,6 +525,30 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
 async def get_me(current_user: User = Depends(get_current_active_user)):
     """获取当前用户信息"""
     return current_user
+
+
+@router.put("/change-password", response_model=MessageResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(request.old_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "PASSWORD_INCORRECT", "message": "原密码不正确"},
+        )
+    if verify_password(request.new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "PASSWORD_UNCHANGED", "message": "新密码不能与原密码相同"},
+        )
+
+    current_user.hashed_password = get_password_hash(request.new_password)
+    current_user.token_version += 1
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "密码已修改，请重新登录"}
 
 
 @router.post("/logout")

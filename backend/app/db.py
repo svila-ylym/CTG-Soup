@@ -1,29 +1,67 @@
-"""
-数据库连接与初始化
-从环境变量读取配置，支持 PostgreSQL
-"""
-import os
-from sqlmodel import SQLModel, create_engine, Session
+"""Database engine, optional local provisioning, and session lifecycle."""
+
+import logging
 from typing import Generator
-from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+import psycopg2
+from psycopg2 import sql
+from sqlalchemy.engine import make_url
+from sqlmodel import SQLModel, Session, create_engine
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/turtle_soup")
+from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+DATABASE_URL = settings.DATABASE_URL
 
 engine = create_engine(
     DATABASE_URL,
-    echo=os.getenv("DEBUG", "False").lower() == "true",  # 开发环境开启 SQL 日志
-    pool_pre_ping=True,  # 自动重连
-    pool_size=10,
-    max_overflow=20
+    echo=settings.DEBUG,
+    pool_pre_ping=True,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
 )
 
-def init_db():
-    """初始化数据库表"""
+
+def ensure_database_exists(database_url: str, enabled: bool) -> None:
+    """Create a missing PostgreSQL database when local provisioning is enabled."""
+    if not enabled:
+        return
+
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql") or not url.database:
+        return
+
+    database_name = url.database
+    maintenance_url = url.set(database="postgres")
+    connect_args = maintenance_url.translate_connect_args(
+        username="user",
+        database="dbname",
+    )
+    connect_args.update(maintenance_url.query)
+    connection = psycopg2.connect(**connect_args)
+    try:
+        connection.autocommit = True
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s",
+                (database_name,),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name))
+                )
+                logger.info("Created local PostgreSQL database %s", database_name)
+    finally:
+        connection.close()
+
+
+def init_db() -> None:
+    """Provision the local database when enabled, then create missing tables."""
+    ensure_database_exists(DATABASE_URL, settings.AUTO_CREATE_DATABASE)
     SQLModel.metadata.create_all(bind=engine)
-    print("✓ 数据库表初始化完成")
+
 
 def get_session() -> Generator[Session, None, None]:
     session = Session(engine)

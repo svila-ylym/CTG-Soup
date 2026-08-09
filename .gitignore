@@ -1,1 +1,39 @@
-Nothing should be ignored based on the provided file changes. The changes consist only of source code files (.py) and a configuration file (.gitignore), with no build artifacts, dependencies, or temporary files present in the change list.
+# Environment and secrets
+.env
+.env.*
+!.env.example
+GithubPAT.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+.venv*/
+venv/
+
+# Node and frontend builds
+node_modules/
+dist/
+test-results/
+*.tsbuildinfo
+
+# Runtime data
+storage/
+private-storage/
+backups/
+*.log
+archive.zip
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local worktrees
+.worktrees/

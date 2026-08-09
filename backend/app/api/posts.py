@@ -1,117 +1,268 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
-from app.models.database import get_db, Post, User, Like, Collection, Comment
-from app.schemas import PostCreate, PostUpdate, PostResponse, PageResponse
-from app.api.auth import get_current_active_user, get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import Session, select
+
+from app.api.auth import get_current_active_user, get_optional_current_user
+from app.models.database import Comment, CommentTargetType, MentionTargetType, Post, User, get_db
+from app.schemas.community import (
+    PostCommentCreate,
+    PostCommentPageResponse,
+    PostCommentResponse,
+    PostCreate,
+    PostPageResponse,
+    PostResponse,
+    PostUpdate,
+)
+from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
 
 router = APIRouter()
 
 
-@router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
-async def create_post(
-    post_data: PostCreate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """发布帖子"""
-    db_post = Post(
-        author_id=current_user.id,
-        title=post_data.title,
-        content=post_data.content,
-        section=post_data.section,
-        post_type=post_data.post_type,
-        tags=post_data.tags,
-        vote_config=post_data.vote_config,
-        status="published",
-    )
-    
-    db.add(db_post)
-    db.commit()
-    db.refresh(db_post)
-    
-    return db_post
+def _author(db: Session, uid: int) -> dict:
+    user = db.get(User, uid)
+    return {
+        "uid": uid,
+        "username": user.username if user else "unknown",
+        "nickname": user.nickname if user else "未知用户",
+        "avatar_url": user.avatar_url if user else None,
+    }
 
 
-@router.get("/{post_id}", response_model=PostResponse)
-async def get_post(
-    post_id: int,
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """获取帖子详情"""
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="帖子不存在")
-    
-    if post.status != "published":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="帖子不可见")
-    
-    post.view_count += 1
-    db.commit()
-    
+def _payload(db: Session, post: Post) -> dict:
+    return {
+        "id": post.id,
+        "author_uid": post.author_uid,
+        "author": _author(db, post.author_uid),
+        "title": post.title,
+        "content": post.content,
+        "section": post.section,
+        "post_type": post.post_type,
+        "tags": post.tags,
+        "status": post.status,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+        "favorite_count": post.favorite_count,
+        "view_count": post.view_count,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
+        "mentions": mention_refs(db, MentionTargetType.POST, post.id),
+    }
+
+
+def _comment_payload(
+    db: Session,
+    comment: Comment,
+    replies: Optional[list[dict]] = None,
+) -> dict:
+    return {
+        "id": comment.id,
+        "author_uid": comment.author_uid,
+        "author": _author(db, comment.author_uid),
+        "content": comment.content,
+        "parent_id": comment.parent_id,
+        "mentions": mention_refs(db, MentionTargetType.COMMENT, comment.id),
+        "created_at": comment.created_at,
+        "replies": replies or [],
+    }
+
+
+def _get_visible_post(db: Session, post_id: int) -> Post:
+    post = db.get(Post, post_id)
+    if post is None or post.status != "published":
+        raise HTTPException(status_code=404, detail="帖子不存在")
     return post
 
 
-@router.get("")
-async def list_posts(
+@router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
+def create_post(
+    data: PostCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    post = Post(
+        author_uid=current_user.uid,
+        title=data.title.strip(),
+        content=data.content.strip(),
+        section=data.section.strip(),
+        post_type=data.post_type,
+        tags=list(dict.fromkeys(tag.strip() for tag in data.tags if tag.strip())),
+    )
+    db.add(post)
+    db.flush()
+    sync_mentions(
+        db,
+        current_user.uid,
+        MentionTargetType.POST,
+        post.id,
+        post.content,
+    )
+    db.commit()
+    db.refresh(post)
+    return _payload(db, post)
+
+
+@router.get("", response_model=PostPageResponse)
+def list_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     section: Optional[str] = None,
     tag: Optional[str] = None,
-    sort_by: str = Query("created_at"),
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    sort_by: str = Query("created_at", pattern="^(created_at|like_count|comment_count)$"),
+    _current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
 ):
-    """获取帖子列表"""
-    offset = (page - 1) * page_size
-    
-    query = db.query(Post).filter(Post.status == "published")
-    
+    query = select(Post).where(Post.status == "published")
     if section:
-        query = query.filter(Post.section == section)
+        query = query.where(Post.section == section)
+    rows = db.exec(query).all()
     if tag:
-        query = query.filter(Post.tags.contains([tag]))
-    
-    if sort_by == "like_count":
-        query = query.order_by(Post.like_count.desc())
-    elif sort_by == "comment_count":
-        query = query.order_by(Post.comment_count.desc())
-    else:
-        query = query.order_by(Post.created_at.desc())
-    
-    total = query.count()
-    posts = query.offset(offset).limit(page_size).all()
-    
-    items = []
-    for post in posts:
-        items.append({
-            "id": post.id,
-            "title": post.title,
-            "content": post.content,
-            "section": post.section,
-            "post_type": post.post_type,
-            "tags": post.tags,
-            "author_id": post.author_id,
-            "author_username": post.author.username,
-            "author_nickname": post.author.nickname,
-            "status": post.status,
-            "like_count": post.like_count,
-            "collect_count": post.collect_count,
-            "comment_count": post.comment_count,
-            "view_count": post.view_count,
-            "is_pinned": post.is_pinned,
-            "is_featured": post.is_featured,
-            "created_at": post.created_at,
-            "updated_at": post.updated_at,
-        })
-    
+        rows = [post for post in rows if tag in post.tags]
+    rows.sort(
+        key=lambda post: getattr(post, sort_by),
+        reverse=True,
+    )
+    total = len(rows)
+    rows = rows[(page - 1) * page_size : page * page_size]
     return {
-        "items": items,
+        "items": [_payload(db, post) for post in rows],
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
+        "total_pages": (total + page_size - 1) // page_size,
     }
+
+
+@router.get("/{post_id}", response_model=PostResponse)
+def get_post(
+    post_id: int,
+    _current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    post = _get_visible_post(db, post_id)
+    post.view_count += 1
+    db.commit()
+    db.refresh(post)
+    return _payload(db, post)
+
+
+@router.put("/{post_id}", response_model=PostResponse)
+def update_post(
+    post_id: int,
+    data: PostUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    post = _get_visible_post(db, post_id)
+    if post.author_uid != current_user.uid and current_user.role.value not in {"admin", "root"}:
+        raise HTTPException(status_code=403, detail="无权更新此帖子")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(post, key, value)
+    if data.content is not None:
+        post.content = data.content.strip()
+        sync_mentions(
+            db,
+            current_user.uid,
+            MentionTargetType.POST,
+            post.id,
+            post.content,
+        )
+    post.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(post)
+    return _payload(db, post)
+
+
+@router.get("/{post_id}/comments", response_model=PostCommentPageResponse)
+def list_post_comments(
+    post_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    _get_visible_post(db, post_id)
+    roots = db.exec(
+        select(Comment)
+        .where(
+            Comment.target_type == CommentTargetType.POST,
+            Comment.target_id == post_id,
+            Comment.parent_id.is_(None),
+            Comment.status == "published",
+        )
+        .order_by(Comment.created_at.desc(), Comment.id.desc())
+    ).all()
+    total = len(roots)
+    roots = roots[(page - 1) * page_size : page * page_size]
+    root_ids = [comment.id for comment in roots]
+    replies_by_parent: dict[int, list[dict]] = {comment_id: [] for comment_id in root_ids}
+    if root_ids:
+        replies = db.exec(
+            select(Comment)
+            .where(
+                Comment.target_type == CommentTargetType.POST,
+                Comment.target_id == post_id,
+                Comment.parent_id.in_(root_ids),
+                Comment.status == "published",
+            )
+            .order_by(Comment.created_at, Comment.id)
+        ).all()
+        for reply in replies:
+            replies_by_parent[reply.parent_id].append(_comment_payload(db, reply))
+    return {
+        "items": [
+            _comment_payload(db, comment, replies_by_parent[comment.id])
+            for comment in roots
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.post(
+    "/{post_id}/comments",
+    response_model=PostCommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_post_comment(
+    post_id: int,
+    data: PostCommentCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    post = _get_visible_post(db, post_id)
+    parent = None
+    if data.parent_id is not None:
+        parent = db.get(Comment, data.parent_id)
+        if (
+            parent is None
+            or parent.target_type != CommentTargetType.POST
+            or parent.target_id != post_id
+            or parent.parent_id is not None
+            or parent.status != "published"
+        ):
+            raise HTTPException(status_code=422, detail={"code": "INVALID_COMMENT_PARENT", "message": "回复目标不存在或不可回复"})
+    comment = Comment(
+        author_uid=current_user.uid,
+        target_type=CommentTargetType.POST,
+        target_id=post_id,
+        content=data.content,
+        parent_id=data.parent_id,
+    )
+    db.add(comment)
+    db.flush()
+    mentions = sync_mentions(
+        db,
+        current_user.uid,
+        MentionTargetType.COMMENT,
+        comment.id,
+        comment.content,
+    )
+    if parent is not None:
+        notify_comment_reply(db, current_user.uid, parent, {item.uid for item in mentions})
+    post.comment_count += 1
+    db.commit()
+    db.refresh(comment)
+    return _comment_payload(db, comment)

@@ -1,14 +1,13 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
-    <div class="container mx-auto px-4 max-w-4xl">
+  <main class="page-shell">
+    <div class="page-container max-w-4xl">
       <!-- 页面标题 -->
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">发布海龟汤</h1>
-        <p class="text-gray-600 dark:text-gray-400">分享你的创意谜题，挑战其他玩家的推理能力</p>
       </div>
 
       <!-- 发布表单 -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+      <div class="border-y border-slate-200 bg-white py-8 dark:border-neutral-800 dark:bg-black sm:px-8">
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <!-- 标题 -->
           <div>
@@ -21,7 +20,7 @@
               type="text"
               required
               maxlength="200"
-              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              class="form-control"
               placeholder="给您的海龟汤起一个吸引人的标题"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ formData.title.length }}/200</p>
@@ -37,10 +36,9 @@
               v-model="formData.puzzle"
               rows="6"
               required
-              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+              class="form-control resize-none"
               placeholder="描述海龟汤的谜面，让玩家通过提问来猜测真相"
             ></textarea>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">尽量简洁明了，但包含足够的线索</p>
           </div>
 
           <!-- 汤底 -->
@@ -53,10 +51,39 @@
               v-model="formData.solution"
               rows="8"
               required
-              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition resize-none"
+              class="w-full resize-none rounded-md border border-gray-300 bg-white px-4 py-3 text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
               placeholder="这是只有作者能看到的汤底，请详细描述真相"
             ></textarea>
-            <p class="mt-1 text-xs text-purple-500 dark:text-purple-400">🔒 汤底仅作者和管理员可见</p>
+            <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">详情页默认隐藏，读者确认后可以展开。</p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              流派 <span class="text-red-500">*</span>
+              <select v-model="formData.genre" required class="form-control mt-2">
+                <option disabled value="">请选择流派</option>
+                <option value="本格">本格</option>
+                <option value="变格">变格</option>
+                <option value="鳖汤">鳖汤</option>
+              </select>
+            </label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              汤色 <span class="text-red-500">*</span>
+              <select v-model="formData.soup_color" required class="form-control mt-2">
+                <option disabled value="">请选择汤色</option>
+                <option value="清汤">清汤</option>
+                <option value="红汤">红汤</option>
+                <option value="黑汤">黑汤</option>
+              </select>
+            </label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              主要人物 <span class="text-red-500">*</span>
+              <input v-model="formData.main_player_count" type="text" class="form-control mt-2" />
+            </label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              次要人物 <span class="text-red-500">*</span>
+              <input v-model="formData.secondary_player_count" type="text" class="form-control mt-2" />
+            </label>
           </div>
 
           <!-- 标签 -->
@@ -66,15 +93,13 @@
             </label>
             <div class="flex flex-wrap gap-2 mb-3">
               <span
-                v-for="tag in formData.tags"
+                v-for="tag in formData.custom_tags"
                 :key="tag"
-                class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm flex items-center"
+                class="flex max-w-full items-center break-all rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
               >
                 #{{ tag }}
-                <button type="button" @click="removeTag(tag)" class="ml-2 hover:text-blue-800 dark:hover:text-blue-300">
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                  </svg>
+                <button type="button" @click="removeTag(tag)" class="ml-2 flex h-5 w-5 items-center justify-center hover:text-blue-800 dark:hover:text-blue-300" aria-label="移除标签" title="移除标签">
+                  <XMarkIcon class="h-4 w-4" aria-hidden="true" />
                 </button>
               </span>
             </div>
@@ -83,14 +108,14 @@
                 v-model="newTag"
                 @keyup.enter="addTag"
                 type="text"
-                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="输入标签后按回车添加"
                 maxlength="20"
               />
               <button
                 type="button"
                 @click="addTag"
-                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                class="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition hover:bg-gray-200 dark:bg-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-700"
               >
                 添加
               </button>
@@ -100,12 +125,19 @@
               <span class="text-xs text-gray-500 dark:text-gray-400">推荐：</span>
               <button
                 v-for="tag in suggestedTags"
-                :key="tag"
+                :key="tag.id"
                 type="button"
                 @click="addSuggestedTag(tag)"
-                class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                :class="[
+                  'inline-flex max-w-full items-center gap-1 break-all rounded px-2 py-1 text-xs transition',
+                  formData.tag_ids.includes(tag.id)
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-gray-400 dark:hover:bg-neutral-700',
+                ]"
               >
-                + {{ tag }}
+                <CheckIcon v-if="formData.tag_ids.includes(tag.id)" class="h-3.5 w-3.5" aria-hidden="true" />
+                <PlusIcon v-else class="h-3.5 w-3.5" aria-hidden="true" />
+                {{ tag.name }}
               </button>
             </div>
           </div>
@@ -133,58 +165,33 @@
             <button
               type="submit"
               :disabled="isSubmitting"
-              class="flex-1 flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition transform hover:scale-[1.02]"
+              class="flex flex-1 justify-center rounded-md border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span v-if="isSubmitting">
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                发布中...
-              </span>
-              <span v-else>🚀 发布海龟汤</span>
+              <ArrowPathIcon v-if="isSubmitting" class="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+              <PaperAirplaneIcon v-else class="mr-2 h-5 w-5" aria-hidden="true" />
+              {{ isSubmitting ? '发布中…' : '发布海龟汤' }}
             </button>
             <router-link
               to="/soups"
-              class="px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              class="rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition hover:bg-slate-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-300 dark:hover:bg-neutral-800"
             >
               取消
             </router-link>
           </div>
         </form>
       </div>
-
-      <!-- 发布指南 -->
-      <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6">
-        <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">💡 发布指南</h3>
-        <ul class="space-y-2 text-sm text-blue-800 dark:text-blue-400">
-          <li class="flex items-start">
-            <span class="mr-2">•</span>
-            <span>谜面应该简洁但包含足够的线索，让玩家能够通过提问逐步接近真相</span>
-          </li>
-          <li class="flex items-start">
-            <span class="mr-2">•</span>
-            <span>汤底应该逻辑自洽，解释谜面中的所有关键点</span>
-          </li>
-          <li class="flex items-start">
-            <span class="mr-2">•</span>
-            <span>选择合适的标签可以帮助玩家找到您的作品</span>
-          </li>
-          <li class="flex items-start">
-            <span class="mr-2">•</span>
-            <span>请确保内容为原创或已获得授权</span>
-          </li>
-        </ul>
-      </div>
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ArrowPathIcon, CheckIcon, PaperAirplaneIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useSoupStore } from '@/stores/soup'
 import { useAuthStore } from '@/stores/auth'
+import { tagApi } from '@/api/tags'
+import type { Tag } from '@/types'
 
 const router = useRouter()
 const soupStore = useSoupStore()
@@ -194,33 +201,51 @@ const newTag = ref('')
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
-const suggestedTags = ['悬疑', '恐怖', '搞笑', '温情', '烧脑', '经典', '原创', '剧情']
+const suggestedTags = ref<Tag[]>([])
 
 const formData = reactive({
   title: '',
   puzzle: '',
   solution: '',
-  tags: [] as string[],
+  genre: '' as '' | '本格' | '变格' | '鳖汤',
+  soup_color: '' as '' | '清汤' | '红汤' | '黑汤',
+  main_player_count: '',
+  secondary_player_count: '',
+  tag_ids: [] as number[],
+  custom_tags: [] as string[],
   is_revealed: false,
 })
 
 const addTag = () => {
   const tag = newTag.value.trim()
-  if (tag && !formData.tags.includes(tag) && formData.tags.length < 10) {
-    formData.tags.push(tag)
+  if (tag && !formData.custom_tags.includes(tag) && formData.custom_tags.length + formData.tag_ids.length < 10) {
+    formData.custom_tags.push(tag)
     newTag.value = ''
   }
 }
 
 const removeTag = (tag: string) => {
-  formData.tags = formData.tags.filter(t => t !== tag)
+  formData.custom_tags = formData.custom_tags.filter(t => t !== tag)
 }
 
-const addSuggestedTag = (tag: string) => {
-  if (!formData.tags.includes(tag) && formData.tags.length < 10) {
-    formData.tags.push(tag)
+const addSuggestedTag = (tag: Tag) => {
+  if (formData.tag_ids.includes(tag.id)) {
+    formData.tag_ids = formData.tag_ids.filter(id => id !== tag.id)
+    return
+  }
+  if (formData.custom_tags.length + formData.tag_ids.length < 10) {
+    formData.tag_ids.push(tag.id)
   }
 }
+
+onMounted(async () => {
+  try {
+    const response = await tagApi.list({ page: 1, page_size: 20, sort_by: 'usage_count' })
+    suggestedTags.value = response.data.items
+  } catch {
+    suggestedTags.value = []
+  }
+})
 
 const handleSubmit = async () => {
   // 验证登录状态
@@ -242,6 +267,10 @@ const handleSubmit = async () => {
     errorMessage.value = '请输入汤底'
     return
   }
+  if (!formData.genre || !formData.soup_color) {
+    errorMessage.value = '请选择流派和汤色'
+    return
+  }
 
   isSubmitting.value = true
   errorMessage.value = ''
@@ -251,7 +280,13 @@ const handleSubmit = async () => {
       title: formData.title.trim(),
       puzzle: formData.puzzle.trim(),
       solution: formData.solution.trim(),
-      tags: formData.tags,
+      genre: formData.genre,
+      soup_color: formData.soup_color,
+      main_player_count: formData.main_player_count,
+      secondary_player_count: formData.secondary_player_count,
+      tag_ids: formData.tag_ids,
+      custom_tags: formData.custom_tags,
+      is_revealed: formData.is_revealed,
     })
 
     // 显示成功提示

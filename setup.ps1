@@ -84,21 +84,7 @@ function Generate-Env {
     Write-Host "[5/5] Checking configuration file..." -ForegroundColor Yellow
     if (!(Test-Path $EnvFile)) {
         Write-Host "  -> Generating default .env configuration file..." -ForegroundColor Gray
-        $envContent = @"
-DATABASE_URL=postgresql://postgres:password@localhost:5432/turtle_soup
-REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=change-this-to-a-random-secret-key-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=user@example.com
-SMTP_PASSWORD=password
-MAIL_FROM=noreply@example.com
-BACKEND_PORT=8000
-FRONTEND_PORT=3000
-"@
-        Set-Content -Path $EnvFile -Value $envContent -Encoding UTF8
+        Copy-Item (Join-Path $BackendDir ".env.example") $EnvFile
         Write-Color "  OK .env file generated" "Green"
     } else {
         Write-Host "  OK .env file already exists" -ForegroundColor Gray
@@ -156,8 +142,8 @@ function Start-Backend {
 function Start-Frontend {
     Write-Host "Starting frontend service..." -ForegroundColor Yellow
     Push-Location $FrontendDir
-    $port = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "3000" }
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm run dev -- --port $port"
+    $port = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "10000" }
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm run dev -- --host 0.0.0.0 --port $port"
     Write-Color "Frontend service started! Access http://localhost:$port" "Green"
     Pop-Location
 }
@@ -169,7 +155,7 @@ function Start-Both {
     Write-Host ""
     Write-Color "============================================================" "Cyan"
     Write-Color "  All services started successfully!" "Green"
-    Write-Color "  Frontend: http://localhost:3000" "White"
+    Write-Color "  Frontend: http://localhost:10000" "White"
     Write-Color "  Backend:  http://localhost:8000/docs" "White"
     Write-Color "============================================================" "Cyan"
 }

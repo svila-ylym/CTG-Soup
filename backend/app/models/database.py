@@ -7,22 +7,33 @@ from typing import Generator
 
 from app.db import engine, init_db, get_session as _get_session
 from app.models.models import (
-    User, UserRole, UserStatus,
+    User, UserRole, UserStatus, ThemePreference, EmailVerification, UploadedAsset,
     Punishment, PunishmentType,
     Post, PostType,
     Comment, CommentTargetType,
-    Soup,
+    Soup, SoupTag, FeaturedSoup, Tag, TagAlias, TagKind, TagStatus, Announcement, AnnouncementStatus,
     Rating,
     Like, LikeTargetType,
     Favorite, FavoriteTargetType,
     Follow, Blacklist,
     Competition, CompetitionEntry, CompetitionScoreType, CompetitionStatus,
     Achievement, Title, UserAchievement, AchievementConditionType,
-    PrivateMessage, Notification, NotificationType,
+    DirectConversation, PrivateMessage, Notification, NotificationType, Mention, MentionTargetType,
+    SystemMessage, SystemMessageRecipient, MessageAttachment,
+    EmailCampaign, EmailCampaignAttachment, EmailCampaignCategory,
+    EmailCampaignRecipient, EmailCampaignRecipientStatus, EmailCampaignStatus,
     Report, ReportTargetType, ReportStatus,
     OperationLog,
     SigninRecord
+    , PermissionGroup, UserPermissionGroup
 )
+
+# Transitional names used by legacy route modules. New code must use the
+# canonical SQLModel names above; these aliases keep unrelated routers
+# importable while they are migrated incrementally.
+TurtleSoup = Soup
+Collection = Favorite
+AchievementDefinition = Achievement
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -40,6 +51,11 @@ __all__ = [
     "User",
     "UserRole",
     "UserStatus",
+    "ThemePreference",
+    "EmailVerification",
+    "UploadedAsset",
+    "PermissionGroup",
+    "UserPermissionGroup",
     # 处罚系统
     "Punishment",
     "PunishmentType",
@@ -51,12 +67,22 @@ __all__ = [
     "CommentTargetType",
     # 海龟汤系统
     "Soup",
+    "TurtleSoup",
+    "Tag",
+    "TagAlias",
+    "TagKind",
+    "TagStatus",
+    "SoupTag",
+    "FeaturedSoup",
+    "Announcement",
+    "AnnouncementStatus",
     # 评分系统
     "Rating",
     # 点赞与收藏
     "Like",
     "LikeTargetType",
     "Favorite",
+    "Collection",
     "FavoriteTargetType",
     # 社交关系
     "Follow",
@@ -68,13 +94,26 @@ __all__ = [
     "CompetitionStatus",
     # 成就系统
     "Achievement",
+    "AchievementDefinition",
     "Title",
     "UserAchievement",
     "AchievementConditionType",
     # 消息系统
+    "DirectConversation",
     "PrivateMessage",
     "Notification",
     "NotificationType",
+    "Mention",
+    "MentionTargetType",
+    "SystemMessage",
+    "SystemMessageRecipient",
+    "MessageAttachment",
+    "EmailCampaign",
+    "EmailCampaignAttachment",
+    "EmailCampaignCategory",
+    "EmailCampaignRecipient",
+    "EmailCampaignRecipientStatus",
+    "EmailCampaignStatus",
     # 举报系统
     "Report",
     "ReportTargetType",

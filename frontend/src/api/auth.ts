@@ -4,7 +4,12 @@ import type { LoginRequest, RegisterRequest, TokenResponse, User } from '@/types
 export const authApi = {
   // 登录
   login(data: LoginRequest) {
-    return http.post<TokenResponse>('/auth/login', data)
+    const form = new URLSearchParams()
+    form.set('username', data.username)
+    form.set('password', data.password)
+    return http.post<TokenResponse>('/auth/login', form, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
   },
 
   // 注册
@@ -24,7 +29,7 @@ export const authApi = {
 
   // 获取当前用户信息
   getCurrentUser() {
-    return http.get<User>('/users/me')
+    return http.get<User>('/auth/me')
   },
 
   // 发送邮箱验证
@@ -33,8 +38,8 @@ export const authApi = {
   },
 
   // 验证邮箱
-  verifyEmail(code: string) {
-    return http.post('/auth/verify-email', { code })
+  verifyEmail(token: string) {
+    return http.post<{ message: string }>('/auth/verify-email', { token })
   },
 
   // 修改密码

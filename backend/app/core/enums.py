@@ -8,6 +8,13 @@ class UserRole(str, Enum):
     ROOT = "root"  # 根用户
 
 
+class UserStatus(str, Enum):
+    PENDING_EMAIL = "pending_email"
+    ACTIVE = "active"
+    BANNED = "banned"
+    SILENCED = "silenced"
+
+
 class AccountStatus(str, Enum):
     """账户状态枚举"""
     ACTIVE = "active"  # 正常

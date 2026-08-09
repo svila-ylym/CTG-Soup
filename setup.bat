@@ -66,29 +66,7 @@ echo.
 REM 创建配置文件
 echo [6/6] 初始化数据库配置...
 if not exist "backend\.env" (
-    (
-        echo # 数据库配置
-        echo DATABASE_URL=postgresql://user:password@localhost:5432/turtle_soup
-        echo.
-        echo # Redis 配置
-        echo REDIS_HOST=localhost
-        echo REDIS_PORT=6379
-        echo.
-        echo # JWT 配置
-        echo SECRET_KEY=your-secret-key-change-in-production
-        echo ALGORITHM=HS256
-        echo ACCESS_TOKEN_EXPIRE_MINUTES=30
-        echo.
-        echo # 邮件配置
-        echo SMTP_HOST=smtp.example.com
-        echo SMTP_PORT=587
-        echo SMTP_USER=your-email@example.com
-        echo SMTP_PASSWORD=your-password
-        echo.
-        echo # Elasticsearch 配置
-        echo ELASTICSEARCH_HOST=localhost
-        echo ELASTICSEARCH_PORT=9200
-    ) > backend\.env
+    copy /Y backend\.env.example backend\.env >nul
     echo [成功] 配置文件 backend\.env 已创建
     echo [提示] 请编辑 backend\.env 文件配置数据库和其他服务
 ) else (
@@ -126,13 +104,13 @@ goto END
 :START_FRONTEND
 echo 启动前端服务...
 cd frontend
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 10000
 goto END
 
 :START_BOTH
 echo 同时启动前后端服务...
 echo 后端将在 http://localhost:8000 运行
-echo 前端将在 http://localhost:5173 运行
+echo 前端将在 http://localhost:10000 运行
 echo.
 echo 按 Ctrl+C 停止所有服务
 echo.
@@ -145,7 +123,7 @@ cd ..
 
 REM 启动前端
 cd frontend
-start "" cmd /k "npm run dev"
+start "" cmd /k "npm run dev -- --host 0.0.0.0 --port 10000"
 cd ..
 
 echo 服务已启动，关闭此窗口不会停止服务

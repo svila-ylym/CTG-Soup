@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '注册', requiresAuth: false },
   },
   {
+    path: '/verify-email',
+    name: 'VerifyEmail',
+    component: () => import('@/views/VerifyEmailView.vue'),
+    meta: { title: '邮箱验证', requiresAuth: false },
+  },
+  {
     path: '/soups',
     name: 'Soups',
     component: () => import('@/views/soup/SoupListView.vue'),
@@ -29,13 +35,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/soups/create',
     name: 'CreateSoup',
-    component: () => import('@/views/soup/SoupCreateView.vue'),
+    component: () => import('@/views/SoupCreateView.vue'),
     meta: { title: '发布海龟汤', requiresAuth: true },
   },
   {
     path: '/soups/:id',
     name: 'SoupDetail',
-    component: () => import('@/views/soup/SoupDetailView.vue'),
+    component: () => import('@/views/SoupDetailView.vue'),
     meta: { title: '海龟汤详情' },
   },
   {
@@ -47,25 +53,31 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/posts',
     name: 'Posts',
-    component: () => import('@/views/post/PostListView.vue'),
+    component: () => import('@/views/PostListView.vue'),
     meta: { title: '论坛' },
   },
   {
     path: '/posts/:id',
     name: 'PostDetail',
-    component: () => import('@/views/post/PostDetailView.vue'),
+    component: () => import('@/views/PostDetailView.vue'),
     meta: { title: '帖子详情' },
   },
   {
     path: '/competitions',
     name: 'Competitions',
-    component: () => import('@/views/competition/CompetitionListView.vue'),
+    component: () => import('@/views/CompetitionListView.vue'),
     meta: { title: '比赛列表' },
+  },
+  {
+    path: '/competitions/create',
+    name: 'CreateCompetition',
+    component: () => import('@/views/CompetitionCreateView.vue'),
+    meta: { title: '发布比赛', requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/competitions/:id',
     name: 'CompetitionDetail',
-    component: () => import('@/views/competition/CompetitionDetailView.vue'),
+    component: () => import('@/views/CompetitionDetailView.vue'),
     meta: { title: '比赛详情' },
   },
   {
@@ -84,7 +96,19 @@ const routes: RouteRecordRaw[] = [
     path: '/messages',
     name: 'Messages',
     component: () => import('@/views/MessageView.vue'),
-    meta: { title: '消息', requiresAuth: true },
+    meta: { title: '私信', requiresAuth: true },
+  },
+  {
+    path: '/system-messages',
+    name: 'SystemMessages',
+    component: () => import('@/views/SystemMessageView.vue'),
+    meta: { title: '系统消息', requiresAuth: true },
+  },
+  {
+    path: '/admin/broadcasts',
+    name: 'BroadcastCenter',
+    component: () => import('@/views/admin/BroadcastCenterView.vue'),
+    meta: { title: '广播中心', requiresAuth: true, requiresRoot: true },
   },
   {
     path: '/admin',
@@ -112,13 +136,14 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // 设置页面标题
-  document.title = `${to.meta.title || '海龟汤社区'} - Turtle Soup`
+  document.title = to.meta.title ? `${to.meta.title} - 汤吧社区` : '汤吧社区'
   
   const token = localStorage.getItem('access_token')
-  const requiresAuth = to.meta.requiresAuth !== false
+  const requiresAuth = to.meta.requiresAuth === true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresRoot = to.meta.requiresRoot === true
   
   if (requiresAuth && !token) {
     next({ name: 'Login', query: { redirect: to.fullPath } })
@@ -132,6 +157,11 @@ router.beforeEach((to, from, next) => {
       next({ name: 'Home' })
       return
     }
+  }
+
+  if (requiresRoot && localStorage.getItem('user_role') !== 'root') {
+    next({ name: 'Home' })
+    return
   }
   
   next()
