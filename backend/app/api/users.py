@@ -1,27 +1,54 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta
 
-from app.models.database import get_db, User, Post, Comment, TurtleSoup, Like, Collection, Follow
-from app.schemas import UserUpdate, UserResponse, PostResponse, CommentResponse, TurtleSoupResponse, PageResponse
-from app.api.auth import get_current_active_user, get_current_user
-from app.core.enums import AccountStatus
+from app.models.database import (
+    Collection,
+    Blacklist,
+    Comment,
+    Follow,
+    FeaturedSoup,
+    Like,
+    Post,
+    TurtleSoup,
+    UploadedAsset,
+    User,
+    SigninRecord,
+    get_db,
+)
+from app.schemas import (
+    CommentResponse,
+    PageResponse,
+    PostResponse,
+    TurtleSoupResponse,
+    UserPreferencesUpdate,
+    UserResponse,
+    UserUpdate,
+)
+from app.api.auth import get_current_active_user, get_optional_current_user
+from app.schemas.community import UserSummary
+from app.schemas.profiles import (
+    FeaturedSoupInput,
+    ProfileSoupSummary,
+    PublicProfileResponse,
+)
+from app.services.levels import level_progress
+from app.services import levels
+from app.schemas.levels import SigninStatusResponse
+from app.core.config import get_settings
 
 router = APIRouter()
+settings = get_settings()
 
 
-@router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db)):
-    """获取用户信息"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    return user
+PUBLIC_SOUP_STATUSES = ("published", "revealed")
 
 
-@router.get("/uid/{uid}", response_model=UserResponse)
-async def get_user_by_uid(uid: str, db: Session = Depends(get_db)):
+@router.get("/uid/{uid}", response_model=UserSummary)
+async def get_user_by_uid(uid: int, db: Session = Depends(get_db)):
     """通过UID获取用户"""
     user = db.query(User).filter(User.uid == uid).first()
     if not user:
@@ -45,17 +72,97 @@ async def update_me(
     
     if user_data.nickname:
         current_user.nickname = user_data.nickname
-    if user_data.avatar_url:
-        current_user.avatar_url = user_data.avatar_url
+    if "avatar_asset_id" in user_data.model_fields_set:
+        if user_data.avatar_asset_id is None:
+            current_user.avatar_asset_id = None
+            current_user.avatar_url = None
+        else:
+            asset = db.query(UploadedAsset).filter(
+                UploadedAsset.id == user_data.avatar_asset_id,
+                UploadedAsset.kind == "image",
+            ).first()
+            if asset is None or asset.owner_uid != current_user.uid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "AVATAR_NOT_OWNED",
+                        "message": "只能选择自己上传的头像",
+                    },
+                )
+            current_user.avatar_asset_id = asset.id
+            current_user.avatar_url = asset.public_url
     if user_data.bio is not None:
         current_user.bio = user_data.bio
     if user_data.notice_preferences is not None:
-        current_user.notice_preferences = user_data.notice_preferences
+        current_user.notification_prefs = user_data.notice_preferences
     
     current_user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(current_user)
     
+    return current_user
+
+
+@router.put("/me/featured-soups", response_model=list[ProfileSoupSummary])
+async def update_featured_soups(
+    data: FeaturedSoupInput,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    soups = db.query(TurtleSoup).filter(
+        TurtleSoup.id.in_(data.soup_ids),
+    ).all() if data.soup_ids else []
+    soups_by_id = {soup.id: soup for soup in soups}
+    invalid_ids = [
+        soup_id
+        for soup_id in data.soup_ids
+        if soup_id not in soups_by_id
+        or soups_by_id[soup_id].author_uid != current_user.uid
+        or soups_by_id[soup_id].status not in PUBLIC_SOUP_STATUSES
+    ]
+    if invalid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "FEATURED_SOUP_INVALID",
+                "message": "代表作必须是本人已发布的海龟汤",
+            },
+        )
+
+    db.query(FeaturedSoup).filter(
+        FeaturedSoup.user_uid == current_user.uid,
+    ).delete(synchronize_session=False)
+    for position, soup_id in enumerate(data.soup_ids):
+        db.add(
+            FeaturedSoup(
+                user_uid=current_user.uid,
+                soup_id=soup_id,
+                position=position,
+            )
+        )
+    db.commit()
+    return [_profile_soup_payload(soups_by_id[soup_id]) for soup_id in data.soup_ids]
+
+
+@router.put("/me/preferences", response_model=UserResponse)
+async def update_preferences(
+    preferences: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if preferences.allow_bulk_email is not None:
+        current_user.allow_bulk_email = preferences.allow_bulk_email
+    if preferences.theme_preference is not None:
+        current_user.theme_preference = preferences.theme_preference
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_active_user)):
+    """Return the authenticated user's complete public profile."""
     return current_user
 
 
@@ -70,7 +177,7 @@ async def get_my_posts(
     offset = (page - 1) * page_size
     
     query = db.query(Post).filter(
-        Post.author_id == current_user.id,
+        Post.author_uid == current_user.uid,
         Post.status == "published"
     ).order_by(Post.created_at.desc())
     
@@ -86,7 +193,7 @@ async def get_my_posts(
             "section": post.section,
             "post_type": post.post_type,
             "tags": post.tags,
-            "author_id": post.author_id,
+            "author_id": post.author_uid,
             "author_username": current_user.username,
             "author_nickname": current_user.nickname,
             "status": post.status,
@@ -120,7 +227,7 @@ async def get_my_turtle_soups(
     offset = (page - 1) * page_size
     
     query = db.query(TurtleSoup).filter(
-        TurtleSoup.author_id == current_user.id,
+        TurtleSoup.author_uid == current_user.uid,
         TurtleSoup.status == "published"
     ).order_by(TurtleSoup.created_at.desc())
     
@@ -135,7 +242,7 @@ async def get_my_turtle_soups(
             "puzzle": soup.puzzle,
             "solution": soup.solution,
             "tags": soup.tags,
-            "author_id": soup.author_id,
+            "author_id": soup.author_uid,
             "author_username": current_user.username,
             "author_nickname": current_user.nickname,
             "average_score": soup.average_score,
@@ -169,7 +276,7 @@ async def get_my_collections(
     """获取我的收藏"""
     offset = (page - 1) * page_size
     
-    query = db.query(Collection).filter(Collection.user_id == current_user.id)
+    query = db.query(Collection).filter(Collection.user_uid == current_user.uid)
     
     if target_type:
         query = query.filter(Collection.target_type == target_type)
@@ -182,7 +289,7 @@ async def get_my_collections(
     items = []
     for collection in collections:
         item_type = collection.target_type
-        item_id = collection.post_id if item_type == "post" else collection.turtle_soup_id
+        item_id = collection.target_id
         
         items.append({
             "id": collection.id,
@@ -200,106 +307,208 @@ async def get_my_collections(
     }
 
 
-@router.post("/signin", response_model=dict)
+def _signin_payload(user: User, business_day, signed_in: bool, gained: int) -> dict:
+    progress = level_progress(user.points)
+    return {
+        "signed_in": signed_in,
+        "signin_day": business_day,
+        "consecutive_days": user.consecutive_signin_days,
+        "experience_points": progress.experience_points,
+        "experience_gained": gained,
+        "level": progress.level,
+        "level_start": progress.level_start,
+        "next_level_start": progress.next_level_start,
+    }
+
+
+@router.get("/me/signin", response_model=SigninStatusResponse)
+async def get_signin_status(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    business_day = levels.signin_day(levels.utc_now(), settings.SIGNIN_TIMEZONE)
+    record = db.query(SigninRecord).filter(
+        SigninRecord.user_uid == current_user.uid,
+        SigninRecord.signin_day == business_day,
+    ).first()
+    return _signin_payload(
+        current_user,
+        business_day,
+        signed_in=record is not None,
+        gained=record.points_earned if record else 0,
+    )
+
+
+@router.post("/me/signin", response_model=SigninStatusResponse)
 async def daily_signin(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """每日签到"""
-    today = datetime.utcnow().date()
-    
-    if current_user.last_signin_date and current_user.last_signin_date.date() == today:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="今日已签到")
-    
-    # 计算连续签到天数
-    if current_user.last_signin_date:
-        last_date = current_user.last_signin_date.date()
-        days_diff = (today - last_date).days
-        if days_diff == 1:
-            current_user.consecutive_signin_days += 1
+    business_day = levels.signin_day(levels.utc_now(), settings.SIGNIN_TIMEZONE)
+    locked_user = db.query(User).filter(User.uid == current_user.uid).with_for_update().one()
+    existing = db.query(SigninRecord).filter(
+        SigninRecord.user_uid == locked_user.uid,
+        SigninRecord.signin_day == business_day,
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_SIGNED_IN", "message": "今天已经签到"},
+        )
+
+    if locked_user.last_signin:
+        last_day = levels.signin_day(
+            locked_user.last_signin,
+            settings.SIGNIN_TIMEZONE,
+        )
+        if (business_day - last_day).days == 1:
+            locked_user.consecutive_signin_days += 1
         else:
-            current_user.consecutive_signin_days = 1
+            locked_user.consecutive_signin_days = 1
     else:
-        current_user.consecutive_signin_days = 1
-    
-    # 计算积分奖励（基础10分 + 连续签到奖励）
-    base_score = 10
-    bonus_score = min(current_user.consecutive_signin_days, 7)  # 最多7天奖励
-    total_score = base_score + bonus_score
-    
-    current_user.score += total_score
-    current_user.last_signin_date = datetime.utcnow()
-    
-    db.commit()
-    
+        locked_user.consecutive_signin_days = 1
+
+    gained = levels.signin_reward(locked_user.consecutive_signin_days)
+    locked_user.points += gained
+    locked_user.last_signin = levels.utc_now()
+    db.add(
+        SigninRecord(
+            user_uid=locked_user.uid,
+            signin_day=business_day,
+            points_earned=gained,
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_SIGNED_IN", "message": "今天已经签到"},
+        ) from exc
+    db.refresh(locked_user)
+    return _signin_payload(locked_user, business_day, signed_in=True, gained=gained)
+
+
+def _profile_soup_payload(soup: TurtleSoup) -> dict:
     return {
-        "message": "签到成功",
-        "score_gained": total_score,
-        "consecutive_days": current_user.consecutive_signin_days,
-        "total_score": current_user.score
+        "id": soup.id,
+        "title": soup.title,
+        "puzzle_excerpt": soup.puzzle[:200],
+        "genre": soup.genre,
+        "soup_color": soup.soup_color,
+        "average_score": soup.avg_rating,
+        "rating_count": soup.rating_count,
+        "like_count": soup.like_count,
+        "favorite_count": soup.favorite_count,
+        "created_at": soup.created_at,
     }
 
 
-@router.get("/{user_id}/profile")
+@router.get("/{uid}/profile", response_model=PublicProfileResponse)
 async def get_user_profile(
-    user_id: int,
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    uid: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
 ):
-    """获取用户主页信息"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+    user = db.query(User).filter(User.uid == uid).first()
+    if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    
-    # 统计信息
-    post_count = db.query(Post).filter(Post.author_id == user_id, Post.status == "published").count()
-    soup_count = db.query(TurtleSoup).filter(TurtleSoup.author_id == user_id, TurtleSoup.status == "published").count()
-    follower_count = db.query(Follow).filter(Follow.followee_id == user_id).count()
-    followee_count = db.query(Follow).filter(Follow.follower_id == user_id).count()
-    like_received = db.query(Like).join(Post, Like.post_id == Post.id).filter(Post.author_id == user_id).count()
-    
-    # 检查是否是好友（互相关注）
-    is_friend = False
+
+    soup_query = db.query(TurtleSoup).filter(
+        TurtleSoup.author_uid == uid,
+        TurtleSoup.status.in_(PUBLIC_SOUP_STATUSES),
+    )
+    soup_total = soup_query.count()
+    soups = soup_query.order_by(
+        TurtleSoup.created_at.desc(),
+        TurtleSoup.id.desc(),
+    ).offset((page - 1) * page_size).limit(page_size).all()
+
+    featured = db.query(TurtleSoup).join(
+        FeaturedSoup,
+        FeaturedSoup.soup_id == TurtleSoup.id,
+    ).filter(
+        FeaturedSoup.user_uid == uid,
+        TurtleSoup.author_uid == uid,
+        TurtleSoup.status.in_(PUBLIC_SOUP_STATUSES),
+    ).order_by(FeaturedSoup.position.asc()).all()
+
+    post_count = db.query(Post).filter(
+        Post.author_uid == uid,
+        Post.status == "published",
+    ).count()
+    follower_count = db.query(Follow).filter(Follow.followed_uid == uid).count()
+    following_count = db.query(Follow).filter(Follow.follower_uid == uid).count()
+    post_likes = db.query(func.coalesce(func.sum(Post.like_count), 0)).filter(
+        Post.author_uid == uid,
+        Post.status == "published",
+    ).scalar()
+    soup_likes = db.query(func.coalesce(func.sum(TurtleSoup.like_count), 0)).filter(
+        TurtleSoup.author_uid == uid,
+        TurtleSoup.status.in_(PUBLIC_SOUP_STATUSES),
+    ).scalar()
+
+    is_self = current_user is not None and current_user.uid == uid
     is_following = False
+    is_friend = False
     is_blocked = False
-    
-    if current_user:
+    if current_user is not None and not is_self:
         is_following = db.query(Follow).filter(
-            Follow.follower_id == current_user.id,
-            Follow.followee_id == user_id
+            Follow.follower_uid == current_user.uid,
+            Follow.followed_uid == uid,
         ).first() is not None
-        
         is_friend = is_following and db.query(Follow).filter(
-            Follow.follower_id == user_id,
-            Follow.followee_id == current_user.id
+            Follow.follower_uid == uid,
+            Follow.followed_uid == current_user.uid,
         ).first() is not None
-        
-        is_blocked = db.query(Follow).filter(
-            (Follow.follower_id == current_user.id) | (Follow.follower_id == user_id),
-            (Follow.followee_id == current_user.id) | (Follow.followee_id == user_id)
-        ).first() is not None  # 简化判断，实际应该查黑名单表
-    
+        is_blocked = db.query(Blacklist).filter(
+            (
+                (Blacklist.blocker_uid == current_user.uid)
+                & (Blacklist.blocked_uid == uid)
+            )
+            | (
+                (Blacklist.blocker_uid == uid)
+                & (Blacklist.blocked_uid == current_user.uid)
+            )
+        ).first() is not None
+
+    progress = level_progress(user.points)
     return {
         "user": {
-            "id": user.id,
             "uid": user.uid,
             "username": user.username,
             "nickname": user.nickname,
             "avatar_url": user.avatar_url,
             "bio": user.bio,
             "role": user.role,
+            "level": progress.level,
+            "experience_points": progress.experience_points,
+            "level_start": progress.level_start,
+            "next_level_start": progress.next_level_start,
             "created_at": user.created_at,
         },
         "stats": {
             "post_count": post_count,
-            "soup_count": soup_count,
+            "soup_count": soup_total,
             "follower_count": follower_count,
-            "followee_count": followee_count,
-            "like_received": like_received,
+            "following_count": following_count,
+            "like_received": int(post_likes or 0) + int(soup_likes or 0),
         },
         "relation": {
-            "is_friend": is_friend,
+            "is_self": is_self,
             "is_following": is_following,
+            "is_friend": is_friend,
             "is_blocked": is_blocked,
-        }
+        },
+        "featured_soups": [_profile_soup_payload(soup) for soup in featured],
+        "soups": {
+            "items": [_profile_soup_payload(soup) for soup in soups],
+            "total": soup_total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (soup_total + page_size - 1) // page_size,
+        },
     }

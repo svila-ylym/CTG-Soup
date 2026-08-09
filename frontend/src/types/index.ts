@@ -11,12 +11,38 @@ export interface User {
   username: string
   nickname: string
   email: string
-  avatar?: string
+  avatar_url?: string
+  avatar_asset_id?: number | null
+  bio?: string
   role: 'user' | 'admin' | 'root'
-  status: 'active' | 'banned' | 'muted'
-  score: number
+  status: 'pending_email' | 'active' | 'banned' | 'silenced'
+  points: number
+  consecutive_signin_days: number
+  allow_bulk_email: boolean
+  theme_preference: ThemePreference
   created_at: string
-  titles: string[]
+}
+
+export type ThemePreference = 'light' | 'dark' | 'system'
+
+export interface UploadedAsset {
+  id: number
+  owner_uid: number
+  kind: 'image'
+  storage_key: string
+  public_url: string
+  mime_type: string
+  size: number
+  created_at: string
+}
+
+export interface UploadImageResult {
+  asset_id: number
+  url: string
+  storage: 'local'
+  key: string
+  mime_type: string
+  size: number
 }
 
 export interface LoginRequest {
@@ -26,6 +52,7 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   username: string
+  nickname: string
   password: string
   email: string
 }
@@ -34,22 +61,60 @@ export interface TokenResponse {
   access_token: string
   refresh_token: string
   token_type: string
-  expires_in: number
+  expires_in?: number
 }
 
 // 海龟汤相关
+export type SoupGenre = '本格' | '变格' | '鳖汤' | '未分类'
+export type SoupColor = '清汤' | '红汤' | '黑汤' | '未分类'
+export type CreateSoupGenre = Exclude<SoupGenre, '未分类'>
+export type CreateSoupColor = Exclude<SoupColor, '未分类'>
+
+export interface Tag {
+  id: number
+  slug: string
+  name: string
+  kind: 'system' | 'custom'
+  status: 'active' | 'disabled'
+  description?: string | null
+  sort_order: number
+  view_count: number
+  usage_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SoupAuthor {
+  uid: number
+  username: string
+  nickname: string
+}
+
 export interface TurtleSoup {
   id: number
   title: string
   puzzle: string
-  solution?: string
-  author: User
-  tags: string[]
-  avg_score: number
-  score_count: number
+  solution?: string | null
+  solution_available: boolean
+  is_solution_public: boolean
+  genre: SoupGenre
+  soup_color: SoupColor
+  main_player_count: string
+  secondary_player_count: string
+  author: SoupAuthor
+  author_uid: number
+  tags: Tag[]
+  average_score: number
+  rating_count: number
+  bayesian_rating: number
   like_count: number
   favorite_count: number
-  status: 'visible' | 'hidden' | 'deleted'
+  view_count: number
+  status: string
+  my_rating: number | null
+  is_liked: boolean
+  is_favorited: boolean
+  can_manage: boolean
   created_at: string
   updated_at: string
 }
@@ -58,7 +123,13 @@ export interface SoupCreate {
   title: string
   puzzle: string
   solution: string
-  tags: string[]
+  genre: CreateSoupGenre
+  soup_color: CreateSoupColor
+  main_player_count: string
+  secondary_player_count: string
+  tag_ids: number[]
+  custom_tags: string[]
+  is_revealed?: boolean
 }
 
 export interface SoupScore {
@@ -66,32 +137,50 @@ export interface SoupScore {
   score: number // 1-10, 支持 0.5 步进
 }
 
+export interface SoupInteractionState {
+  liked?: boolean
+  favorited?: boolean
+  like_count: number
+  favorite_count: number
+}
+
 // 帖子相关
 export interface Post {
   id: number
   title: string
   content: string
-  author: User
-  category: string
+  author_uid: number
+  author?: SoupAuthor
+  author_username?: string
+  author_nickname?: string
+  section: string
   tags: string[]
-  type: 'normal' | 'poll' | 'turtle_soup'
+  post_type: 'normal' | 'poll' | 'turtle_soup'
   like_count: number
   comment_count: number
   favorite_count: number
-  status: 'visible' | 'hidden' | 'deleted'
+  view_count: number
+  status: 'published' | 'hidden' | 'deleted'
   created_at: string
   updated_at: string
+  mentions: MentionRef[]
+}
+
+export interface MentionRef {
+  uid: number
+  username: string
+  start_offset: number
+  end_offset: number
 }
 
 export interface Comment {
   id: number
   content: string
-  author: User
-  target_type: 'post' | 'soup'
-  target_id: number
-  like_count: number
-  status: 'visible' | 'hidden' | 'deleted'
+  author_uid: number
+  author?: SoupAuthor
+  parent_id?: number | null
   created_at: string
+  mentions: MentionRef[]
   replies?: Comment[]
 }
 
@@ -102,13 +191,28 @@ export interface Competition {
   description: string
   start_time: string
   end_time: string
-  tags: string[]
-  scoring_method: 'average' | 'highest'
+  creator_uid: number
+  required_tag_ids: number[]
+  score_type: 'average' | 'top_score'
   top_n: number
-  custom_page: any
-  status: 'pending' | 'ongoing' | 'ended'
-  creator: User
+  custom_page_config: Record<string, unknown>
+  status: 'pending' | 'ongoing' | 'completed'
+  result_snapshot?: Record<string, unknown> | null
+  settled_at?: string | null
   created_at: string
+  updated_at: string
+  entries?: CompetitionEntry[]
+}
+
+export interface CompetitionCreate {
+  name: string
+  description: string
+  start_time: string
+  end_time: string
+  required_tag_ids: number[]
+  score_type: 'average' | 'top_score'
+  top_n: number
+  custom_page_config: Record<string, unknown>
 }
 
 export interface CompetitionEntry {
@@ -116,7 +220,7 @@ export interface CompetitionEntry {
   soup_id: number
   final_score: number
   author_uid: number
-  rank: number
+  rank: number | null
 }
 
 // 社交相关
@@ -138,6 +242,10 @@ export interface Message {
   id: number
   sender_uid: number
   receiver_uid: number
+  sender: SoupAuthor
+  receiver: SoupAuthor
+  sender_username?: string
+  receiver_username?: string
   content: string
   is_read: boolean
   sender_deleted: boolean
@@ -145,16 +253,125 @@ export interface Message {
   created_at: string
 }
 
-export interface Notification {
+export interface ChatMessage {
   id: number
+  conversation_id: number
+  sender_uid: number
   receiver_uid: number
-  type: 'mention' | 'comment' | 'reply' | 'score' | 'report' | 'punishment' | 'role_change' | 'achievement' | 'competition'
-  title: string
   content: string
-  entity_id?: number
-  entity_type?: string
   is_read: boolean
   created_at: string
+}
+
+export interface DirectConversation {
+  id: number
+  other_user: SoupAuthor & { avatar_url?: string | null }
+  last_message: ChatMessage | null
+  unread_count: number
+  last_message_at: string | null
+  created_at: string
+}
+
+export interface ConversationPage {
+  items: DirectConversation[]
+  total: number
+}
+
+export interface MessageCursorPage {
+  items: ChatMessage[]
+  next_cursor: number | null
+}
+
+export interface SystemMessageAttachment {
+  id: number
+  original_name: string
+  mime_type: string
+  size: number
+  sha256: string
+  created_at: string
+}
+
+export interface SystemMessageSummary {
+  id: number
+  title: string
+  sender_uid: number
+  is_read: boolean
+  attachment_count: number
+  created_at: string
+}
+
+export interface SystemMessageDetail extends SystemMessageSummary {
+  markdown: string
+  rendered_html: string
+  read_at: string | null
+  attachments: SystemMessageAttachment[]
+}
+
+export interface SystemMessagePage extends PageResult<SystemMessageSummary> {}
+
+export interface SystemMessageSendResult {
+  id: number
+  title: string
+  recipient_mode: 'selected' | 'all'
+  recipient_count: number
+  attachment_count: number
+  created_at: string
+}
+
+export interface BroadcastUser {
+  uid: number
+  username: string
+  nickname: string
+  email: string
+  role: User['role']
+  status: User['status']
+  allow_bulk_email?: boolean
+}
+
+export type EmailCampaignCategory = 'notice' | 'promotion'
+export type EmailCampaignStatus = 'draft' | 'queued' | 'sending' | 'completed' | 'cancelled'
+
+export interface EmailCampaignSummary {
+  id: number
+  subject: string
+  category: EmailCampaignCategory
+  recipient_mode: 'selected' | 'all'
+  status: EmailCampaignStatus
+  selected_count: number
+  eligible_count: number
+  filtered_count: number
+  queued_count: number
+  delivered_count: number
+  failed_count: number
+  attachment_count: number
+  created_at: string
+  queued_at: string | null
+  completed_at: string | null
+}
+
+export interface Notification {
+  id: number
+  recipient_uid: number
+  notification_type: string
+  title: string
+  content: string
+  related_entity_id?: number
+  related_entity_type?: string
+  is_read: boolean
+  created_at: string
+}
+
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  priority: number
+  status: 'draft' | 'published' | 'expired'
+  author_uid: number
+  published_at?: string | null
+  expires_at?: string | null
+  created_at: string
+  updated_at: string
 }
 
 // 成就相关
@@ -214,6 +431,7 @@ export interface PageResult<T> {
   total: number
   page: number
   page_size: number
+  total_pages?: number
 }
 
 // 搜索参数
@@ -223,4 +441,98 @@ export interface SearchParams {
   sort?: 'relevance' | 'time' | 'likes'
   page?: number
   page_size?: number
+}
+
+export interface SearchUser {
+  uid: number
+  username: string
+  nickname: string
+  avatar_url?: string | null
+}
+
+export interface SearchPost {
+  id: number
+  author_uid: number
+  title: string
+  excerpt: string
+  section: string
+  created_at: string
+}
+
+export interface SearchSoup {
+  id: number
+  author_uid: number
+  title: string
+  puzzle_excerpt: string
+  average_score: number
+  rating_count: number
+  favorite_count: number
+  created_at: string
+}
+
+export interface SearchSectionState<T> {
+  items: T[]
+  loading: boolean
+  error: string
+}
+
+export interface PublicProfileUser {
+  uid: number
+  username: string
+  nickname: string
+  avatar_url?: string | null
+  bio?: string | null
+  role: 'user' | 'admin' | 'root'
+  level: number
+  experience_points: number
+  level_start: number
+  next_level_start: number | null
+  created_at: string
+}
+
+export interface ProfileStats {
+  post_count: number
+  soup_count: number
+  follower_count: number
+  following_count: number
+  like_received: number
+}
+
+export interface ProfileRelation {
+  is_self: boolean
+  is_following: boolean
+  is_friend: boolean
+  is_blocked: boolean
+}
+
+export interface ProfileSoupSummary {
+  id: number
+  title: string
+  puzzle_excerpt: string
+  genre: string
+  soup_color: string
+  average_score: number
+  rating_count: number
+  like_count: number
+  favorite_count: number
+  created_at: string
+}
+
+export interface PublicProfile {
+  user: PublicProfileUser
+  stats: ProfileStats
+  relation: ProfileRelation
+  featured_soups: ProfileSoupSummary[]
+  soups: PageResult<ProfileSoupSummary>
+}
+
+export interface SigninStatus {
+  signed_in: boolean
+  signin_day: string
+  consecutive_days: number
+  experience_points: number
+  experience_gained: number
+  level: number
+  level_start: number
+  next_level_start: number | null
 }

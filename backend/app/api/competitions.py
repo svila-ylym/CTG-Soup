@@ -1,100 +1,140 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.models.database import get_db, Competition, CompetitionEntry, TurtleSoup, User
-from app.schemas import CompetitionCreate, CompetitionResponse, PageResponse
-from app.api.auth import get_current_active_user, get_current_admin_user
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import Session, select
+
+from app.api.auth import get_current_admin_user
+from app.models.database import (
+    Competition,
+    CompetitionEntry,
+    CompetitionStatus,
+    Tag,
+    TagStatus,
+    User,
+    get_db,
+)
+from app.schemas.competitions import (
+    CompetitionCreate,
+    CompetitionPageResponse,
+    CompetitionResponse,
+)
+from app.services.competition_entries import competition_tag_ids, settle_competition
 
 router = APIRouter()
 
 
-@router.post("", response_model=CompetitionResponse)
-async def create_competition(
-    competition_data: CompetitionCreate,
+def _payload(db: Session, competition: Competition, include_entries: bool = False) -> dict:
+    entries = []
+    if include_entries:
+        entries = db.exec(
+            select(CompetitionEntry)
+            .where(CompetitionEntry.competition_id == competition.id)
+            .order_by(CompetitionEntry.rank.is_(None), CompetitionEntry.rank, CompetitionEntry.created_at)
+        ).all()
+    return {
+        "id": competition.id,
+        "creator_uid": competition.creator_uid,
+        "name": competition.name,
+        "description": competition.description,
+        "start_time": competition.start_time,
+        "end_time": competition.end_time,
+        "required_tag_ids": competition_tag_ids(competition),
+        "score_type": competition.score_type,
+        "top_n": competition.top_n,
+        "custom_page_config": competition.custom_page_config,
+        "status": competition.status,
+        "result_snapshot": competition.result_snapshot,
+        "created_at": competition.created_at,
+        "updated_at": competition.updated_at,
+        "settled_at": competition.settled_at,
+        "entries": entries,
+    }
+
+
+@router.post("", response_model=CompetitionResponse, status_code=status.HTTP_201_CREATED)
+def create_competition(
+    data: CompetitionCreate,
     current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """创建比赛（仅管理员）"""
-    if competition_data.start_time >= competition_data.end_time:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="开始时间必须早于结束时间")
-    
-    db_competition = Competition(
-        creator_id=current_user.id,
-        name=competition_data.name,
-        description=competition_data.description,
-        start_time=competition_data.start_time,
-        end_time=competition_data.end_time,
-        entry_tags=competition_data.entry_tags,
-        scoring_method=competition_data.scoring_method,
-        top_n=competition_data.top_n,
-        custom_page_config=competition_data.custom_page_config,
-        status="pending",
+    tags = db.exec(select(Tag).where(Tag.id.in_(data.required_tag_ids))).all()
+    active_ids = {tag.id for tag in tags if tag.status == TagStatus.ACTIVE}
+    if active_ids != set(data.required_tag_ids):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "COMPETITION_TAG_NOT_ACTIVE", "message": "比赛只能引用已启用标签"},
+        )
+
+    now = datetime.utcnow()
+    current_status = (
+        CompetitionStatus.PENDING
+        if now < data.start_time
+        else CompetitionStatus.ONGOING
+        if now <= data.end_time
+        else CompetitionStatus.COMPLETED
     )
-    
-    db.add(db_competition)
+    competition = Competition(
+        creator_uid=current_user.uid,
+        name=data.name.strip(),
+        description=data.description.strip(),
+        start_time=data.start_time,
+        end_time=data.end_time,
+        required_tag_ids=data.required_tag_ids,
+        score_type=data.score_type,
+        top_n=data.top_n,
+        custom_page_config=data.custom_page_config,
+        status=current_status,
+    )
+    db.add(competition)
     db.commit()
-    db.refresh(db_competition)
-    
-    return db_competition
+    db.refresh(competition)
+    return _payload(db, competition)
 
 
-@router.get("/{competition_id}", response_model=CompetitionResponse)
-async def get_competition(
-    competition_id: int,
-    db: Session = Depends(get_db)
-):
-    """获取比赛详情"""
-    competition = db.query(Competition).filter(Competition.id == competition_id).first()
-    if not competition:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="比赛不存在")
-    return competition
-
-
-@router.get("")
-async def list_competitions(
+@router.get("", response_model=CompetitionPageResponse)
+def list_competitions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[str] = None,
-    db: Session = Depends(get_db)
+    status_filter: Optional[CompetitionStatus] = None,
+    db: Session = Depends(get_db),
 ):
-    """获取比赛列表"""
-    offset = (page - 1) * page_size
-    
-    query = db.query(Competition)
-    
-    if status_filter:
-        query = query.filter(Competition.status == status_filter)
-    
-    query = query.order_by(Competition.created_at.desc())
-    
-    total = query.count()
-    competitions = query.offset(offset).limit(page_size).all()
-    
-    items = []
-    for comp in competitions:
-        items.append({
-            "id": comp.id,
-            "name": comp.name,
-            "description": comp.description,
-            "start_time": comp.start_time,
-            "end_time": comp.end_time,
-            "entry_tags": comp.entry_tags,
-            "scoring_method": comp.scoring_method,
-            "top_n": comp.top_n,
-            "custom_page_config": comp.custom_page_config,
-            "status": comp.status,
-            "result_snapshot": comp.result_snapshot,
-            "creator_id": comp.creator_id,
-            "created_at": comp.created_at,
-            "updated_at": comp.updated_at,
-        })
-    
+    query = select(Competition)
+    if status_filter is not None:
+        query = query.where(Competition.status == status_filter)
+    total = len(db.exec(query).all())
+    rows = db.exec(
+        query.order_by(Competition.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
     return {
-        "items": items,
+        "items": [_payload(db, competition) for competition in rows],
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
+        "total_pages": (total + page_size - 1) // page_size,
     }
+
+
+@router.get("/{competition_id}", response_model=CompetitionResponse)
+def get_competition(competition_id: int, db: Session = Depends(get_db)):
+    competition = db.get(Competition, competition_id)
+    if competition is None:
+        raise HTTPException(status_code=404, detail="比赛不存在")
+    return _payload(db, competition, include_entries=True)
+
+
+@router.post("/{competition_id}/settle", response_model=CompetitionResponse)
+def settle_competition_endpoint(
+    competition_id: int,
+    _current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    competition = db.get(Competition, competition_id)
+    if competition is None:
+        raise HTTPException(status_code=404, detail="比赛不存在")
+    if competition.status != CompetitionStatus.COMPLETED and datetime.utcnow() < competition.end_time:
+        raise HTTPException(status_code=409, detail="比赛尚未结束，不能结算")
+    settle_competition(db, competition)
+    return _payload(db, competition, include_entries=True)

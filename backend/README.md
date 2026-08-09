@@ -19,7 +19,7 @@
 - **数据库**: PostgreSQL + SQLAlchemy ORM
 - **缓存**: Redis (排行榜、会话)
 - **认证**: JWT (python-jose)
-- **密码加密**: bcrypt (passlib)
+- **密码加密**: bcrypt
 
 ## 快速开始
 

@@ -3,9 +3,11 @@ SMTP 邮件服务模块
 用于发送验证邮件、重置密码邮件、通知邮件等
 """
 import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, List
+from typing import Optional, List, Sequence
 from fastapi import HTTPException, status
 import logging
 
@@ -21,6 +23,7 @@ class SMTPService:
     def __init__(self):
         self.smtp_host = settings.SMTP_HOST
         self.smtp_port = settings.SMTP_PORT
+        self.smtp_use_ssl = settings.SMTP_USE_SSL
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.SMTP_FROM_EMAIL
@@ -28,8 +31,11 @@ class SMTPService:
     def _create_connection(self) -> smtplib.SMTP:
         """创建 SMTP 连接"""
         try:
-            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
-            server.starttls()  # 启用 TLS 加密
+            if self.smtp_use_ssl:
+                server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port)
+            else:
+                server = smtplib.SMTP(self.smtp_host, self.smtp_port)
+                server.starttls()
             if self.smtp_user and self.smtp_password:
                 server.login(self.smtp_user, self.smtp_password)
             return server
@@ -84,20 +90,68 @@ class SMTPService:
         except Exception as e:
             logger.error(f"邮件发送失败：{to_email}, 错误：{str(e)}")
             return False
+
+    def send_campaign_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: str,
+        attachments: Sequence[tuple[str, bytes, str]],
+    ) -> bool:
+        """Send one campaign message, including already-validated attachments.
+
+        Campaign callers log a masked address themselves. This method intentionally
+        does not log the recipient, subject, attachment names, or SMTP exception.
+        """
+        server: smtplib.SMTP | None = None
+        try:
+            message = MIMEMultipart("mixed")
+            message["Subject"] = subject
+            message["From"] = self.from_email
+            message["To"] = to_email
+
+            alternatives = MIMEMultipart("alternative")
+            alternatives.attach(MIMEText(text_content, "plain", "utf-8"))
+            alternatives.attach(MIMEText(html_content, "html", "utf-8"))
+            message.attach(alternatives)
+            for filename, content, mime_type in attachments:
+                maintype, subtype = mime_type.split("/", 1)
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(content)
+                encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition",
+                    "attachment",
+                    filename=("utf-8", "", filename),
+                )
+                message.attach(part)
+
+            server = self._create_connection()
+            server.sendmail(self.from_email, to_email, message.as_string())
+            return True
+        except Exception:
+            return False
+        finally:
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
     
-    def send_verification_email(self, to_email: str, username: str, verification_code: str) -> bool:
+    def send_verification_email(self, to_email: str, username: str, verification_token: str) -> bool:
         """
         发送邮箱验证邮件
         
         Args:
             to_email: 收件人邮箱
             username: 用户名
-            verification_code: 验证码
+            verification_token: 不透明验证令牌
         
         Returns:
             bool: 发送是否成功
         """
-        subject = f"【海龟汤社区】邮箱验证 - {username}"
+        subject = f"【汤吧社区】邮箱验证 - {username}"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -117,16 +171,15 @@ class SMTPService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🐢 海龟汤社区</h1>
+                    <h1>汤吧社区</h1>
                     <p>欢迎加入我们的解谜世界</p>
                 </div>
                 <div class="content">
                     <h2>亲爱的 {username}：</h2>
-                    <p>感谢您注册海龟汤社区！为了完成账号验证，请使用以下验证码：</p>
-                    <div class="code">{verification_code}</div>
-                    <p>验证码有效期为 30 分钟。请勿将此验证码透露给他人。</p>
+                    <p>感谢您注册汤吧社区！为了完成账号验证，请使用以下验证码：</p>
+                    <p>验证链接有效期为 30 分钟。请勿将此链接透露给他人。</p>
                     <p>如果这不是您本人的操作，请忽略此邮件。</p>
-                    <a href="{settings.APP_URL or 'http://localhost:5173'}/verify-email?code={verification_code}" class="button">立即验证</a>
+                    <a href="{settings.public_web_url}/verify-email?token={verification_token}" class="button">立即验证</a>
                 </div>
                 <div class="footer">
                     <p>© 2026 SkyUnreal Lab. 保留所有权利。</p>
@@ -140,9 +193,9 @@ class SMTPService:
         text_content = f"""
         亲爱的 {username}：
         
-        感谢您注册海龟汤社区！
+        感谢您注册汤吧社区！
         
-        您的验证码是：{verification_code}
+        验证链接：{settings.public_web_url}/verify-email?token={verification_token}
         
         验证码有效期为 30 分钟。
         
@@ -165,9 +218,9 @@ class SMTPService:
         Returns:
             bool: 发送是否成功
         """
-        subject = "【海龟汤社区】重置密码"
+        subject = "【汤吧社区】重置密码"
         
-        reset_link = f"{settings.APP_URL or 'http://localhost:5173'}/reset-password?token={reset_token}"
+        reset_link = f"{settings.public_web_url}/reset-password?token={reset_token}"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -188,11 +241,11 @@ class SMTPService:
             <div class="container">
                 <div class="header">
                     <h1>🔐 密码重置</h1>
-                    <p>海龟汤社区安全中心</p>
+                    <p>汤吧社区安全中心</p>
                 </div>
                 <div class="content">
                     <h2>亲爱的 {username}：</h2>
-                    <p>您请求重置海龟汤社区的账号密码。请点击下方按钮进行重置：</p>
+                    <p>您请求重置汤吧社区的账号密码。请点击下方按钮进行重置：</p>
                     <a href="{reset_link}" class="button">重置密码</a>
                     <div class="warning">
                         <strong>⚠️ 安全提示：</strong>
@@ -215,7 +268,7 @@ class SMTPService:
         text_content = f"""
         亲爱的 {username}：
         
-        您请求重置海龟汤社区的账号密码。
+        您请求重置汤吧社区的账号密码。
         
         请访问以下链接重置密码：
         {reset_link}
@@ -250,7 +303,7 @@ class SMTPService:
         Returns:
             bool: 发送是否成功
         """
-        subject = f"【海龟汤社区】{title}"
+        subject = f"【汤吧社区】{title}"
         
         type_icons = {
             "mention": "@",
@@ -286,7 +339,7 @@ class SMTPService:
                     <div class="notification">
                         <p>{content}</p>
                     </div>
-                    <p>登录海龟汤社区查看更多详情。</p>
+                    <p>登录汤吧社区查看更多详情。</p>
                 </div>
                 <div class="footer">
                     <p>© 2026 SkyUnreal Lab. 保留所有权利。</p>

@@ -1,135 +1,141 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 
-from app.models.database import get_db, User, Post, TurtleSoup, Comment
-from app.schemas import PageResponse
-from app.api.auth import get_current_user
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
+from sqlmodel import Session, select
+
+from app.models.database import Post, Soup, User, get_db
+from app.schemas.community import (
+    SearchPostPageResponse,
+    SearchSoupPageResponse,
+    UserPageResponse,
+    UserSummary,
+)
 
 router = APIRouter()
 
 
-@router.get("/users")
-async def search_users(
-    q: str = Query(..., min_length=1),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
-):
-    """搜索用户"""
-    offset = (page - 1) * page_size
-    
-    # 支持用户名、昵称、UID搜索
-    query = db.query(User).filter(
-        (User.username.ilike(f"%{q}%")) |
-        (User.nickname.ilike(f"%{q}%")) |
-        (User.uid.ilike(f"%{q}%"))
-    )
-    
-    total = query.count()
-    users = query.offset(offset).limit(page_size).all()
-    
-    items = []
-    for user in users:
-        items.append({
-            "id": user.id,
-            "uid": user.uid,
-            "username": user.username,
-            "nickname": user.nickname,
-            "avatar_url": user.avatar_url,
-        })
-    
+def _page_payload(items: list[dict], total: int, page: int, page_size: int) -> dict:
     return {
         "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
+        "total_pages": (total + page_size - 1) // page_size,
     }
 
 
-@router.get("/posts")
-async def search_posts(
-    q: str = Query(..., min_length=1),
+@router.get("/users", response_model=UserPageResponse)
+def search_users(
+    q: str = Query(min_length=1, max_length=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    term = q.strip()
+    filters = (
+        User.username.ilike(f"%{term}%")
+        | User.nickname.ilike(f"%{term}%")
+    )
+    total = db.exec(
+        select(func.count()).select_from(User).where(filters)
+    ).one()
+    rows = db.exec(
+        select(User)
+        .where(filters)
+        .order_by(User.uid.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [
+        UserSummary(
+            uid=row.uid,
+            username=row.username,
+            nickname=row.nickname,
+            avatar_url=row.avatar_url,
+        ).model_dump()
+        for row in rows
+    ]
+    return _page_payload(items, total, page, page_size)
+
+
+@router.get("/posts", response_model=SearchPostPageResponse)
+def search_posts(
+    q: str = Query(min_length=1, max_length=100),
     section: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """搜索帖子"""
-    offset = (page - 1) * page_size
-    
-    query = db.query(Post).filter(
-        (Post.title.ilike(f"%{q}%")) |
-        (Post.content.ilike(f"%{q}%")),
-        Post.status == "published"
-    )
-    
+    term = q.strip()
+    filters = [
+        Post.status == "published",
+        Post.title.ilike(f"%{term}%") | Post.content.ilike(f"%{term}%"),
+    ]
     if section:
-        query = query.filter(Post.section == section)
-    
-    query = query.order_by(Post.created_at.desc())
-    
-    total = query.count()
-    posts = query.offset(offset).limit(page_size).all()
-    
-    items = []
-    for post in posts:
-        items.append({
-            "id": post.id,
-            "title": post.title,
-            "content": post.content[:200] + "..." if len(post.content) > 200 else post.content,
-            "section": post.section,
-            "author_username": post.author.username,
-            "created_at": post.created_at,
-        })
-    
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
+        filters.append(Post.section == section)
+
+    total = db.exec(
+        select(func.count()).select_from(Post).where(*filters)
+    ).one()
+    rows = db.exec(
+        select(Post)
+        .where(*filters)
+        .order_by(Post.created_at.desc(), Post.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [
+        {
+            "id": row.id,
+            "author_uid": row.author_uid,
+            "title": row.title,
+            "excerpt": row.content[:200],
+            "section": row.section,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+    return _page_payload(items, total, page, page_size)
 
 
-@router.get("/turtle-soups")
-async def search_turtle_soups(
-    q: str = Query(..., min_length=1),
+@router.get("/turtle-soups", response_model=SearchSoupPageResponse)
+def search_soups(
+    q: str = Query(min_length=1, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """搜索海龟汤"""
-    offset = (page - 1) * page_size
-    
-    query = db.query(TurtleSoup).filter(
-        (TurtleSoup.title.ilike(f"%{q}%")) |
-        (TurtleSoup.puzzle.ilike(f"%{q}%")),
-        TurtleSoup.status == "published"
+    term = q.strip()
+    filters = (
+        Soup.status.in_(["published", "revealed"]),
+        Soup.title.ilike(f"%{term}%") | Soup.puzzle.ilike(f"%{term}%"),
     )
-    
-    query = query.order_by(TurtleSoup.average_score.desc())
-    
-    total = query.count()
-    soups = query.offset(offset).limit(page_size).all()
-    
-    items = []
-    for soup in soups:
-        items.append({
-            "id": soup.id,
-            "title": soup.title,
-            "puzzle": soup.puzzle[:200] + "..." if len(soup.puzzle) > 200 else soup.puzzle,
-            "tags": soup.tags,
-            "average_score": soup.average_score,
-            "author_username": soup.author.username,
-            "created_at": soup.created_at,
-        })
-    
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
+    total = db.exec(
+        select(func.count()).select_from(Soup).where(*filters)
+    ).one()
+    rows = db.exec(
+        select(Soup)
+        .where(*filters)
+        .order_by(
+            Soup.bayesian_rating.desc(),
+            Soup.created_at.desc(),
+            Soup.id.desc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [
+        {
+            "id": row.id,
+            "author_uid": row.author_uid,
+            "title": row.title,
+            "puzzle_excerpt": row.puzzle[:200],
+            "average_score": row.avg_rating,
+            "rating_count": row.rating_count,
+            "favorite_count": row.favorite_count,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+    return _page_payload(items, total, page, page_size)

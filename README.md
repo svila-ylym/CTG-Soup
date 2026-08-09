@@ -4,6 +4,16 @@
 
 ## 🚀 快速开始
 
+### Linux/macOS 一键初始化与运行
+
+```bash
+chmod +x dev.sh
+./dev.sh init   # 创建虚拟环境、安装依赖、生成 backend/.env
+./dev.sh dev    # 后端 8000 + 前端 10000
+```
+
+单独运行：`./dev.sh backend` 或 `./dev.sh frontend`。默认使用清华 PyPI 和 npm 镜像；可通过 `PYTHON_INDEX_URL`、`NPM_REGISTRY_URL` 覆盖。
+
 ### Windows 用户 (推荐 PowerShell)
 
 1. **右键点击** `setup.ps1` 选择 "使用 PowerShell 运行"
@@ -47,7 +57,7 @@ npm run dev
 
 ## 🌐 访问地址
 
-- **前端**: http://localhost:3000
+- **前端**: http://localhost:10000
 - **后端 API 文档**: http://localhost:8000/docs
 
 ## 📦 技术栈
@@ -69,7 +79,7 @@ npm run dev
 
 ## 📝 配置说明
 
-首次运行会自动生成 `.env` 文件，需要配置：
+首次运行会自动生成 `backend/.env` 文件，需要配置：
 
 ```env
 # 数据库
@@ -98,7 +108,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 ### 端口被占用
-修改 `.env` 中的 `BACKEND_PORT` 或 `FRONTEND_PORT`
+当前端口由 `dev.sh` 和 `frontend/vite.config.ts` 配置。修改端口时需同步调整启动脚本、Vite 代理、后端 CORS 和 `APP_URL`。
 
 ### 数据库连接失败
-确保 PostgreSQL 服务已启动，并创建 `turtle_soup` 数据库
+确保 PostgreSQL 服务已启动。本机可设置 `AUTO_CREATE_DATABASE=true` 自动创建 `turtle_soup`；若账号没有建库权限，请手动运行 `sudo -u postgres createdb -O postgres turtle_soup`。

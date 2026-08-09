@@ -3,7 +3,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
-from app.core.enums import UserRole, AccountStatus
+from app.core.enums import UserRole, UserStatus
+from app.models.database import ThemePreference
 
 
 # ============ 用户相关 Schema ============
@@ -28,6 +29,8 @@ class UserCreate(UserBase):
             raise ValueError('密码必须包含小写字母')
         if not any(c.isdigit() for c in v):
             raise ValueError('密码必须包含数字')
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('密码不能超过72字节')
         return v
 
 
@@ -39,24 +42,36 @@ class UserLogin(BaseModel):
 class UserUpdate(BaseModel):
     nickname: Optional[str] = Field(None, min_length=1, max_length=50)
     email: Optional[EmailStr] = None
-    avatar_url: Optional[str] = None
+    avatar_asset_id: Optional[int] = Field(default=None, gt=0)
     bio: Optional[str] = None
     notice_preferences: Optional[Dict[str, bool]] = None
 
+    @field_validator('nickname')
+    @classmethod
+    def normalize_nickname(cls, value):
+        return value.strip() if value else value
+
 
 class UserResponse(UserBase):
-    id: int
-    uid: str
+    uid: int
     role: UserRole
-    status: AccountStatus
+    status: UserStatus
     avatar_url: Optional[str] = None
+    avatar_asset_id: Optional[int] = None
     bio: Optional[str] = None
-    score: int
+    points: int
     consecutive_signin_days: int
+    allow_bulk_email: bool = False
+    theme_preference: ThemePreference = ThemePreference.SYSTEM
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+
+class AdminUserUpdate(BaseModel):
+    role: Optional[UserRole] = None
+    status: Optional[UserStatus] = None
 
 
 class Token(BaseModel):
@@ -69,6 +84,68 @@ class TokenData(BaseModel):
     user_id: Optional[int] = None
     username: Optional[str] = None
     role: Optional[UserRole] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1, max_length=4096)
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=512)
+
+
+class EmailVerificationResendRequest(BaseModel):
+    email: EmailStr
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if not any(character.isupper() for character in value):
+            raise ValueError("密码必须包含大写字母")
+        if not any(character.islower() for character in value):
+            raise ValueError("密码必须包含小写字母")
+        if not any(character.isdigit() for character in value):
+            raise ValueError("密码必须包含数字")
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("密码不能超过72字节")
+        return value
+
+
+class UserPreferencesUpdate(BaseModel):
+    allow_bulk_email: Optional[bool] = None
+    theme_preference: Optional[ThemePreference] = None
+
+
+class UploadedAssetResponse(BaseModel):
+    id: int
+    owner_uid: int
+    kind: str
+    storage_key: str
+    public_url: str
+    mime_type: str
+    size: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UploadImageResponse(BaseModel):
+    asset_id: int
+    url: str
+    storage: str
+    key: str
+    mime_type: str
+    size: int
 
 
 # ============ 帖子相关 Schema ============
@@ -273,19 +350,24 @@ class NotificationResponse(BaseModel):
 # ============ 举报相关 Schema ============
 
 class ReportCreate(BaseModel):
-    target_type: str
-    target_id: int
-    reason: str
+    target_type: str = Field(..., min_length=1)
+    target_id: int = Field(..., gt=0)
+    reason: str = Field(..., min_length=2, max_length=2000)
+
+
+class ReportDecision(BaseModel):
+    accepted: bool
+    result: str = Field(..., min_length=2, max_length=2000)
 
 
 class ReportResponse(BaseModel):
     id: int
-    reporter_id: int
+    reporter_uid: int
     target_type: str
     target_id: int
     reason: str
     status: str
-    handler_id: Optional[int] = None
+    handler_uid: Optional[int] = None
     handle_result: Optional[str] = None
     handled_at: Optional[datetime] = None
     created_at: datetime
@@ -337,12 +419,11 @@ class UserAchievementResponse(BaseModel):
 # ============ 处罚相关 Schema ============
 
 class PunishmentCreate(BaseModel):
-    target_user_id: int
+    target_uid: int
     punishment_type: str
     reason: str
     end_time: Optional[datetime] = None
     related_content_id: Optional[int] = None
-    related_content_type: Optional[str] = None
 
 
 class PunishmentRevoke(BaseModel):
@@ -351,8 +432,8 @@ class PunishmentRevoke(BaseModel):
 
 class PunishmentResponse(BaseModel):
     id: int
-    target_user_id: int
-    operator_id: int
+    target_uid: int
+    operator_uid: int
     punishment_type: str
     reason: str
     start_time: datetime
@@ -371,8 +452,8 @@ class PunishmentResponse(BaseModel):
 
 class OperationLogResponse(BaseModel):
     id: int
-    operator_id: int
-    operator_username: str
+    operator_uid: int
+    operator_username: Optional[str] = None
     operator_roles: List[str]
     action_type: str
     target_type: Optional[str] = None

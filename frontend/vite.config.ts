@@ -11,14 +11,20 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    host: '0.0.0.0',
+    allowedHosts: true,
+    port: 10000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:10001',
+        changeOrigin: true,
+      },
+      '/storage': {
+        target: 'http://127.0.0.1:10001',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://127.0.0.1:10001',
         ws: true,
       },
     },

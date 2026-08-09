@@ -1,5 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
-import type { ApiResponse } from '@/types'
+import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 
 class HttpClient {
   private instance: AxiosInstance
@@ -27,7 +26,9 @@ class HttpClient {
 
     // 响应拦截器
     this.instance.interceptors.response.use(
-      (response) => response.data,
+      // Keep the Axios response envelope. The FastAPI endpoints return raw
+      // JSON payloads, and callers consistently consume them through `.data`.
+      (response) => response,
       (error) => {
         if (error.response?.status === 401) {
           // Token 过期，尝试刷新或跳转登录
@@ -40,19 +41,19 @@ class HttpClient {
     )
   }
 
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.get(url, config)
   }
 
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.post(url, data, config)
   }
 
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.put(url, data, config)
   }
 
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.delete(url, config)
   }
 }

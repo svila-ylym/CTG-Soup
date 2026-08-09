@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import type { User, TokenResponse } from '@/types'
+import { extractApiError } from '@/utils/auth'
+import { applyTheme } from '@/utils/theme'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -22,20 +24,20 @@ export const useAuthStore = defineStore('auth', () => {
       await fetchCurrentUser()
       return { success: true }
     } catch (error: any) {
-      return { success: false, message: error.response?.data?.message || '登录失败' }
+      return { success: false, message: extractApiError(error, '登录失败') }
     } finally {
       isLoading.value = false
     }
   }
 
   // 注册
-  async function register(username: string, password: string, email: string) {
+  async function register(username: string, nickname: string, password: string, email: string) {
     isLoading.value = true
     try {
-      await authApi.register({ username, password, email })
+      await authApi.register({ username, nickname, password, email })
       return { success: true }
     } catch (error: any) {
-      return { success: false, message: error.response?.data?.message || '注册失败' }
+      return { success: false, message: extractApiError(error, '注册失败') }
     } finally {
       isLoading.value = false
     }
@@ -48,6 +50,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = ''
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user_uid')
+    localStorage.removeItem('user_role')
   }
 
   // 设置令牌
@@ -64,9 +68,19 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await authApi.getCurrentUser()
       user.value = res.data
+      localStorage.setItem('user_uid', String(res.data.uid))
+      localStorage.setItem('user_role', res.data.role)
+      applyTheme(res.data.theme_preference || 'system')
     } catch (error) {
       logout()
     }
+  }
+
+  function setUser(value: User) {
+    user.value = value
+    localStorage.setItem('user_uid', String(value.uid))
+    localStorage.setItem('user_role', value.role)
+    applyTheme(value.theme_preference || 'system')
   }
 
   // 初始化（从本地存储恢复状态）
@@ -88,6 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     fetchCurrentUser,
+    setUser,
     init,
   }
 })

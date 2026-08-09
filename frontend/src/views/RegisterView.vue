@@ -1,15 +1,12 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4">
+  <main class="flex min-h-screen items-center justify-center bg-white px-4 py-12 dark:bg-black">
     <div class="max-w-md w-full">
-      <!-- Logo -->
       <div class="text-center mb-8">
-        <span class="text-6xl">🐢</span>
-        <h1 class="mt-4 text-3xl font-bold text-gray-900 dark:text-white">创建账号</h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">加入海龟汤社区，开始解谜之旅</p>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">创建账号</h1>
       </div>
 
       <!-- 注册表单 -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+      <div class="border-y border-slate-200 bg-white py-8 dark:border-neutral-800 dark:bg-black sm:px-8">
         <form @submit.prevent="handleRegister" class="space-y-6">
           <!-- 用户名 -->
           <div>
@@ -21,7 +18,7 @@
               v-model="formData.username"
               type="text"
               required
-              class="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="form-control mt-1"
               placeholder="支持中英文，4-20 个字符"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">支持中英文，4-20 个字符</p>
@@ -37,7 +34,7 @@
               v-model="formData.email"
               type="email"
               required
-              class="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="form-control mt-1"
               placeholder="请输入您的邮箱"
             />
           </div>
@@ -52,7 +49,7 @@
               v-model="formData.password"
               type="password"
               required
-              class="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="form-control mt-1"
               placeholder="长度≥8 位，包含大小写字母与数字"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">长度≥8 位，包含大小写字母与数字</p>
@@ -68,13 +65,13 @@
               v-model="formData.confirmPassword"
               type="password"
               required
-              class="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="form-control mt-1"
               placeholder="请再次输入密码"
             />
           </div>
 
           <!-- 错误提示 -->
-          <div v-if="errorMessage" class="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg p-3">
+          <div v-if="errorMessage" class="break-words rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
             {{ errorMessage }}
           </div>
 
@@ -82,9 +79,9 @@
           <button
             type="submit"
             :disabled="isLoading"
-            class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            class="flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span v-if="isLoading">注册中...</span>
+            <span v-if="isLoading">注册中…</span>
             <span v-else>注册</span>
           </button>
         </form>
@@ -98,7 +95,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -144,14 +141,19 @@ const handleRegister = async () => {
   isLoading.value = true
   errorMessage.value = ''
 
-  const result = await authStore.register(formData.username, formData.password, formData.email)
+  const result = await authStore.register(
+    formData.username,
+    formData.username,
+    formData.password,
+    formData.email,
+  )
 
   if (result.success) {
     // 显示成功提示
     if ((window as any).showToast) {
       (window as any).showToast('注册成功！请登录', 'success')
     }
-    router.push('/login')
+    router.push({ path: '/verify-email', query: { email: formData.email } })
   } else {
     errorMessage.value = result.message || '注册失败，请稍后重试'
   }

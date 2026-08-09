@@ -1,17 +1,24 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
 from functools import lru_cache
 from typing import List, Optional
+from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import secrets
 
 
 class Settings(BaseSettings):
     # 应用配置
-    APP_NAME: str = "海龟汤社区平台"
+    APP_NAME: str = "汤吧社区"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
-    APP_URL: Optional[str] = "http://localhost:5173"  # 前端地址
+    APP_URL: Optional[str] = "http://localhost:10000"  # 前端地址
+    PUBLIC_WEB_URL: Optional[str] = None
+    SIGNIN_TIMEZONE: str = "Asia/Shanghai"
     
     # 数据库配置
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/turtle_soup"
+    AUTO_CREATE_DATABASE: bool = False
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
     
@@ -22,7 +29,7 @@ class Settings(BaseSettings):
     ELASTICSEARCH_URL: str = "http://localhost:9200"
     
     # JWT配置
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -30,17 +37,24 @@ class Settings(BaseSettings):
     # 邮件配置 (SMTP)
     SMTP_HOST: str = "smtp.example.com"
     SMTP_PORT: int = 587
+    SMTP_USE_SSL: bool = False
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     VERIFICATION_CODE_EXPIRE_MINUTES: int = 30
     EMAIL_DOMAIN_WHITELIST: Optional[List[str]] = None  # 邮箱域名白名单
+    EMAIL_VERIFICATION_IP_LIMIT: int = 5
+    EMAIL_VERIFICATION_EMAIL_LIMIT: int = 3
+    EMAIL_VERIFICATION_GLOBAL_LIMIT: int = 100
+    EMAIL_VERIFICATION_IP_WINDOW_SECONDS: int = 60
+    EMAIL_VERIFICATION_EMAIL_WINDOW_SECONDS: int = 3600
+    EMAIL_VERIFICATION_GLOBAL_WINDOW_SECONDS: int = 60
+    SMTP_VERIFICATION_RETRY_ATTEMPTS: int = 3
     
-    # 对象存储配置
-    S3_ENDPOINT_URL: Optional[str] = None
-    S3_BUCKET_NAME: str = "turtle-soup"
-    S3_ACCESS_KEY: Optional[str] = None
-    S3_SECRET_KEY: Optional[str] = None
+    # 本地文件存储配置
+    LOCAL_STORAGE_DIR: str = "storage"
+    PRIVATE_STORAGE_DIR: str = "private-storage"
+    MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
     
     # 分页配置
     DEFAULT_PAGE_SIZE: int = 20
@@ -49,6 +63,34 @@ class Settings(BaseSettings):
     # 贝叶斯平均参数
     BAYESIAN_C: float = 3.0  # 先验评分数量
     BAYESIAN_M: float = 5.0  # 先验平均分
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, value: str) -> str:
+        normalized = value.strip()
+        insecure_prefixes = ("your-secret", "replace-with", "change-this")
+        if len(normalized) < 32 or normalized.lower().startswith(insecure_prefixes):
+            raise ValueError("SECRET_KEY must be a non-placeholder value of at least 32 characters")
+        return normalized
+
+    @property
+    def public_web_url(self) -> str:
+        value = (
+            self.PUBLIC_WEB_URL or self.APP_URL or "http://localhost:10000"
+        ).strip().rstrip("/")
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("PUBLIC_WEB_URL must be an absolute HTTP(S) URL")
+        return value
+
+    @field_validator("SIGNIN_TIMEZONE")
+    @classmethod
+    def validate_signin_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("SIGNIN_TIMEZONE must be a valid IANA timezone") from exc
+        return value
     
     class Config:
         env_file = ".env"
