@@ -7,9 +7,6 @@ class HttpClient {
     this.instance = axios.create({
       baseURL,
       timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
     })
 
     // 请求拦截器

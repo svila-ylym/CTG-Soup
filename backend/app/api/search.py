@@ -118,7 +118,7 @@ def search_soups(
         select(Soup)
         .where(*filters)
         .order_by(
-            Soup.bayesian_rating.desc(),
+            Soup.avg_rating.desc(),
             Soup.created_at.desc(),
             Soup.id.desc(),
         )

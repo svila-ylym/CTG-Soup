@@ -5,6 +5,7 @@ import { PlusIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { formatChinaDateTime } from '@/utils/datetime'
 import type { Competition, PageResult } from '@/types'
 const router = useRouter(); const competitions = ref<Competition[]>([]); const loading = ref(true); const error = ref(''); const status = ref('')
 const auth = useAuthStore()
@@ -48,7 +49,7 @@ function statusText(value: string) { return value === 'ongoing' ? '进行中' : 
           </div>
           <p class="mt-3 line-clamp-3 flex-1 break-words text-sm leading-6 text-slate-600 dark:text-slate-300">{{ competition.description }}</p>
           <div class="mt-4 border-t border-slate-200 pt-4 text-xs text-slate-500">
-            <p>{{ new Date(competition.start_time).toLocaleString() }} 至 {{ new Date(competition.end_time).toLocaleString() }}</p>
+            <p>{{ formatChinaDateTime(competition.start_time) }} 至 {{ formatChinaDateTime(competition.end_time) }}（UTC+8）</p>
             <p class="mt-2">{{ competition.required_tag_ids.length }} 个必需标签 · 前 {{ competition.top_n }} 名</p>
           </div>
         </article>

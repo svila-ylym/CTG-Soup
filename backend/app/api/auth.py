@@ -22,12 +22,19 @@ from app.schemas import (
 )
 from app.core.config import get_settings
 from app.models.database import UserRole
+from app.services.moderation_locks import lock_user_punishments
+from app.services.punishments import (
+    active_punishment_types,
+    effective_user_status,
+    sync_user_punishment_status,
+)
 from app.services.email_verification import (
     hash_verification_token,
     new_verification_token,
     verification_expiry,
 )
 from app.services.rate_limiter import rate_limiter
+from app.services.pending_accounts import allocate_user_uid
 from app.utils.email import get_smtp_service
 
 router = APIRouter()
@@ -113,13 +120,16 @@ def _resolve_user_from_token(token: str, db: Session) -> User:
         token_data = TokenData(user_id=int(payload["sub"]))
     except (TypeError, ValueError) as exc:
         raise credentials_exception from exc
-    
+
     user = db.query(User).filter(User.uid == token_data.user_id).first()
     if user is None:
         raise credentials_exception
+    if sync_user_punishment_status(db, user):
+        db.commit()
+        db.refresh(user)
     if payload.get("ver") != user.token_version:
         raise credentials_exception
-    
+
     # 检查用户状态
     if user.status == UserStatus.BANNED:
         raise HTTPException(
@@ -131,7 +141,7 @@ def _resolve_user_from_token(token: str, db: Session) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="请先完成邮箱验证",
         )
-    
+
     return user
 
 
@@ -198,7 +208,7 @@ def validate_email_domain(email: str) -> bool:
     """验证邮箱域名是否在白名单中"""
     if not settings.EMAIL_DOMAIN_WHITELIST:
         return True
-    
+
     domain = email.split('@')[-1]
     return domain in settings.EMAIL_DOMAIN_WHITELIST
 
@@ -267,13 +277,13 @@ async def register(
     existing_user = db.query(User).filter(
         (User.username == username) | (User.email == email)
     ).first()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户名或邮箱已被注册"
         )
-    
+
     # 验证邮箱域名白名单
     if not validate_email_domain(email):
         raise HTTPException(
@@ -286,21 +296,26 @@ async def register(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="请求过于频繁，请稍后再试",
         )
-    
+
     # 创建新用户
     hashed_password = get_password_hash(user_data.password)
+    allocated_uid = allocate_user_uid(db)
     db_user = User(
+        uid=allocated_uid,
         username=username,
         nickname=user_data.nickname,
         email=email,
         hashed_password=hashed_password,
         role=UserRole.USER,
         status=UserStatus.PENDING_EMAIL,
+        allow_bulk_email=True,
     )
 
     try:
         db.add(db_user)
         db.flush()
+        if db_user.uid == 1:
+            db_user.role = UserRole.ROOT
         token = _create_verification(db, db_user, datetime.utcnow())
         db.commit()
         db.refresh(db_user)
@@ -316,7 +331,7 @@ async def register(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="账号已创建，但验证邮件发送失败，请稍后重新发送",
         )
-    
+
     return db_user
 
 
@@ -359,8 +374,14 @@ async def verify_email(
             },
         )
 
+    lock_user_punishments(db, user.uid)
+    db.refresh(user)
     verification.used_at = now
-    user.status = UserStatus.ACTIVE
+    if user.status in {UserStatus.BANNED, UserStatus.SILENCED}:
+        active_types = active_punishment_types(db, user.uid, now)
+        user.status = effective_user_status(db, user, active_types)
+    else:
+        user.status = UserStatus.ACTIVE
     db.commit()
     return {"message": "邮箱验证成功，请登录"}
 
@@ -409,14 +430,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     user = db.query(User).filter(
         (User.username == form_data.username) | (User.email == form_data.username)
     ).first()
-    
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    if sync_user_punishment_status(db, user):
+        db.commit()
+        db.refresh(user)
+
     if user.status == UserStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -427,7 +452,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             status_code=status.HTTP_403_FORBIDDEN,
             detail="请先完成邮箱验证",
         )
-    
+
     # 生成令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -446,10 +471,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             "ver": user.token_version,
         }
     )
-    
+
     # 更新最后登录时间等
     # 这里可以添加登录日志等
-    
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -469,7 +494,7 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             detail="无效的刷新令牌",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     user = db.query(User).filter(User.uid == user_id).first()
     if not user:
         raise HTTPException(
@@ -477,13 +502,16 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             detail="用户不存在",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if sync_user_punishment_status(db, user):
+        db.commit()
+        db.refresh(user)
     if payload.get("ver") != user.token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的刷新令牌",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if user.status == UserStatus.BANNED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -494,7 +522,7 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             status_code=status.HTTP_403_FORBIDDEN,
             detail="请先完成邮箱验证",
         )
-    
+
     # 生成新的访问令牌
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -513,7 +541,7 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             "ver": user.token_version,
         }
     )
-    
+
     return {
         "access_token": access_token,
         "refresh_token": new_refresh_token,

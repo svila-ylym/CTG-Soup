@@ -2,33 +2,7 @@
   <main class="page-shell">
     <div class="page-container">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">海龟汤排行榜</h1>
-      <p class="text-gray-600 dark:text-gray-400 mb-8">基于贝叶斯平均算法的公正排名</p>
-
-      <!-- 排序切换 -->
-      <div class="flex space-x-4 mb-6">
-        <button
-          @click="fetchLeaderboard('bayesian')"
-          :class="[
-            'min-h-10 rounded-md px-4 py-2 transition',
-            currentType === 'bayesian'
-              ? 'bg-blue-500 text-white'
-              : 'bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
-          ]"
-        >
-          贝叶斯评分
-        </button>
-        <button
-          @click="fetchLeaderboard('average')"
-          :class="[
-            'min-h-10 rounded-md px-4 py-2 transition',
-            currentType === 'average'
-              ? 'bg-blue-500 text-white'
-              : 'bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
-          ]"
-        >
-          平均分
-        </button>
-      </div>
+      <p class="mb-8 text-gray-600 dark:text-gray-400">按作品平均分排名</p>
 
       <!-- 加载状态 -->
       <div v-if="soupStore.isLoading" class="flex justify-center py-12">
@@ -85,20 +59,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { ChartBarIcon } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
 
 const soupStore = useSoupStore()
-const currentType = ref<'bayesian' | 'average'>('bayesian')
-
-const fetchLeaderboard = (type: 'bayesian' | 'average') => {
-  currentType.value = type
-  soupStore.fetchLeaderboard(50, type)
-}
-
 onMounted(() => {
-  fetchLeaderboard('bayesian')
+  soupStore.fetchLeaderboard(50)
 })
 </script>

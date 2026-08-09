@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { formatChinaDateTime, parseUtcDateTime } from '@/utils/datetime'
 import type { Competition } from '@/types'
 const route = useRoute(); const router = useRouter(); const competition = ref<Competition | null>(null); const loading = ref(true); const error = ref(''); const settling = ref(false); const settleMessage = ref('')
+const auth = useAuthStore()
+const canSettle = computed(() => auth.isAdmin
+  && competition.value !== null
+  && competition.value.settled_at === null
+  && Date.now() >= parseUtcDateTime(competition.value.end_time).getTime())
 async function load() { loading.value = true; error.value = ''; try { competition.value = (await http.get<Competition>(`/competitions/${route.params.id}`)).data } catch (cause) { error.value = extractApiError(cause, '比赛不存在或无法加载') } finally { loading.value = false } }
 async function settle() { settling.value = true; settleMessage.value = ''; try { competition.value = (await http.post<Competition>(`/competitions/${route.params.id}/settle`)).data; settleMessage.value = '比赛已结算' } catch (cause) { settleMessage.value = extractApiError(cause, '结算失败') } finally { settling.value = false } }
 onMounted(load)
@@ -30,12 +37,12 @@ onMounted(load)
           </div>
           <p class="mt-6 break-words whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{{ competition.description }}</p>
           <dl class="mt-8 grid gap-4 border-t border-slate-200 pt-6 sm:grid-cols-3">
-            <div><dt class="text-sm text-slate-500">时间</dt><dd class="mt-1 text-sm">{{ new Date(competition.start_time).toLocaleString() }}<br>至 {{ new Date(competition.end_time).toLocaleString() }}</dd></div>
-            <div><dt class="text-sm text-slate-500">评分方式</dt><dd class="mt-1">{{ competition.score_type }} · 前 {{ competition.top_n }} 名</dd></div>
+            <div><dt class="text-sm text-slate-500">时间（UTC+8）</dt><dd class="mt-1 text-sm">{{ formatChinaDateTime(competition.start_time) }}<br>至 {{ formatChinaDateTime(competition.end_time) }}</dd></div>
+            <div><dt class="text-sm text-slate-500">评分方式</dt><dd class="mt-1">平均分 · 前 {{ competition.top_n }} 名</dd></div>
             <div><dt class="text-sm text-slate-500">标签 ID</dt><dd class="mt-1 break-words">{{ competition.required_tag_ids.join('、') }}</dd></div>
           </dl>
           <div class="mt-8 flex flex-wrap items-center gap-3">
-            <button v-if="competition.status !== 'completed'" class="btn-secondary" :disabled="settling" @click="settle">{{ settling ? '结算中…' : '管理员结算' }}</button>
+            <button v-if="canSettle" class="btn-secondary" :disabled="settling" @click="settle">{{ settling ? '结算中…' : '管理员结算' }}</button>
             <span v-if="settleMessage" class="min-w-0 break-words text-sm" :class="settleMessage.includes('失败') ? 'text-red-600' : 'text-emerald-600'">{{ settleMessage }}</span>
           </div>
         </section>

@@ -20,6 +20,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     try {
       const res = await authApi.login({ username, password })
+      logout()
       setTokens(res.data)
       await fetchCurrentUser()
       return { success: true }

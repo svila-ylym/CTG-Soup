@@ -153,7 +153,7 @@ class User(SQLModel, table=True):
     )
     bio: Optional[str] = None
     points: int = Field(default=0)
-    allow_bulk_email: bool = Field(default=False, index=True)
+    allow_bulk_email: bool = Field(default=True, index=True)
     theme_preference: ThemePreference = Field(
         default=ThemePreference.SYSTEM,
         sa_column=Column(
@@ -187,6 +187,20 @@ class EmailVerification(SQLModel, table=True):
     expires_at: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     used_at: Optional[datetime] = None
+
+
+class UserUidAllocator(SQLModel, table=True):
+    __tablename__ = "user_uid_allocator"
+
+    id: int = Field(default=1, primary_key=True)
+    next_uid: int = Field(ge=1)
+
+
+class ReusableUserUid(SQLModel, table=True):
+    __tablename__ = "reusable_user_uids"
+
+    uid: int = Field(primary_key=True, ge=1)
+    released_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
 class UploadedAsset(SQLModel, table=True):
@@ -333,13 +347,37 @@ class Soup(SQLModel, table=True):
     secondary_player_count: str = Field(default="", sa_column=Column(Text, nullable=False))
     avg_rating: float = Field(default=0.0)
     rating_count: int = Field(default=0)
-    bayesian_rating: float = Field(default=0.0)
     like_count: int = Field(default=0)
     favorite_count: int = Field(default=0)
     view_count: int = Field(default=0)
     status: str = Field(default="published")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SoupImage(SQLModel, table=True):
+    __tablename__ = "soup_images"
+    __table_args__ = (
+        UniqueConstraint("soup_id", "asset_id", name="uq_soup_images_soup_asset"),
+        UniqueConstraint(
+            "soup_id",
+            "placement",
+            "sort_order",
+            name="uq_soup_images_placement_order",
+        ),
+        CheckConstraint(
+            "placement IN ('puzzle', 'solution')",
+            name="ck_soup_images_placement",
+        ),
+        CheckConstraint("sort_order >= 0", name="ck_soup_images_sort_order"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    soup_id: int = Field(foreign_key="soups.id", index=True)
+    asset_id: int = Field(foreign_key="uploaded_assets.id", index=True)
+    placement: str = Field(max_length=16, index=True)
+    sort_order: int = Field(ge=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class SoupTag(SQLModel, table=True):

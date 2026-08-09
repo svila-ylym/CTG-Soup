@@ -52,17 +52,17 @@
             <!-- 通知图标 -->
             <button @click="$router.push('/notifications')" class="relative flex h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300" type="button" aria-label="通知" title="通知">
               <BellIcon class="h-6 w-6" aria-hidden="true" />
-              <span v-if="unreadCount > 0" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] text-white">
-                {{ unreadLabel }}
-              </span>
+              <span v-if="unreadStore.hasNotifications" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读通知"></span>
             </button>
 
-            <button @click="$router.push('/system-messages')" class="hidden h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300 sm:flex" type="button" aria-label="系统消息" title="系统消息">
+            <button @click="$router.push('/system-messages')" class="relative hidden h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300 sm:flex" type="button" aria-label="系统消息" title="系统消息">
               <InboxIcon class="h-6 w-6" aria-hidden="true" />
+              <span v-if="unreadStore.hasSystemMessages" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读系统消息"></span>
             </button>
 
-            <button @click="$router.push('/messages')" class="hidden h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300 sm:flex" type="button" aria-label="私信" title="私信">
+            <button @click="$router.push('/messages')" class="relative hidden h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300 sm:flex" type="button" aria-label="私信" title="私信">
               <ChatBubbleLeftRightIcon class="h-6 w-6" aria-hidden="true" />
+              <span v-if="chatStore.hasUnreadMessages" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读私信"></span>
             </button>
 
             <!-- 发布按钮 -->
@@ -122,9 +122,9 @@
       </div>
       <div v-if="mobileOpen" class="mobile-nav xl:hidden">
         <router-link v-for="item in mobileLinks" :key="item.to" :to="item.to" @click="mobileOpen = false">{{ item.label }}</router-link>
-        <router-link v-if="authStore.isAuthenticated" to="/messages" @click="mobileOpen = false">私信</router-link>
-        <router-link v-if="authStore.isAuthenticated" to="/system-messages" @click="mobileOpen = false">系统消息</router-link>
-        <router-link v-if="authStore.isAuthenticated" to="/notifications" @click="mobileOpen = false">通知</router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/messages" class="inline-flex items-center gap-2" @click="mobileOpen = false">私信<span v-if="chatStore.hasUnreadMessages" class="h-2 w-2 rounded-full bg-red-500" aria-label="有未读私信"></span></router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/system-messages" class="inline-flex items-center gap-2" @click="mobileOpen = false">系统消息<span v-if="unreadStore.hasSystemMessages" class="h-2 w-2 rounded-full bg-red-500" aria-label="有未读系统消息"></span></router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/notifications" class="inline-flex items-center gap-2" @click="mobileOpen = false">通知<span v-if="unreadStore.hasNotifications" class="h-2 w-2 rounded-full bg-red-500" aria-label="有未读通知"></span></router-link>
         <router-link v-if="authStore.isRoot" :to="{ path: '/admin/broadcasts', query: { tab: 'email' } }" @click="mobileOpen = false">邮件群发</router-link>
         <router-link to="/search" @click="mobileOpen = false">搜索</router-link>
       </div>
@@ -136,6 +136,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+import { useUnreadStore } from '@/stores/unread'
 import { Bars3Icon, BellIcon, ChatBubbleLeftRightIcon, InboxIcon, MagnifyingGlassIcon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { applyTheme, storedTheme } from '@/utils/theme'
 import SigninControl from '@/components/SigninControl.vue'
@@ -143,11 +145,11 @@ import SigninControl from '@/components/SigninControl.vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
+const unreadStore = useUnreadStore()
 
 const searchQuery = ref('')
 const showUserMenu = ref(false)
-const unreadCount = ref(0)
-const unreadLabel = computed(() => unreadCount.value > 99 ? '99+' : String(unreadCount.value))
 const isDark = ref(false)
 const mobileOpen = ref(false)
 const mobileLinks = [
@@ -184,7 +186,22 @@ watch(
   },
 )
 
+watch(
+  () => authStore.user?.uid ?? null,
+  (uid) => {
+    unreadStore.reset()
+    chatStore.reset()
+    if (uid === null || !authStore.accessToken) return
+    unreadStore.startPolling()
+    void chatStore.loadConversations()
+    chatStore.connect()
+  },
+  { immediate: true },
+)
+
 const handleLogout = () => {
+  unreadStore.reset()
+  chatStore.reset()
   authStore.logout()
   router.push('/')
   showUserMenu.value = false
@@ -217,5 +234,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', closeMenu)
   window.removeEventListener('themechange', syncThemeState)
+  unreadStore.stopPolling()
+  chatStore.disconnect()
 })
 </script>

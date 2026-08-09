@@ -31,7 +31,7 @@ const password = reactive({ old: '', next: '', confirm: '' })
 const selectedAvatarId = ref<number | null>(null)
 const avatarChanged = ref(false)
 const assets = ref<UploadedAsset[]>([])
-const allowBulkEmail = ref(false)
+const allowBulkEmail = ref(true)
 const themePreference = ref<ThemePreference>('system')
 const busy = ref(false)
 const uploading = ref(false)
@@ -44,7 +44,7 @@ function populate(user: User | null) {
   profile.email = user.email
   profile.bio = user.bio || ''
   selectedAvatarId.value = user.avatar_asset_id ?? null
-  allowBulkEmail.value = user.allow_bulk_email ?? false
+  allowBulkEmail.value = user.allow_bulk_email ?? true
   themePreference.value = user.theme_preference || 'system'
 }
 
@@ -239,7 +239,7 @@ onMounted(async () => {
           <input v-model="allowBulkEmail" class="mt-1 h-4 w-4" type="checkbox">
           <span>
             <strong class="block text-sm">接收社区批量邮件</strong>
-            <span class="mt-1 block text-sm text-slate-500">仅在主动开启后接收管理员发布的活动和社区邮件。</span>
+            <span class="mt-1 block text-sm text-slate-500">用于接收管理员发布的活动和社区邮件，可随时关闭。</span>
           </span>
         </label>
         <button class="btn-primary mt-5" :disabled="busy" @click="savePreferences({ allow_bulk_email: allowBulkEmail })">保存通知设置</button>

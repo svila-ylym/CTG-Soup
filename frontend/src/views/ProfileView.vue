@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { profileApi } from '@/api/profile'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { parseUtcDateTime } from '@/utils/datetime'
 import type { ProfileSoupSummary, PublicProfile } from '@/types'
-import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownIcon, ArrowUpIcon, FlagIcon } from '@heroicons/vue/24/outline'
 import SigninControl from '@/components/SigninControl.vue'
+import ReportDialog from '@/components/ReportDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +20,7 @@ const error = ref('')
 const page = ref(1)
 const editingFeatured = ref(false)
 const featuredIds = ref<number[]>([])
+const reportOpen = ref(false)
 
 const uid = computed(() => Number(route.params.uid))
 const isSelf = computed(() => profile.value?.relation.is_self === true)
@@ -116,7 +119,10 @@ async function saveFeatured() {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value))
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Shanghai',
+  }).format(parseUtcDateTime(value))
 }
 
 watch(
@@ -169,6 +175,7 @@ watch(
               {{ profile.relation.is_following ? '取消关注' : '关注' }}
             </button>
             <button class="btn-secondary" type="button" :disabled="profile.relation.is_blocked" @click="router.push({ path: '/messages', query: { uid: profile.user.uid } })">发消息</button>
+            <button v-if="auth.isAuthenticated" class="inline-flex h-10 w-10 items-center justify-center text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" type="button" title="举报用户" aria-label="举报用户" @click="reportOpen = true"><FlagIcon class="h-5 w-5" aria-hidden="true" /></button>
           </template>
         </div>
       </header>
@@ -247,6 +254,7 @@ watch(
       </section>
 
       <p v-if="error" class="pb-6 text-sm text-red-700">{{ error }}</p>
+      <ReportDialog :open="reportOpen" target-type="user" :target-id="profile.user.uid" @close="reportOpen = false" />
     </div>
   </main>
 </template>

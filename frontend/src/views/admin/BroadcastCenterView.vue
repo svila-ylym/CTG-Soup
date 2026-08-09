@@ -16,6 +16,7 @@ import {
   type SystemMessageInput,
 } from '@/api/systemMessages'
 import { extractApiError } from '@/utils/auth'
+import { parseUtcDateTime } from '@/utils/datetime'
 import type {
   BroadcastUser,
   EmailCampaignCategory,
@@ -79,7 +80,11 @@ function formatBytes(value: number) {
 
 function formatDate(value: string | null) {
   if (!value) return '-'
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Shanghai',
+  }).format(parseUtcDateTime(value))
 }
 
 function statusLabel(status: EmailCampaignSummary['status']) {

@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import suppress
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -5,12 +8,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+from sqlmodel import Session
 
 from app.core.config import get_settings
 from app.api import auth, users, posts, turtle_soups, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages
 from pathlib import Path
-from app.db import init_db
+from app.db import engine, init_db
 from app.services.dependency_health import optional_dependency_status
+from app.services.pending_accounts import cleanup_expired_pending_users
 
 settings = get_settings()
 
@@ -20,6 +25,27 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_pending_accounts_once() -> None:
+    try:
+        with Session(engine) as db:
+            deleted_uids = cleanup_expired_pending_users(db)
+    except Exception:
+        logger.exception("Pending-account cleanup failed")
+        return
+    if deleted_uids:
+        logger.info(
+            "Deleted %s expired pending accounts uids=%s",
+            len(deleted_uids),
+            deleted_uids,
+        )
+
+
+async def _pending_account_cleanup_loop() -> None:
+    while True:
+        await asyncio.sleep(60)
+        _cleanup_pending_accounts_once()
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -150,7 +176,10 @@ async def startup_event():
     # 初始化数据库表
     init_db()
     logger.info("数据库初始化完成")
-    # 这里可以添加其他启动逻辑，如Redis连接、Elasticsearch索引等
+    _cleanup_pending_accounts_once()
+    app.state.pending_account_cleanup_task = asyncio.create_task(
+        _pending_account_cleanup_loop()
+    )
     logger.info("应用启动完成")
 
 
@@ -158,7 +187,11 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("应用关闭中...")
-    # 这里可以添加清理逻辑
+    task = getattr(app.state, "pending_account_cleanup_task", None)
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
     logger.info("应用已关闭")
 
 

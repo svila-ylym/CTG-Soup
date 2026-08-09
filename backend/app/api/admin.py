@@ -1,17 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign
+from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign, Notification, NotificationType, ReportStatus
 from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse
 from app.api.auth import get_current_admin_user, get_current_root_user, get_current_user
 from app.models.database import UserRole, UserStatus, PunishmentType
 from app.core.enums import ActionType
-from app.services.governance_rules import can_manage_role, status_from_active_punishments
+from app.services.governance_rules import can_manage_role
 from app.services.governance_rules import decide_report
 from app.schemas.announcements import TagAdminCreate, TagAdminUpdate, TagMergeRequest, AnnouncementCreate, AnnouncementUpdate
 from app.services.tag_rules import normalize_tag_name
+from app.services.reporting import ReportTargetError, inspect_report_target, validate_report_target
+from app.services.moderation_locks import lock_report_submission, lock_role_management, lock_user_punishments
+from app.services.punishments import (
+    active_punishment_types,
+    effective_user_status,
+    sync_user_punishment_status,
+)
 from app.api.system_messages import admin_router as system_message_admin_router
 from app.schemas.email_campaigns import EmailCampaignCreate, EmailCampaignPage, EmailCampaignSummary
 from app.services.email_campaigns import cancel_campaign, campaign_summary, create_campaign, queue_campaign
@@ -220,6 +228,33 @@ def admin_list_announcements(
     }
 
 
+@router.put("/announcements/{announcement_id}")
+def admin_update_announcement(
+    announcement_id: int,
+    data: AnnouncementUpdate,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    announcement = db.get(Announcement, announcement_id)
+    if not announcement:
+        raise HTTPException(404, "公告不存在")
+    values = data.model_dump(exclude_unset=True)
+    for key, value in values.items():
+        setattr(announcement, key, value)
+    announcement.updated_at = datetime.utcnow()
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="update",
+        target_type="announcement",
+        target_id=announcement.id,
+        details={"fields": list(values)},
+    ))
+    db.commit()
+    db.refresh(announcement)
+    return announcement
+
+
 @router.post("/announcements/{announcement_id}/publish")
 def admin_publish_announcement(
     announcement_id: int,
@@ -373,7 +408,7 @@ async def delete_permission_group(group_id: int, current_user: User = Depends(ge
 
 
 @router.put("/permission-groups/{group_id}/members/{uid}")
-async def assign_permission_group(group_id: int, uid: int, current_user: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
+async def assign_permission_group(group_id: int, uid: int, current_user: User = Depends(get_current_root_user), db: Session = Depends(get_db)):
     if not db.get(PermissionGroup, group_id) or not db.get(User, uid):
         raise HTTPException(404, "权限组或用户不存在")
     if not db.query(UserPermissionGroup).filter_by(user_uid=uid, group_id=group_id).first():
@@ -391,7 +426,7 @@ async def assign_permission_group(group_id: int, uid: int, current_user: User = 
 
 
 @router.delete("/permission-groups/{group_id}/members/{uid}")
-async def remove_permission_group(group_id: int, uid: int, current_user: User = Depends(get_current_admin_user), db: Session = Depends(get_db)):
+async def remove_permission_group(group_id: int, uid: int, current_user: User = Depends(get_current_root_user), db: Session = Depends(get_db)):
     membership = db.query(UserPermissionGroup).filter_by(user_uid=uid, group_id=group_id).first()
     if membership:
         db.delete(membership)
@@ -414,10 +449,39 @@ async def submit_report(
     db: Session = Depends(get_db),
 ):
     """Submit a report; moderation decisions are restricted to admins."""
+    try:
+        target = validate_report_target(
+            db,
+            data.target_type,
+            data.target_id,
+            current_user.uid,
+        )
+    except ReportTargetError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    lock_report_submission(
+        db,
+        current_user.uid,
+        target.target_type.value,
+        target.target_id,
+    )
+    duplicate = db.query(Report).filter(
+        Report.reporter_uid == current_user.uid,
+        Report.target_type == target.target_type,
+        Report.target_id == target.target_id,
+        Report.status == ReportStatus.PENDING,
+    ).first()
+    if duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "REPORT_ALREADY_PENDING", "message": "该目标已有待处理举报"},
+        )
     report = Report(
         reporter_uid=current_user.uid,
-        target_type=data.target_type,
-        target_id=data.target_id,
+        target_type=target.target_type,
+        target_id=target.target_id,
         reason=data.reason.strip(),
     )
     db.add(report)
@@ -433,7 +497,9 @@ async def decide_report_endpoint(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    report = db.query(Report).filter(Report.id == report_id).first()
+    report = db.exec(
+        select(Report).where(Report.id == report_id).with_for_update()
+    ).first()
     if not report:
         raise HTTPException(status_code=404, detail="举报不存在")
     try:
@@ -458,6 +524,14 @@ async def decide_report_endpoint(
         target_id=report.id,
         details={"accepted": data.accepted, "result": data.result},
     ))
+    db.add(Notification(
+        recipient_uid=report.reporter_uid,
+        notification_type=NotificationType.REPORT_RESULT,
+        title="举报处理结果",
+        content=f"你提交的举报 #{report.id} 已{'采纳' if data.accepted else '驳回'}：{report.handle_result}",
+        related_entity_type="report",
+        related_entity_id=report.id,
+    ))
     db.commit()
     db.refresh(report)
     return report
@@ -474,18 +548,24 @@ async def list_users(
 ):
     """获取用户列表（管理员）"""
     offset = (page - 1) * page_size
-    
+
     query = db.query(User)
-    
+
     if role:
         query = query.filter(User.role == role)
     if status_filter:
         query = query.filter(User.status == status_filter)
-    
+
     query = query.order_by(User.created_at.desc())
-    
+
     total = query.count()
     users = query.offset(offset).limit(page_size).all()
+    statuses_changed = False
+    for user in users:
+        if user.status in {UserStatus.BANNED, UserStatus.SILENCED}:
+            statuses_changed = sync_user_punishment_status(db, user) or statuses_changed
+    if statuses_changed:
+        db.commit()
     user_uids = [user.uid for user in users]
     memberships = db.query(UserPermissionGroup).filter(
         UserPermissionGroup.user_uid.in_(user_uids)
@@ -493,7 +573,7 @@ async def list_users(
     groups_by_user: dict[int, list[int]] = {}
     for membership in memberships:
         groups_by_user.setdefault(membership.user_uid, []).append(membership.group_id)
-    
+
     items = []
     for user in users:
         items.append({
@@ -508,7 +588,7 @@ async def list_users(
             "group_ids": groups_by_user.get(user.uid, []),
             "created_at": user.created_at,
         })
-    
+
     return {
         "items": items,
         "total": total,
@@ -525,18 +605,39 @@ async def update_user_management(
     current_user: User = Depends(get_current_root_user),
     db: Session = Depends(get_db),
 ):
+    lock_role_management(db)
     target = db.get(User, uid)
     if target is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    lock_user_punishments(db, target.uid)
+    db.refresh(target)
     if data.role is None and data.status is None:
         raise HTTPException(status_code=400, detail="至少需要修改角色或状态")
 
     next_role = UserRole(data.role.value) if data.role is not None else target.role
     next_status = UserStatus(data.status.value) if data.status is not None else target.status
+    punitive_statuses = {UserStatus.BANNED, UserStatus.SILENCED}
+    if target.status != next_status and next_status in punitive_statuses:
+        raise HTTPException(status_code=400, detail="封禁或禁言必须通过处罚功能执行")
+    if target.status in punitive_statuses and next_status != target.status:
+        active_punishment = db.query(Punishment).filter(
+            Punishment.target_uid == target.uid,
+            Punishment.punishment_type.in_([PunishmentType.BAN, PunishmentType.SILENCE]),
+            Punishment.is_revoked == False,
+            or_(Punishment.end_time.is_(None), Punishment.end_time > datetime.utcnow()),
+        ).first()
+        if active_punishment:
+            raise HTTPException(status_code=409, detail="请先撤销该用户的生效处罚")
     if target.uid == current_user.uid and next_role != UserRole.ROOT:
         raise HTTPException(status_code=400, detail="不能移除当前根用户权限")
     if target.uid == current_user.uid and next_status != UserStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="不能停用当前根用户")
+    if target.role == UserRole.ROOT and next_status != UserStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="根用户不能被停用或处罚")
+    if next_role == UserRole.ROOT and next_status != UserStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="根用户必须保持激活状态")
+    if next_role == UserRole.ROOT and active_punishment_types(db, target.uid):
+        raise HTTPException(status_code=409, detail="存在生效处罚的用户不能设为根用户")
     if target.role == UserRole.ROOT and next_role != UserRole.ROOT:
         root_count = db.query(User).filter(User.role == UserRole.ROOT).count()
         if root_count <= 1:
@@ -575,31 +676,68 @@ async def create_punishment(
     db: Session = Depends(get_db)
 ):
     """执行处罚"""
+    lock_role_management(db)
+    current_user = db.get(User, current_user.uid, populate_existing=True)
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证管理员身份")
+    if current_user.role not in {UserRole.ADMIN, UserRole.ROOT} or current_user.status in {
+        UserStatus.BANNED,
+        UserStatus.PENDING_EMAIL,
+    }:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员权限已失效")
     target_user = db.query(User).filter(User.uid == punishment_data.target_uid).first()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    
+
+    lock_user_punishments(db, target_user.uid)
+    db.refresh(target_user)
+
+    if target_user.uid == current_user.uid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能处罚自己")
+    if target_user.role == UserRole.ROOT:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="根用户不能被处罚")
     if not can_manage_role(current_user.role.value, target_user.role.value):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前角色不能处罚目标用户")
-    
+
+    try:
+        punishment_type = PunishmentType(punishment_data.punishment_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="处罚类型无效") from exc
+    reason = punishment_data.reason.strip()
+    if len(reason) < 2:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="处罚原因至少需要 2 个字符")
+    now = datetime.utcnow()
+    if punishment_data.end_time is not None and punishment_data.end_time <= now:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="处罚结束时间必须晚于当前时间")
+    duplicate = db.query(Punishment).filter(
+        Punishment.target_uid == target_user.uid,
+        Punishment.punishment_type == punishment_type,
+        Punishment.is_revoked == False,
+        or_(Punishment.end_time.is_(None), Punishment.end_time > now),
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该用户已有同类型生效处罚")
+
     db_punishment = Punishment(
         target_uid=punishment_data.target_uid,
         operator_uid=current_user.uid,
-        punishment_type=punishment_data.punishment_type,
-        reason=punishment_data.reason,
+        punishment_type=punishment_type,
+        reason=reason,
         end_time=punishment_data.end_time,
         related_content_id=punishment_data.related_content_id,
-        start_time=datetime.utcnow(),
+        start_time=now,
     )
-    
+
     db.add(db_punishment)
-    
-    # 根据处罚类型更新用户状态
-    if punishment_data.punishment_type == PunishmentType.BAN:
-        target_user.status = UserStatus.BANNED
-    elif punishment_data.punishment_type == PunishmentType.SILENCE:
-        target_user.status = UserStatus.SILENCED
-    
+    db.flush()
+
+    # 根据全部生效处罚更新用户状态，封禁始终优先于禁言。
+    previous_status = target_user.status
+    active_types = active_punishment_types(db, target_user.uid, now)
+    target_user.status = effective_user_status(db, target_user, active_types)
+    if target_user.status != previous_status:
+        target_user.token_version += 1
+
     # 记录操作日志
     log = OperationLog(
         operator_uid=current_user.uid,
@@ -607,13 +745,21 @@ async def create_punishment(
         action_type=ActionType.PUNISH,
         target_type="user",
         target_id=punishment_data.target_uid,
-        details={"punishment_type": punishment_data.punishment_type, "reason": punishment_data.reason},
+        details={"punishment_type": punishment_type.value, "reason": reason},
     )
     db.add(log)
-    
+    db.add(Notification(
+        recipient_uid=target_user.uid,
+        notification_type=NotificationType.PUNISHMENT,
+        title="账号处罚通知",
+        content=f"你的账号受到{('封禁' if punishment_type == PunishmentType.BAN else '禁言' if punishment_type == PunishmentType.SILENCE else '处罚')}：{reason}",
+        related_entity_type="punishment",
+        related_entity_id=db_punishment.id,
+    ))
+
     db.commit()
     db.refresh(db_punishment)
-    
+
     return db_punishment
 
 
@@ -621,33 +767,61 @@ async def create_punishment(
 async def revoke_punishment(
     punishment_id: int,
     revoke_data: PunishmentRevoke,
-    current_user: User = Depends(get_current_root_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """撤销处罚（仅根用户）"""
+    """撤销当前管理员有权管理的处罚。"""
+    lock_role_management(db)
+    current_user = db.get(User, current_user.uid, populate_existing=True)
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无法验证管理员身份",
+        )
     punishment = db.query(Punishment).filter(Punishment.id == punishment_id).first()
     if not punishment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="处罚记录不存在")
-    
+
     if punishment.is_revoked:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="处罚已被撤销")
-    
+
+    revoke_reason = revoke_data.revoke_reason.strip()
+    if len(revoke_reason) < 2:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="撤销原因至少需要 2 个字符")
+
+    target_user = db.query(User).filter(User.uid == punishment.target_uid).first()
+    if target_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if target_user.uid == current_user.uid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能撤销自己的处罚")
+    if not can_manage_role(current_user.role.value, target_user.role.value):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前角色不能管理目标用户")
+
+    lock_user_punishments(db, punishment.target_uid)
+    db.refresh(punishment)
+    db.refresh(target_user)
+    if punishment.is_revoked:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="处罚已被撤销")
+
     punishment.is_revoked = True
     punishment.revoked_at = datetime.utcnow()
     punishment.revoked_by = current_user.uid
-    punishment.revoke_reason = revoke_data.revoke_reason.strip()
-    
+    punishment.revoke_reason = revoke_reason
+
     # 恢复用户状态
-    target_user = db.query(User).filter(User.uid == punishment.target_uid).first()
     if target_user:
-        active_punishments = db.query(Punishment).filter(
-            Punishment.target_uid == punishment.target_uid,
-            Punishment.is_revoked == False,
-            Punishment.id != punishment.id,
-        ).all()
-        active_types = {item.punishment_type.value for item in active_punishments}
-        target_user.status = UserStatus(status_from_active_punishments(active_types))
-    
+        previous_status = target_user.status
+        now = datetime.utcnow()
+        active_types = active_punishment_types(
+            db,
+            punishment.target_uid,
+            now,
+            exclude_id=punishment.id,
+        )
+        target_user.status = effective_user_status(db, target_user, active_types)
+        if target_user.status != previous_status:
+            target_user.token_version += 1
+
     # 记录操作日志
     log = OperationLog(
         operator_uid=current_user.uid,
@@ -655,12 +829,21 @@ async def revoke_punishment(
         action_type=ActionType.REVOKE_PUNISHMENT,
         target_type="punishment",
         target_id=punishment_id,
-        details={"revoke_reason": revoke_data.revoke_reason},
+        details={"revoke_reason": revoke_reason},
     )
     db.add(log)
-    
+    if target_user:
+        db.add(Notification(
+            recipient_uid=target_user.uid,
+            notification_type=NotificationType.PUNISHMENT_REVOKED,
+            title="处罚已撤销",
+            content=f"处罚 #{punishment.id} 已撤销：{punishment.revoke_reason}",
+            related_entity_type="punishment",
+            related_entity_id=punishment.id,
+        ))
+
     db.commit()
-    
+
     return punishment
 
 
@@ -674,17 +857,18 @@ async def list_punishments(
 ):
     """获取处罚记录列表"""
     offset = (page - 1) * page_size
-    
+
     query = db.query(Punishment)
-    
+
     if is_revoked is not None:
         query = query.filter(Punishment.is_revoked == is_revoked)
-    
+
     query = query.order_by(Punishment.created_at.desc())
-    
+
     total = query.count()
     punishments = query.offset(offset).limit(page_size).all()
-    
+    now = datetime.utcnow()
+
     items = []
     for p in punishments:
         items.append({
@@ -696,12 +880,13 @@ async def list_punishments(
             "start_time": p.start_time,
             "end_time": p.end_time,
             "is_revoked": p.is_revoked,
+            "is_active": not p.is_revoked and (p.end_time is None or p.end_time > now),
             "revoked_at": p.revoked_at,
             "revoked_by": p.revoked_by,
             "revoke_reason": p.revoke_reason,
             "created_at": p.created_at,
         })
-    
+
     return {
         "items": items,
         "total": total,
@@ -721,19 +906,20 @@ async def list_reports(
 ):
     """获取举报列表"""
     offset = (page - 1) * page_size
-    
+
     query = db.query(Report)
-    
+
     if status_filter:
         query = query.filter(Report.status == status_filter)
-    
+
     query = query.order_by(Report.created_at.desc())
-    
+
     total = query.count()
     reports = query.offset(offset).limit(page_size).all()
-    
+
     items = []
     for report in reports:
+        target = inspect_report_target(db, report.target_type, report.target_id)
         items.append({
             "id": report.id,
             "reporter_uid": report.reporter_uid,
@@ -744,9 +930,13 @@ async def list_reports(
             "handler_uid": report.handler_uid,
             "handle_result": report.handle_result,
             "handled_at": report.handled_at,
+            "target_exists": target.exists,
+            "target_url": target.url,
+            "target_author_uid": target.author_uid,
+            "target_preview": target.preview,
             "created_at": report.created_at,
         })
-    
+
     return {
         "items": items,
         "total": total,
@@ -766,23 +956,26 @@ async def list_operation_logs(
 ):
     """获取操作日志（仅根用户）"""
     offset = (page - 1) * page_size
-    
+
     query = db.query(OperationLog)
-    
+
     if action_type:
         query = query.filter(OperationLog.action_type == action_type)
-    
+
     query = query.order_by(OperationLog.created_at.desc())
-    
+
     total = query.count()
     logs = query.offset(offset).limit(page_size).all()
-    
+    operator_uids = {log.operator_uid for log in logs}
+    operators = db.query(User).filter(User.uid.in_(operator_uids)).all() if operator_uids else []
+    usernames = {operator.uid: operator.username for operator in operators}
+
     items = []
     for log in logs:
         items.append({
             "id": log.id,
             "operator_uid": log.operator_uid,
-            "operator_username": db.query(User).filter(User.uid == log.operator_uid).first().username if db.query(User).filter(User.uid == log.operator_uid).first() else None,
+            "operator_username": usernames.get(log.operator_uid),
             "operator_roles": log.operator_roles,
             "action_type": log.action_type,
             "target_type": log.target_type,
@@ -791,7 +984,7 @@ async def list_operation_logs(
             "ip_address": log.ip_address,
             "created_at": log.created_at,
         })
-    
+
     return {
         "items": items,
         "total": total,

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,8 +9,7 @@ from app.models.database import (
     Competition,
     CompetitionEntry,
     CompetitionStatus,
-    Tag,
-    TagStatus,
+    OperationLog,
     User,
     get_db,
 )
@@ -19,9 +18,46 @@ from app.schemas.competitions import (
     CompetitionPageResponse,
     CompetitionResponse,
 )
-from app.services.competition_entries import competition_tag_ids, settle_competition
+from app.services.competition_entries import (
+    collect_competition_entries,
+    competition_tag_ids,
+    delete_competition_entries,
+    settle_competition,
+)
+from app.services.tag_resolution import TagSelectionError, resolve_active_tags
 
 router = APIRouter()
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _current_status(competition: Competition, now: datetime) -> CompetitionStatus:
+    if competition.settled_at is not None:
+        return CompetitionStatus.COMPLETED
+    if now < competition.start_time:
+        return CompetitionStatus.PENDING
+    if now <= competition.end_time:
+        return CompetitionStatus.ONGOING
+    return CompetitionStatus.COMPLETED
+
+
+def _sync_statuses(db: Session, competitions: list[Competition]) -> None:
+    now = datetime.utcnow()
+    changed = False
+    for competition in competitions:
+        current_status = _current_status(competition, now)
+        if competition.status != current_status:
+            competition.status = current_status
+            competition.updated_at = now
+            changed = True
+    if changed:
+        db.commit()
 
 
 def _payload(db: Session, competition: Competition, include_entries: bool = False) -> dict:
@@ -37,17 +73,17 @@ def _payload(db: Session, competition: Competition, include_entries: bool = Fals
         "creator_uid": competition.creator_uid,
         "name": competition.name,
         "description": competition.description,
-        "start_time": competition.start_time,
-        "end_time": competition.end_time,
+        "start_time": _utc(competition.start_time),
+        "end_time": _utc(competition.end_time),
         "required_tag_ids": competition_tag_ids(competition),
         "score_type": competition.score_type,
         "top_n": competition.top_n,
         "custom_page_config": competition.custom_page_config,
         "status": competition.status,
         "result_snapshot": competition.result_snapshot,
-        "created_at": competition.created_at,
-        "updated_at": competition.updated_at,
-        "settled_at": competition.settled_at,
+        "created_at": _utc(competition.created_at),
+        "updated_at": _utc(competition.updated_at),
+        "settled_at": _utc(competition.settled_at),
         "entries": entries,
     }
 
@@ -58,13 +94,24 @@ def create_competition(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    tags = db.exec(select(Tag).where(Tag.id.in_(data.required_tag_ids))).all()
-    active_ids = {tag.id for tag in tags if tag.status == TagStatus.ACTIVE}
-    if active_ids != set(data.required_tag_ids):
+    try:
+        tags = resolve_active_tags(
+            db,
+            data.required_tag_ids,
+            data.custom_tags,
+            min_count=1,
+            max_count=10,
+        )
+    except TagSelectionError as exc:
+        code = (
+            "COMPETITION_TAG_NOT_ACTIVE"
+            if exc.code == "TAG_NOT_ACTIVE"
+            else exc.code
+        )
         raise HTTPException(
             status_code=422,
-            detail={"code": "COMPETITION_TAG_NOT_ACTIVE", "message": "比赛只能引用已启用标签"},
-        )
+            detail={"code": code, "message": exc.message},
+        ) from exc
 
     now = datetime.utcnow()
     current_status = (
@@ -80,16 +127,18 @@ def create_competition(
         description=data.description.strip(),
         start_time=data.start_time,
         end_time=data.end_time,
-        required_tag_ids=data.required_tag_ids,
+        required_tag_ids=[tag.id for tag in tags],
         score_type=data.score_type,
         top_n=data.top_n,
         custom_page_config=data.custom_page_config,
         status=current_status,
     )
     db.add(competition)
+    db.flush()
+    collect_competition_entries(db, competition)
     db.commit()
     db.refresh(competition)
-    return _payload(db, competition)
+    return _payload(db, competition, include_entries=True)
 
 
 @router.get("", response_model=CompetitionPageResponse)
@@ -99,6 +148,7 @@ def list_competitions(
     status_filter: Optional[CompetitionStatus] = None,
     db: Session = Depends(get_db),
 ):
+    _sync_statuses(db, db.exec(select(Competition)).all())
     query = select(Competition)
     if status_filter is not None:
         query = query.where(Competition.status == status_filter)
@@ -122,6 +172,7 @@ def get_competition(competition_id: int, db: Session = Depends(get_db)):
     competition = db.get(Competition, competition_id)
     if competition is None:
         raise HTTPException(status_code=404, detail="比赛不存在")
+    _sync_statuses(db, [competition])
     return _payload(db, competition, include_entries=True)
 
 
@@ -134,7 +185,29 @@ def settle_competition_endpoint(
     competition = db.get(Competition, competition_id)
     if competition is None:
         raise HTTPException(status_code=404, detail="比赛不存在")
-    if competition.status != CompetitionStatus.COMPLETED and datetime.utcnow() < competition.end_time:
+    if competition.settled_at is None and datetime.utcnow() < competition.end_time:
         raise HTTPException(status_code=409, detail="比赛尚未结束，不能结算")
     settle_competition(db, competition)
     return _payload(db, competition, include_entries=True)
+
+
+@router.delete("/{competition_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_competition(
+    competition_id: int,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    competition = db.get(Competition, competition_id)
+    if competition is None:
+        raise HTTPException(status_code=404, detail="比赛不存在")
+    entry_count = delete_competition_entries(db, competition.id)
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="delete",
+        target_type="competition",
+        target_id=competition.id,
+        details={"name": competition.name, "entry_count": entry_count},
+    ))
+    db.delete(competition)
+    db.commit()

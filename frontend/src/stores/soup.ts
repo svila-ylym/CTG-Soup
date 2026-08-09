@@ -130,11 +130,11 @@ export const useSoupStore = defineStore('soup', () => {
   }
 
   // 获取排行榜
-  async function fetchLeaderboard(limit = 10, type: 'average' | 'bayesian' = 'bayesian') {
+  async function fetchLeaderboard(limit = 10) {
     isLoading.value = true
     error.value = null
     try {
-      const res = await soupApi.getLeaderboard({ limit, type })
+      const res = await soupApi.getLeaderboard({ limit })
       leaderboard.value = res.data.items
       return res.data.items
     } catch (e: any) {

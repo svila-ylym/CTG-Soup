@@ -100,7 +100,6 @@ def test_soup_response_uses_only_canonical_score_and_uid_fields():
         author={"uid": 42, "username": "author", "nickname": "作者"},
         average_score=8.5,
         rating_count=2,
-        bayesian_rating=7.2,
         like_count=3,
         favorite_count=4,
         view_count=5,

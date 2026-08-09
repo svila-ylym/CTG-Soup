@@ -30,9 +30,9 @@ export interface EmailCampaignInput {
 }
 
 export const systemMessagesApi = {
-  list(page = 1, pageSize = 20) {
+  list(page = 1, pageSize = 20, unreadOnly = false) {
     return http.get<SystemMessagePage>('/system-messages', {
-      params: { page, page_size: pageSize },
+      params: { page, page_size: pageSize, unread_only: unreadOnly },
     })
   },
 

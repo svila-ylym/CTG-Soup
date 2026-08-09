@@ -1,13 +1,42 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, field_validator, model_validator
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import secrets
 
 
+def _normalize_https_origin(value: str, field_name: str) -> str:
+    parsed = urlsplit(value)
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must contain a valid port") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or "?" in value
+        or "#" in value
+        or parsed.username
+        or parsed.password
+        or any(character.isspace() for character in parsed.netloc)
+    ):
+        raise ValueError(f"{field_name} must be an HTTPS origin without a path")
+    return value.rstrip("/")
+
+
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+        hide_input_in_errors=True,
+    )
+
     # 应用配置
     APP_NAME: str = "汤吧社区"
     APP_VERSION: str = "1.0.0"
@@ -55,15 +84,20 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_DIR: str = "storage"
     PRIVATE_STORAGE_DIR: str = "private-storage"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
+
+    # 公开文件存储配置
+    PUBLIC_STORAGE_BACKEND: Literal["local", "r2"] = "local"
+    R2_ENDPOINT_URL: Optional[str] = None
+    R2_BUCKET_NAME: Optional[str] = None
+    R2_REGION: str = "auto"
+    R2_ACCESS_KEY_ID: Optional[str] = None
+    R2_SECRET_ACCESS_KEY: Optional[SecretStr] = None
+    R2_PUBLIC_BASE_URL: Optional[str] = None
     
     # 分页配置
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
     
-    # 贝叶斯平均参数
-    BAYESIAN_C: float = 3.0  # 先验评分数量
-    BAYESIAN_M: float = 5.0  # 先验平均分
-
     @field_validator("SECRET_KEY")
     @classmethod
     def validate_secret_key(cls, value: str) -> str:
@@ -91,10 +125,53 @@ class Settings(BaseSettings):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("SIGNIN_TIMEZONE must be a valid IANA timezone") from exc
         return value
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+
+    @model_validator(mode="after")
+    def validate_public_storage(self):
+        if self.PUBLIC_STORAGE_BACKEND == "local":
+            return self
+
+        required_fields = (
+            "R2_ENDPOINT_URL",
+            "R2_BUCKET_NAME",
+            "R2_REGION",
+            "R2_ACCESS_KEY_ID",
+            "R2_SECRET_ACCESS_KEY",
+            "R2_PUBLIC_BASE_URL",
+        )
+        for field_name in required_fields:
+            value = getattr(self, field_name)
+            raw_value = value.get_secret_value() if isinstance(value, SecretStr) else value
+            if not raw_value or not raw_value.strip():
+                raise ValueError(f"{field_name} is required when PUBLIC_STORAGE_BACKEND=r2")
+            normalized = raw_value.strip()
+            setattr(
+                self,
+                field_name,
+                SecretStr(normalized) if isinstance(value, SecretStr) else normalized,
+            )
+
+        self.R2_ENDPOINT_URL = _normalize_https_origin(
+            self.R2_ENDPOINT_URL or "",
+            "R2_ENDPOINT_URL",
+        )
+        self.R2_PUBLIC_BASE_URL = _normalize_https_origin(
+            self.R2_PUBLIC_BASE_URL or "",
+            "R2_PUBLIC_BASE_URL",
+        )
+        return self
+
+    @property
+    def r2_public_base_url(self) -> str:
+        if not self.R2_PUBLIC_BASE_URL:
+            raise ValueError("R2_PUBLIC_BASE_URL is not configured")
+        return self.R2_PUBLIC_BASE_URL
+
+    @property
+    def r2_secret_access_key(self) -> str:
+        if not self.R2_SECRET_ACCESS_KEY:
+            raise ValueError("R2_SECRET_ACCESS_KEY is not configured")
+        return self.R2_SECRET_ACCESS_KEY.get_secret_value()
 
 
 @lru_cache()

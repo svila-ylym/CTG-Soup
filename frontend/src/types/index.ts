@@ -90,11 +90,20 @@ export interface SoupAuthor {
   nickname: string
 }
 
+export interface SoupImageRef {
+  id: number
+  public_url: string
+  mime_type: string
+  size: number
+}
+
 export interface TurtleSoup {
   id: number
   title: string
   puzzle: string
   solution?: string | null
+  puzzle_images: SoupImageRef[]
+  solution_images: SoupImageRef[]
   solution_available: boolean
   is_solution_public: boolean
   genre: SoupGenre
@@ -106,7 +115,7 @@ export interface TurtleSoup {
   tags: Tag[]
   average_score: number
   rating_count: number
-  bayesian_rating: number
+  comment_count: number
   like_count: number
   favorite_count: number
   view_count: number
@@ -115,6 +124,7 @@ export interface TurtleSoup {
   is_liked: boolean
   is_favorited: boolean
   can_manage: boolean
+  can_edit: boolean
   created_at: string
   updated_at: string
 }
@@ -129,7 +139,17 @@ export interface SoupCreate {
   secondary_player_count: string
   tag_ids: number[]
   custom_tags: string[]
+  puzzle_image_ids: number[]
+  solution_image_ids: number[]
   is_revealed?: boolean
+}
+
+export type SoupEditorState = Omit<
+  SoupCreate,
+  'puzzle_image_ids' | 'solution_image_ids'
+> & {
+  puzzle_images: SoupImageRef[]
+  solution_images: SoupImageRef[]
 }
 
 export interface SoupScore {
@@ -164,6 +184,7 @@ export interface Post {
   created_at: string
   updated_at: string
   mentions: MentionRef[]
+  can_edit: boolean
 }
 
 export interface MentionRef {
@@ -193,7 +214,7 @@ export interface Competition {
   end_time: string
   creator_uid: number
   required_tag_ids: number[]
-  score_type: 'average' | 'top_score'
+  score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
   status: 'pending' | 'ongoing' | 'completed'
@@ -210,7 +231,8 @@ export interface CompetitionCreate {
   start_time: string
   end_time: string
   required_tag_ids: number[]
-  score_type: 'average' | 'top_score'
+  custom_tags: string[]
+  score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
 }

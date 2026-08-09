@@ -61,7 +61,7 @@ class UserResponse(UserBase):
     bio: Optional[str] = None
     points: int
     consecutive_signin_days: int
-    allow_bulk_email: bool = False
+    allow_bulk_email: bool = True
     theme_preference: ThemePreference = ThemePreference.SYSTEM
     created_at: datetime
     

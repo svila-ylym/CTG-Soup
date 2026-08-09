@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChatBubbleOvalLeftIcon, EyeIcon, HeartIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import MentionText from '@/components/MentionText.vue'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { formatChinaDateTime } from '@/utils/datetime'
+import { draftStorageKey, readDraft, removeDraft, writeDraft } from '@/utils/draftStorage'
 import type { PageResult, Post } from '@/types'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const posts = ref<Post[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -18,7 +22,52 @@ const totalPages = ref(1)
 const composerOpen = ref(false)
 const submitting = ref(false)
 const submitMessage = ref('')
-const draft = ref({ title: '', content: '', section: 'general' })
+
+type PostDraft = {
+  title: string
+  content: string
+  section: string
+}
+
+const emptyPostDraft = (): PostDraft => ({ title: '', content: '', section: 'general' })
+const draft = ref<PostDraft>(emptyPostDraft())
+
+function isPostDraft(value: unknown): value is PostDraft {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.title === 'string'
+    && typeof record.content === 'string'
+    && typeof record.section === 'string'
+  )
+}
+
+function hasPostDraft(value: PostDraft): boolean {
+  const sectionValue = value.section.trim()
+  return Boolean(
+    value.title.trim()
+    || value.content.trim()
+    || (sectionValue && sectionValue !== 'general')
+  )
+}
+
+const postDraftKey = draftStorageKey(
+  'post',
+  authStore.user?.uid ?? localStorage.getItem('user_uid'),
+)
+const restoredPostDraft = readDraft(postDraftKey, isPostDraft)
+if (restoredPostDraft && hasPostDraft(restoredPostDraft)) {
+  draft.value = { ...restoredPostDraft }
+  composerOpen.value = true
+} else if (restoredPostDraft) {
+  removeDraft(postDraftKey)
+}
+
+watch(draft, currentDraft => {
+  const snapshot = { ...currentDraft }
+  if (hasPostDraft(snapshot)) writeDraft(postDraftKey, snapshot)
+  else removeDraft(postDraftKey)
+}, { deep: true, flush: 'sync' })
 
 async function load() {
   loading.value = true; error.value = ''
@@ -33,7 +82,7 @@ async function createPost() {
   submitting.value = true; submitMessage.value = ''
   try {
     await http.post('/posts', { title: draft.value.title.trim(), content: draft.value.content.trim(), section: draft.value.section.trim() || 'general', post_type: 'normal', tags: [] })
-    draft.value = { title: '', content: '', section: 'general' }; composerOpen.value = false; submitMessage.value = '帖子发布成功'; await load()
+    draft.value = emptyPostDraft(); removeDraft(postDraftKey); composerOpen.value = false; submitMessage.value = '帖子发布成功'; await load()
   } catch (cause) { submitMessage.value = extractApiError(cause, '发布失败，请先登录并重试') } finally { submitting.value = false }
 }
 onMounted(load)
@@ -81,7 +130,7 @@ onMounted(load)
           <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-500">
             <span class="max-w-full break-words rounded-full bg-blue-50 px-2 py-1 text-blue-700">{{ post.section }}</span>
             <router-link :to="`/profile/${post.author_uid}`" class="min-w-0 break-words hover:text-blue-600 hover:underline" @click.stop>{{ post.author?.nickname || post.author?.username || `用户 ${post.author_uid}` }}</router-link>
-            <time>{{ new Date(post.created_at).toLocaleString() }}</time>
+            <time>{{ formatChinaDateTime(post.created_at) }}</time>
           </div>
           <h2 class="mt-3 break-words text-lg font-semibold text-slate-900 dark:text-white">{{ post.title }}</h2>
           <p class="mt-2 line-clamp-2 break-words whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300"><MentionText :text="post.content" :mentions="post.mentions" /></p>

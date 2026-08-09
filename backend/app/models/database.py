@@ -7,11 +7,12 @@ from typing import Generator
 
 from app.db import engine, init_db, get_session as _get_session
 from app.models.models import (
-    User, UserRole, UserStatus, ThemePreference, EmailVerification, UploadedAsset,
+    User, UserRole, UserStatus, ThemePreference, EmailVerification,
+    ReusableUserUid, UserUidAllocator, UploadedAsset,
     Punishment, PunishmentType,
     Post, PostType,
     Comment, CommentTargetType,
-    Soup, SoupTag, FeaturedSoup, Tag, TagAlias, TagKind, TagStatus, Announcement, AnnouncementStatus,
+    Soup, SoupImage, SoupTag, FeaturedSoup, Tag, TagAlias, TagKind, TagStatus, Announcement, AnnouncementStatus,
     Rating,
     Like, LikeTargetType,
     Favorite, FavoriteTargetType,
@@ -53,6 +54,8 @@ __all__ = [
     "UserStatus",
     "ThemePreference",
     "EmailVerification",
+    "ReusableUserUid",
+    "UserUidAllocator",
     "UploadedAsset",
     "PermissionGroup",
     "UserPermissionGroup",
@@ -67,6 +70,7 @@ __all__ = [
     "CommentTargetType",
     # 海龟汤系统
     "Soup",
+    "SoupImage",
     "TurtleSoup",
     "Tag",
     "TagAlias",

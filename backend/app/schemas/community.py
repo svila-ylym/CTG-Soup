@@ -53,6 +53,7 @@ class PostResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     mentions: list[MentionRef] = Field(default_factory=list)
+    can_edit: bool
 
 
 class PostPageResponse(PageResponse[PostResponse]):

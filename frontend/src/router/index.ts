@@ -12,13 +12,13 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue'),
-    meta: { title: '登录', requiresAuth: false },
+    meta: { title: '登录', guestOnly: true },
   },
   {
     path: '/register',
     name: 'Register',
     component: () => import('@/views/RegisterView.vue'),
-    meta: { title: '注册', requiresAuth: false },
+    meta: { title: '注册', guestOnly: true },
   },
   {
     path: '/verify-email',
@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '发布海龟汤', requiresAuth: true },
   },
   {
+    path: '/soups/:id/edit',
+    name: 'EditSoup',
+    component: () => import('@/views/SoupEditView.vue'),
+    meta: { title: '修改海龟汤', requiresAuth: true },
+  },
+  {
     path: '/soups/:id',
     name: 'SoupDetail',
     component: () => import('@/views/SoupDetailView.vue'),
@@ -55,6 +61,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Posts',
     component: () => import('@/views/PostListView.vue'),
     meta: { title: '论坛' },
+  },
+  {
+    path: '/posts/:id/edit',
+    name: 'EditPost',
+    component: () => import('@/views/PostEditView.vue'),
+    meta: { title: '修改帖子', requiresAuth: true },
   },
   {
     path: '/posts/:id',
@@ -142,11 +154,17 @@ router.beforeEach((to, _from, next) => {
   
   const token = localStorage.getItem('access_token')
   const requiresAuth = to.meta.requiresAuth === true
+  const guestOnly = to.meta.guestOnly === true
   const requiresAdmin = to.meta.requiresAdmin === true
   const requiresRoot = to.meta.requiresRoot === true
   
   if (requiresAuth && !token) {
     next({ name: 'Login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  if (guestOnly && token) {
+    next({ name: 'Home' })
     return
   }
   

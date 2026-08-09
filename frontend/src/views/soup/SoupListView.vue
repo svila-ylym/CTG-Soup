@@ -36,16 +36,12 @@
           <div class="flex items-center space-x-2">
             <span class="text-sm font-medium text-gray-700 dark:text-gray-300">标签:</span>
             <select
-              v-model="selectedTag"
+              v-model="selectedTagId"
               @change="fetchSoups"
               class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
             >
               <option value="">全部</option>
-              <option value="悬疑">悬疑</option>
-              <option value="恐怖">恐怖</option>
-              <option value="搞笑">搞笑</option>
-              <option value="温情">温情</option>
-              <option value="烧脑">烧脑</option>
+              <option v-for="tag in availableTags" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
             </select>
           </div>
 
@@ -128,7 +124,7 @@
                 </span>
                 <span class="flex items-center">
                   <ChatBubbleLeftRightIcon class="mr-1 h-4 w-4" aria-hidden="true" />
-                  {{ soup.rating_count }}
+                  {{ soup.comment_count }}
                 </span>
               </div>
             </div>
@@ -180,6 +176,7 @@
             第 {{ currentPage }} 页
           </span>
           <button
+            v-if="currentPage < totalPages"
             @click="changePage(currentPage + 1)"
             class="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-slate-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800"
           >
@@ -196,18 +193,23 @@ import { ref, onMounted } from 'vue'
 import { ChatBubbleLeftRightIcon, FaceFrownIcon, HeartIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
-import type { CreateSoupColor, CreateSoupGenre } from '@/types'
+import { parseUtcDateTime } from '@/utils/datetime'
+import { tagApi } from '@/api/tags'
+import type { CreateSoupColor, CreateSoupGenre, Tag } from '@/types'
 
 const soupStore = useSoupStore()
 
-const selectedTag = ref('')
+const selectedTagId = ref<number | ''>('')
+const availableTags = ref<Tag[]>([])
 const sortBy = ref('latest')
 const selectedGenre = ref<CreateSoupGenre | ''>('')
 const selectedColor = ref<CreateSoupColor | ''>('')
 const currentPage = ref(1)
+const totalPages = ref(0)
+const pageSize = 30
 
 const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
+  const date = parseUtcDateTime(dateString)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   
@@ -219,42 +221,54 @@ const formatDate = (dateString: string) => {
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
   
-  return date.toLocaleDateString('zh-CN')
+  return date.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })
 }
 
-const fetchSoups = () => {
-  currentPage.value = 1
+function listFilters() {
   let sortParam = ''
   if (sortBy.value === 'latest') sortParam = 'created_at'
   else if (sortBy.value === 'hot') sortParam = 'likes'
   else if (sortBy.value === 'score') sortParam = 'score'
-  
-  soupStore.fetchList(1, 20, {
-    tag: selectedTag.value || undefined,
+
+  return {
+    tag_id: selectedTagId.value || undefined,
     genre: selectedGenre.value || undefined,
     soup_color: selectedColor.value || undefined,
     sort_by: sortParam || undefined,
-  })
+  }
 }
 
-const changePage = (page: number) => {
-  if (page < 1) return
-  currentPage.value = page
-  
-  let sortParam = ''
-  if (sortBy.value === 'latest') sortParam = 'created_at'
-  else if (sortBy.value === 'hot') sortParam = 'likes'
-  else if (sortBy.value === 'score') sortParam = 'score'
-  
-  soupStore.fetchList(page, 20, {
-    tag: selectedTag.value || undefined,
-    genre: selectedGenre.value || undefined,
-    soup_color: selectedColor.value || undefined,
-    sort_by: sortParam || undefined,
-  })
+async function loadPage(page: number) {
+  const result = await soupStore.fetchList(page, pageSize, listFilters())
+  currentPage.value = result.page
+  totalPages.value = result.total_pages ?? 0
+}
+
+async function fetchSoups() {
+  await loadPage(1)
+}
+
+async function changePage(page: number) {
+  if (page < 1 || (totalPages.value > 0 && page > totalPages.value)) return
+  await loadPage(page)
+}
+
+async function loadTags() {
+  try {
+    const first = await tagApi.list({ page: 1, page_size: 100, sort_by: 'usage_count' })
+    const items = [...first.data.items]
+    for (let page = 2; page <= (first.data.total_pages ?? 1); page += 1) {
+      const response = await tagApi.list({ page, page_size: 100, sort_by: 'usage_count' })
+      items.push(...response.data.items)
+    }
+    availableTags.value = items
+  } catch {
+    availableTags.value = []
+  }
 }
 
 onMounted(() => {
-  fetchSoups()
+  void loadTags()
+  void fetchSoups()
 })
 </script>
