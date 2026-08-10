@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '@/api/http'
+import { useUnreadStore } from '@/stores/unread'
 import { extractApiError } from '@/utils/auth'
+import { formatChinaDateTime } from '@/utils/datetime'
 import type { Notification, PageResult } from '@/types'
 
 const router = useRouter()
+const unreadStore = useUnreadStore()
 const notifications = ref<Notification[]>([])
 const loading = ref(true)
 const error = ref('')
-const unread = computed(() => notifications.value.filter((item) => !item.is_read).length)
 
 async function load() {
   loading.value = true
@@ -20,6 +22,7 @@ async function load() {
         params: { page: 1, page_size: 50 },
       })
     ).data.items
+    await unreadStore.refreshNotifications()
   } catch (reason) {
     error.value = extractApiError(reason, '通知暂时无法加载')
   } finally {
@@ -32,6 +35,7 @@ async function open(item: Notification) {
     if (!item.is_read) {
       await http.put(`/notifications/${item.id}/read`)
       item.is_read = true
+      await unreadStore.refreshNotifications()
     }
     if (item.related_entity_type === 'post' && item.related_entity_id) {
       await router.push(`/posts/${item.related_entity_id}`)
@@ -50,7 +54,7 @@ onMounted(load)
   <main class="page-shell">
     <div class="page-container max-w-3xl">
       <div class="mb-6 flex items-end justify-between gap-4">
-        <div><h1 class="section-title text-3xl">通知</h1><p class="mt-2 text-slate-500">{{ unread ? `${unread} 条未读通知` : '全部通知已读' }}</p></div>
+        <div><h1 class="section-title text-3xl">通知</h1><p class="mt-2 text-slate-500">{{ unreadStore.hasNotifications ? '有未读通知' : '全部通知已读' }}</p></div>
         <button class="btn-secondary" type="button" @click="load">刷新</button>
       </div>
       <div v-if="loading" class="py-16 text-center text-slate-500">正在加载通知…</div>
@@ -69,7 +73,7 @@ onMounted(load)
             <div class="min-w-0 flex-1"><h2 class="break-words font-semibold">{{ item.title }}</h2><p class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ item.content }}</p></div>
             <span v-if="!item.is_read" class="shrink-0 text-xs text-blue-700">未读</span>
           </div>
-          <time class="mt-3 block text-xs text-slate-500">{{ new Date(item.created_at).toLocaleString() }}</time>
+          <time class="mt-3 block text-xs text-slate-500">{{ formatChinaDateTime(item.created_at) }}</time>
         </button>
       </div>
     </div>

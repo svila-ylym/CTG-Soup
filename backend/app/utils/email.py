@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List, Sequence
 from fastapi import HTTPException, status
 import logging
+from html import escape
 
 from app.core.config import get_settings
 
@@ -250,7 +251,7 @@ class SMTPService:
                     <div class="warning">
                         <strong>⚠️ 安全提示：</strong>
                         <ul>
-                            <li>此链接有效期为 1 小时</li>
+                            <li>此链接有效期为 30 分钟</li>
                             <li>如非本人操作，请立即修改密码并检查账号安全</li>
                             <li>请勿将此链接透露给他人</li>
                         </ul>
@@ -273,7 +274,7 @@ class SMTPService:
         请访问以下链接重置密码：
         {reset_link}
         
-        此链接有效期为 1 小时。
+        此链接有效期为 30 分钟。
         
         如非本人操作，请立即修改密码并检查账号安全。
         
@@ -313,7 +314,10 @@ class SMTPService:
         }
         
         icon = type_icons.get(notification_type, "📧")
-        
+        safe_username = escape(username)
+        safe_title = escape(title)
+        safe_content = escape(content).replace("\n", "<br>")
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -331,13 +335,13 @@ class SMTPService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{icon} {title}</h1>
+                    <h1>{icon} {safe_title}</h1>
                     <p>您有一条新的通知</p>
                 </div>
                 <div class="content">
-                    <h2>亲爱的 {username}：</h2>
+                    <h2>亲爱的 {safe_username}：</h2>
                     <div class="notification">
-                        <p>{content}</p>
+                        <p>{safe_content}</p>
                     </div>
                     <p>登录汤吧社区查看更多详情。</p>
                 </div>

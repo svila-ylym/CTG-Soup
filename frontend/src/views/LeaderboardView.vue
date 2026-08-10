@@ -1,104 +1,259 @@
 <template>
-  <main class="page-shell">
+  <main class="leaderboard-page page-shell overflow-hidden">
     <div class="page-container">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">海龟汤排行榜</h1>
-      <p class="text-gray-600 dark:text-gray-400 mb-8">基于贝叶斯平均算法的公正排名</p>
-
-      <!-- 排序切换 -->
-      <div class="flex space-x-4 mb-6">
-        <button
-          @click="fetchLeaderboard('bayesian')"
-          :class="[
-            'min-h-10 rounded-md px-4 py-2 transition',
-            currentType === 'bayesian'
-              ? 'bg-blue-500 text-white'
-              : 'bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
-          ]"
-        >
-          贝叶斯评分
-        </button>
-        <button
-          @click="fetchLeaderboard('average')"
-          :class="[
-            'min-h-10 rounded-md px-4 py-2 transition',
-            currentType === 'average'
-              ? 'bg-blue-500 text-white'
-              : 'bg-white dark:bg-neutral-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
-          ]"
-        >
-          平均分
-        </button>
-      </div>
-
-      <!-- 加载状态 -->
-      <div v-if="soupStore.isLoading" class="flex justify-center py-12">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-
-      <!-- 排行榜列表 -->
-      <div v-else-if="soupStore.leaderboard.length > 0" class="space-y-4">
-        <div
-          v-for="(soup, index) in soupStore.leaderboard"
-          :key="soup.id"
-          class="grid cursor-pointer grid-cols-[3rem_minmax(0,1fr)] items-center gap-4 rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-400 dark:border-neutral-800 dark:bg-neutral-950 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:p-5"
-          @click="$router.push(`/soups/${soup.id}`)"
-        >
-          <!-- 排名 -->
-          <div :class="[
-            'flex h-12 w-12 items-center justify-center rounded-full font-bold text-white',
-            index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-500' : 'bg-blue-500'
-          ]">
-            {{ index + 1 }}
+      <header class="leaderboard-header relative -mx-4 overflow-hidden border-y border-slate-800 bg-slate-950 px-5 py-10 text-white sm:mx-0 sm:rounded-md sm:border sm:px-8 sm:py-12 dark:border-neutral-800 dark:bg-neutral-950">
+        <div class="relative z-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div class="max-w-2xl">
+            <p class="mb-3 inline-flex items-center gap-2 text-sm font-bold text-amber-300">
+              <SparklesIcon class="h-5 w-5" aria-hidden="true" />
+              社区高分作品
+            </p>
+            <h1 class="text-3xl font-black text-white sm:text-5xl">海龟汤排行榜</h1>
+            <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">评分会实时改变席位。看看哪些谜面经得住最多人的追问。</p>
           </div>
-
-          <!-- 内容 -->
-          <div class="min-w-0 flex-1">
-            <h3 class="mb-2 break-words text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">{{ soup.title }}</h3>
-            <p class="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{{ soup.puzzle }}</p>
-            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
-              <span class="flex items-center text-yellow-500">
-                <StarIcon class="mr-1 h-4 w-4" aria-hidden="true" />
-                {{ soup.average_score.toFixed(2) }}
-              </span>
-              <span>{{ soup.rating_count }}人评分</span>
-              <span>{{ soup.like_count }}次点赞</span>
+          <dl v-if="soupStore.leaderboard.length" class="grid grid-cols-2 gap-x-8 gap-y-3 border-l border-slate-700 pl-5 sm:flex sm:gap-9 sm:pl-7">
+            <div>
+              <dt class="text-xs font-semibold text-slate-400">入榜作品</dt>
+              <dd class="mt-1 text-2xl font-black text-white">{{ soupStore.leaderboard.length }}</dd>
             </div>
-          </div>
-
-          <!-- 作者 -->
-          <div class="col-span-2 mt-2 flex min-w-0 items-center justify-end gap-2 text-right sm:col-span-1 sm:mt-0 sm:block sm:max-w-40">
-            <div class="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 font-semibold text-white sm:mb-2">
-              {{ soup.author?.nickname?.charAt(0).toUpperCase() || 'U' }}
+            <div>
+              <dt class="text-xs font-semibold text-slate-400">累计评分</dt>
+              <dd class="mt-1 text-2xl font-black text-amber-300">{{ totalRatings }}</dd>
             </div>
-            <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400" :title="soup.author?.nickname || '未知'">{{ soup.author?.nickname || '未知' }}</span>
-          </div>
+          </dl>
         </div>
-      </div>
+      </header>
 
-      <!-- 空状态 -->
-      <div v-else class="text-center py-12">
-        <ChartBarIcon class="mx-auto h-12 w-12 text-gray-400" aria-hidden="true" />
-        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">暂无数据</h3>
-      </div>
+      <section v-if="soupStore.isLoading" class="py-10" aria-live="polite" aria-label="正在加载排行榜">
+        <div class="grid gap-5 md:grid-cols-3">
+          <div v-for="index in 3" :key="index" class="surface-card h-72 animate-pulse bg-slate-100 dark:bg-neutral-900"></div>
+        </div>
+        <div class="mt-10 space-y-3">
+          <div v-for="index in 5" :key="index" class="surface-card h-24 animate-pulse bg-slate-100 dark:bg-neutral-900"></div>
+        </div>
+      </section>
+
+      <section v-else-if="soupStore.error" class="py-16 text-center" aria-live="polite">
+        <ExclamationCircleIcon class="mx-auto h-12 w-12 text-rose-500" aria-hidden="true" />
+        <h2 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">榜单暂时没有加载出来</h2>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ soupStore.error }}</p>
+        <button class="btn-primary mt-6" type="button" @click="loadLeaderboard">
+          <ArrowPathIcon class="mr-2 h-5 w-5" aria-hidden="true" />
+          重新加载
+        </button>
+      </section>
+
+      <template v-else-if="soupStore.leaderboard.length">
+        <section class="pt-12" aria-labelledby="podium-heading">
+          <div class="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p class="text-xs font-black text-amber-600 dark:text-amber-400">TOP 3</p>
+              <h2 id="podium-heading" class="mt-1 text-2xl font-black text-slate-950 dark:text-white">本期前三名</h2>
+            </div>
+            <TrophyIcon class="h-9 w-9 text-amber-500" aria-hidden="true" />
+          </div>
+
+          <div class="podium-grid grid gap-5 md:grid-cols-3 md:items-end">
+            <router-link
+              v-for="(soup, index) in topThree"
+              :key="soup.id"
+              :to="`/soups/${soup.id}`"
+              class="podium-card group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-white p-6 text-slate-900 shadow-[6px_8px_0_rgba(15,23,42,.08)] dark:bg-neutral-950 dark:text-white dark:shadow-[6px_8px_0_rgba(0,0,0,.3)]"
+              :class="podiumClass(index)"
+              :style="{ animationDelay: `${index * 100 + 80}ms` }"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <span class="podium-rank flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-xl font-black text-white" :class="rankClass(index)">{{ index + 1 }}</span>
+                <span class="inline-flex items-center gap-1 text-lg font-black text-amber-500"><StarIcon class="h-5 w-5" aria-hidden="true" />{{ formatScore(soup.average_score) }}</span>
+              </div>
+
+              <div class="mt-6 min-w-0 flex-1">
+                <p class="mb-2 text-xs font-bold" :class="placementTextClass(index)">{{ placementLabel(index) }}</p>
+                <h3 class="line-clamp-2 break-words text-xl font-black leading-7 text-slate-950 transition group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">{{ soup.title }}</h3>
+                <p class="mt-3 line-clamp-3 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{{ soup.puzzle }}</p>
+              </div>
+
+              <div class="mt-6 flex min-w-0 items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-neutral-800">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">{{ authorInitial(soup.author?.nickname) }}</span>
+                  <span class="truncate text-sm font-semibold text-slate-600 dark:text-slate-300">{{ soup.author?.nickname || '未知作者' }}</span>
+                </div>
+                <span class="shrink-0 text-xs font-medium text-slate-400">{{ soup.rating_count }} 人评分</span>
+              </div>
+              <span class="podium-accent absolute inset-x-0 bottom-0 h-1" :class="accentClass(index)" aria-hidden="true"></span>
+            </router-link>
+          </div>
+        </section>
+
+        <section v-if="remainingEntries.length" class="pb-4 pt-14" aria-labelledby="ranking-heading">
+          <div class="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4 dark:border-neutral-800">
+            <div>
+              <p class="text-xs font-black text-blue-600 dark:text-blue-400">RANKING</p>
+              <h2 id="ranking-heading" class="mt-1 text-2xl font-black text-slate-950 dark:text-white">完整榜单</h2>
+            </div>
+            <span class="text-sm text-slate-500 dark:text-slate-400">按作品平均分排序</span>
+          </div>
+
+          <div class="space-y-3">
+            <router-link
+              v-for="(soup, index) in remainingEntries"
+              :key="soup.id"
+              :to="`/soups/${soup.id}`"
+              class="ranking-row group grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-blue-800 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5"
+              :style="{ animationDelay: `${Math.min(index, 10) * 45 + 160}ms` }"
+            >
+              <span class="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-sm font-black text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-neutral-900 dark:text-slate-300">{{ index + 4 }}</span>
+
+              <div class="min-w-0">
+                <h3 class="truncate font-bold text-slate-900 transition group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">{{ soup.title }}</h3>
+                <p class="mt-1 line-clamp-1 text-sm text-slate-500 dark:text-slate-400">{{ soup.puzzle }}</p>
+                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+                  <span class="truncate">{{ soup.author?.nickname || '未知作者' }}</span>
+                  <span class="inline-flex items-center gap-1"><UsersIcon class="h-4 w-4" aria-hidden="true" />{{ soup.rating_count }} 人评分</span>
+                  <span class="inline-flex items-center gap-1"><HandThumbUpIcon class="h-4 w-4" aria-hidden="true" />{{ soup.like_count }}</span>
+                </div>
+              </div>
+
+              <div class="col-span-2 flex items-center justify-end gap-2 border-t border-slate-100 pt-3 text-amber-500 dark:border-neutral-800 sm:col-span-1 sm:border-0 sm:pt-0">
+                <StarIcon class="h-5 w-5" aria-hidden="true" />
+                <strong class="text-lg">{{ formatScore(soup.average_score) }}</strong>
+                <ChevronRightIcon class="ml-1 h-5 w-5 text-slate-300 transition group-hover:translate-x-1 group-hover:text-blue-500 dark:text-neutral-700" aria-hidden="true" />
+              </div>
+            </router-link>
+          </div>
+        </section>
+      </template>
+
+      <section v-else class="py-20 text-center">
+        <ChartBarIcon class="mx-auto h-12 w-12 text-slate-400" aria-hidden="true" />
+        <h2 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">暂无上榜作品</h2>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">新的评分出现后，榜单会在这里更新。</p>
+        <router-link to="/soups" class="btn-primary mt-6">去看看海龟汤</router-link>
+      </section>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ChartBarIcon } from '@heroicons/vue/24/outline'
+import { computed, onMounted } from 'vue'
+import {
+  ArrowPathIcon,
+  ChartBarIcon,
+  ChevronRightIcon,
+  ExclamationCircleIcon,
+  HandThumbUpIcon,
+  SparklesIcon,
+  TrophyIcon,
+  UsersIcon,
+} from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
 
 const soupStore = useSoupStore()
-const currentType = ref<'bayesian' | 'average'>('bayesian')
+const topThree = computed(() => soupStore.leaderboard.slice(0, 3))
+const remainingEntries = computed(() => soupStore.leaderboard.slice(3))
+const totalRatings = computed(() => soupStore.leaderboard.reduce((total, soup) => total + soup.rating_count, 0))
 
-const fetchLeaderboard = (type: 'bayesian' | 'average') => {
-  currentType.value = type
-  soupStore.fetchLeaderboard(50, type)
+function loadLeaderboard() {
+  void soupStore.fetchLeaderboard(50).catch(() => undefined)
 }
 
-onMounted(() => {
-  fetchLeaderboard('bayesian')
-})
+function formatScore(score: number) {
+  return Number.isFinite(score) ? score.toFixed(2) : '0.00'
+}
+
+function authorInitial(nickname?: string) {
+  return Array.from(nickname || '')[0]?.toUpperCase() || 'U'
+}
+
+function placementLabel(index: number) {
+  return ['冠军作品', '亚军作品', '季军作品'][index] || '上榜作品'
+}
+
+function podiumClass(index: number) {
+  return [`podium-place-${index + 1}`, index === 0 ? 'border-amber-300 dark:border-amber-700' : index === 1 ? 'border-slate-300 dark:border-slate-700' : 'border-orange-300 dark:border-orange-800']
+}
+
+function rankClass(index: number) {
+  return index === 0 ? 'rank-gold' : index === 1 ? 'rank-silver' : 'rank-bronze'
+}
+
+function placementTextClass(index: number) {
+  return index === 0 ? 'text-amber-600 dark:text-amber-400' : index === 1 ? 'text-slate-500 dark:text-slate-400' : 'text-orange-600 dark:text-orange-400'
+}
+
+function accentClass(index: number) {
+  return index === 0 ? 'bg-amber-400' : index === 1 ? 'bg-slate-400' : 'bg-orange-500'
+}
+
+onMounted(loadLeaderboard)
 </script>
+
+<style scoped>
+.leaderboard-header::after {
+  content: '';
+  position: absolute;
+  right: -4rem;
+  bottom: -5rem;
+  width: 15rem;
+  height: 13rem;
+  background: #f59e0b;
+  clip-path: polygon(44% 0, 100% 28%, 72% 100%, 0 72%);
+  opacity: .16;
+  transform: rotate(-8deg);
+  animation: header-mark-float 8s ease-in-out infinite;
+}
+
+.podium-card,
+.ranking-row {
+  opacity: 0;
+  animation: leaderboard-rise 620ms cubic-bezier(.18, .8, .25, 1) forwards;
+}
+
+.podium-card {
+  min-height: 19rem;
+  transition: transform 280ms cubic-bezier(.2, .75, .25, 1), box-shadow 280ms ease, border-color 280ms ease;
+}
+
+.podium-card:hover {
+  transform: translateY(-.5rem);
+  box-shadow: 9px 13px 0 rgba(15, 23, 42, .11), 0 18px 35px rgba(15, 23, 42, .1);
+}
+
+:global(.dark) .podium-card:hover {
+  box-shadow: 9px 13px 0 rgba(0, 0, 0, .34), 0 18px 35px rgba(0, 0, 0, .28);
+}
+
+.rank-gold { background: #d99a16; box-shadow: 0 4px 0 #9f6506; }
+.rank-silver { background: #718196; box-shadow: 0 4px 0 #4b586a; }
+.rank-bronze { background: #c96535; box-shadow: 0 4px 0 #8d3f20; }
+
+@media (min-width: 768px) {
+  .podium-place-1 { order: 2; min-height: 22rem; }
+  .podium-place-2 { order: 1; }
+  .podium-place-3 { order: 3; }
+}
+
+@keyframes leaderboard-rise {
+  from { opacity: 0; transform: translateY(1.5rem) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes header-mark-float {
+  0%, 100% { transform: translate(0, 0) rotate(-8deg); }
+  50% { transform: translate(-1rem, -.5rem) rotate(-3deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaderboard-header::after,
+  .podium-card,
+  .ranking-row {
+    animation: none;
+    opacity: 1;
+  }
+
+  .podium-card:hover {
+    transform: none;
+  }
+}
+</style>

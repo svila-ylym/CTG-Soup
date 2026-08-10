@@ -21,6 +21,8 @@ node_modules/
 dist/
 test-results/
 *.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
 # Runtime data
 storage/

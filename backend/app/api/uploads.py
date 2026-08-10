@@ -1,26 +1,24 @@
-"""Authenticated image uploads stored on the local disk."""
-from pathlib import Path
+"""Authenticated uploads for public images."""
+import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_active_user
-from app.core.config import get_settings
 from app.models.database import UploadedAsset, User, get_db
 from app.schemas import UploadedAssetResponse, UploadImageResponse
+from app.services.public_storage import (
+    PublicStorage,
+    PublicStorageError,
+    get_public_storage,
+)
 from app.services.upload_rules import validate_upload
 
 router = APIRouter()
-settings = get_settings()
-
-
-def _local_directory() -> Path:
-    directory = Path(settings.LOCAL_STORAGE_DIR)
-    if not directory.is_absolute():
-        directory = Path(__file__).resolve().parents[2] / directory
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
+logger = logging.getLogger(__name__)
 
 
 @router.get("/images", response_model=list[UploadedAssetResponse])
@@ -47,6 +45,7 @@ async def upload_image(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
+    storage: PublicStorage = Depends(get_public_storage),
 ):
     content = await file.read()
     try:
@@ -54,13 +53,25 @@ async def upload_image(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     key = f"images/{current_user.uid}/{uuid4().hex}{suffix}"
-    destination = _local_directory() / key
-    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        destination.write_bytes(content)
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail="头像保存失败") from exc
-    url = f"/storage/{key}"
+        await run_in_threadpool(
+            storage.put,
+            key,
+            content,
+            file.content_type or "application/octet-stream",
+        )
+    except PublicStorageError as exc:
+        logger.error(
+            "Public image write failed provider=%s key=%s type=%s",
+            storage.name,
+            key,
+            type(exc.__cause__ or exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="公开图片存储暂时不可用",
+        ) from exc
+    url = storage.public_url(key)
 
     asset = UploadedAsset(
         owner_uid=current_user.uid,
@@ -70,14 +81,36 @@ async def upload_image(
         mime_type=file.content_type or "application/octet-stream",
         size=len(content),
     )
-    db.add(asset)
-    db.commit()
-    db.refresh(asset)
-    return {
-        "asset_id": asset.id,
-        "url": asset.public_url,
-        "storage": "local",
-        "key": asset.storage_key,
-        "mime_type": asset.mime_type,
-        "size": asset.size,
-    }
+    try:
+        db.add(asset)
+        db.flush()
+        db.refresh(asset)
+        response = {
+            "asset_id": asset.id,
+            "url": asset.public_url,
+            "storage": storage.name,
+            "key": asset.storage_key,
+            "mime_type": asset.mime_type,
+            "size": asset.size,
+        }
+        db.commit()
+    except SQLAlchemyError:
+        try:
+            db.rollback()
+        except SQLAlchemyError as rollback_exc:
+            logger.error(
+                "Public image transaction rollback failed key=%s type=%s",
+                key,
+                type(rollback_exc).__name__,
+            )
+        try:
+            await run_in_threadpool(storage.delete, key)
+        except PublicStorageError as cleanup_exc:
+            logger.error(
+                "Public image cleanup failed provider=%s key=%s type=%s",
+                storage.name,
+                key,
+                type(cleanup_exc.__cause__ or cleanup_exc).__name__,
+            )
+        raise
+    return response

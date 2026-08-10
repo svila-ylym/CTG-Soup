@@ -8,10 +8,13 @@ import {
   PaperClipIcon,
 } from '@heroicons/vue/24/outline'
 import { systemMessagesApi } from '@/api/systemMessages'
+import { useUnreadStore } from '@/stores/unread'
 import { extractApiError } from '@/utils/auth'
+import { parseUtcDateTime } from '@/utils/datetime'
 import type { SystemMessageAttachment, SystemMessageDetail, SystemMessageSummary } from '@/types'
 
 const messages = ref<SystemMessageSummary[]>([])
+const unreadStore = useUnreadStore()
 const selected = ref<SystemMessageDetail | null>(null)
 const loading = ref(true)
 const loadingDetail = ref(false)
@@ -31,7 +34,8 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(value))
+    timeZone: 'Asia/Shanghai',
+  }).format(parseUtcDateTime(value))
 }
 
 function formatBytes(value: number) {
@@ -47,10 +51,11 @@ async function loadList(targetPage = page.value) {
     const response = await systemMessagesApi.list(targetPage)
     messages.value = response.data.items || []
     page.value = response.data.page
-    totalPages.value = response.data.total_pages
+    totalPages.value = response.data.total_pages ?? 0
     if (selected.value && !messages.value.some((item) => item.id === selected.value?.id)) {
       selected.value = null
     }
+    await unreadStore.refreshSystemMessages()
   } catch (reason) {
     error.value = extractApiError(reason, '系统消息暂时无法加载')
   } finally {
@@ -75,6 +80,7 @@ async function openMessage(item: SystemMessageSummary) {
       if (requestId !== detailRequestId) return
       selected.value = readDetail
       item.is_read = true
+      await unreadStore.refreshSystemMessages()
     } catch (reason) {
       if (requestId !== detailRequestId) return
       error.value = extractApiError(reason, '正文已打开，但标记已读失败')

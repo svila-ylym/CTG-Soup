@@ -2,6 +2,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import { chatApi } from '@/api/chat'
 import { useAuthStore } from '@/stores/auth'
+import { useUnreadStore } from '@/stores/unread'
 import { extractApiError } from '@/utils/auth'
 import type { ChatMessage, ConversationPage, DirectConversation } from '@/types'
 
@@ -29,6 +30,7 @@ type SocketEvent = {
   user_uid?: number
   code?: string
   message_text?: string
+  system_message_id?: number
 }
 
 function sortConversations(items: DirectConversation[]) {
@@ -52,6 +54,7 @@ function newClientId() {
 
 export const useChatStore = defineStore('chat', () => {
   const auth = useAuthStore()
+  const unread = useUnreadStore()
   const conversations = ref<DirectConversation[]>([])
   const messagesByConversation = ref<Record<number, ChatItem[]>>({})
   const cursors = ref<Record<number, number | null>>({})
@@ -69,6 +72,7 @@ export const useChatStore = defineStore('chat', () => {
   let shouldReconnect = false
   let reconnectTimer: number | undefined
   let pollTimer: number | undefined
+  let stateGeneration = 0
 
   const activeConversation = computed(() =>
     conversations.value.find((conversation) => conversation.id === activeConversationId.value) || null,
@@ -84,6 +88,11 @@ export const useChatStore = defineStore('chat', () => {
   const isTyping = computed(() =>
     activeConversationId.value !== null && remoteTyping.value[activeConversationId.value] === true,
   )
+  const unreadMessageCount = computed(() => conversations.value.reduce(
+    (total, conversation) => total + Math.max(0, conversation.unread_count || 0),
+    0,
+  ))
+  const hasUnreadMessages = computed(() => unreadMessageCount.value > 0)
 
   function currentUid() {
     const raw = auth.user?.uid ?? localStorage.getItem('user_uid')
@@ -136,25 +145,31 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadConversations() {
+    const generation = stateGeneration
     loadingConversations.value = true
     error.value = ''
     try {
       const response = await chatApi.conversations()
+      if (generation !== stateGeneration) return
       const payload = response.data as ConversationPage
       conversations.value = payload.items || []
       sortConversations(conversations.value)
     } catch (reason) {
-      error.value = extractApiError(reason, '会话暂时无法加载')
+      if (generation === stateGeneration) {
+        error.value = extractApiError(reason, '会话暂时无法加载')
+      }
     } finally {
-      loadingConversations.value = false
+      if (generation === stateGeneration) loadingConversations.value = false
     }
   }
 
   async function loadMessages(conversationId: number, beforeId?: number, replace = false) {
+    const generation = stateGeneration
     if (beforeId) loadingOlderMessages.value = true
     else loadingMessages.value = true
     try {
       const response = await chatApi.messages(conversationId, beforeId)
+      if (generation !== stateGeneration) return null
       const payload = response.data
       const existing = messagesByConversation.value[conversationId] || []
       if (replace) {
@@ -171,16 +186,21 @@ export const useChatStore = defineStore('chat', () => {
       loadedConversations.value[conversationId] = true
       return payload
     } catch (reason) {
-      error.value = extractApiError(reason, '消息暂时无法加载')
+      if (generation === stateGeneration) {
+        error.value = extractApiError(reason, '消息暂时无法加载')
+      }
       return null
     } finally {
-      loadingMessages.value = false
-      loadingOlderMessages.value = false
+      if (generation === stateGeneration) {
+        loadingMessages.value = false
+        loadingOlderMessages.value = false
+      }
     }
   }
 
   async function markRead(conversationId = activeConversationId.value) {
     if (conversationId === null) return
+    const generation = stateGeneration
     const uid = currentUid()
     const items = messagesByConversation.value[conversationId] || []
     const lastIncoming = [...items]
@@ -188,18 +208,29 @@ export const useChatStore = defineStore('chat', () => {
       .find((item) => item.receiver_uid === uid && !item.deliveryStatus)
     if (!lastIncoming) return
     try {
-      await chatApi.read(conversationId, lastIncoming.id)
-      for (const item of items) {
+      const response = await chatApi.read(conversationId, lastIncoming.id)
+      if (generation !== stateGeneration) return
+      const currentItems = messagesByConversation.value[conversationId] || []
+      for (const item of currentItems) {
         if (item.receiver_uid === uid && item.id <= lastIncoming.id) item.is_read = true
       }
       const conversation = conversations.value.find((item) => item.id === conversationId)
-      if (conversation) conversation.unread_count = 0
+      if (conversation) {
+        const remainingUnread = currentItems.filter(
+          (item) => item.receiver_uid === uid && !item.is_read && !item.deliveryStatus,
+        ).length
+        conversation.unread_count = Math.max(
+          remainingUnread,
+          conversation.unread_count - response.data.read_count,
+        )
+      }
     } catch {
       // A later poll can reconcile the read cursor.
     }
   }
 
   async function openConversation(conversationId: number) {
+    const generation = stateGeneration
     if (!conversations.value.some((conversation) => conversation.id === conversationId)) return
     if (activeConversationId.value !== null && activeConversationId.value !== conversationId) {
       setTyping(false, activeConversationId.value)
@@ -209,10 +240,12 @@ export const useChatStore = defineStore('chat', () => {
     if (!loadedConversations.value[conversationId]) {
       await loadMessages(conversationId, undefined, true)
     }
+    if (generation !== stateGeneration || activeConversationId.value !== conversationId) return
     await markRead(conversationId)
   }
 
   async function openConversationForUser(userUid: number) {
+    const generation = stateGeneration
     const existing = conversations.value.find((conversation) => conversation.other_user.uid === userUid)
     if (existing) {
       await openConversation(existing.id)
@@ -220,11 +253,14 @@ export const useChatStore = defineStore('chat', () => {
     }
     try {
       const response = await chatApi.createConversation(userUid)
+      if (generation !== stateGeneration) return null
       upsertConversation(response.data)
       await openConversation(response.data.id)
       return response.data
     } catch (reason) {
-      error.value = extractApiError(reason, '无法打开会话')
+      if (generation === stateGeneration) {
+        error.value = extractApiError(reason, '无法打开会话')
+      }
       return null
     }
   }
@@ -238,6 +274,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendMessage(content: string, retryClientId?: string) {
+    const generation = stateGeneration
     const conversation = activeConversation.value
     const uid = currentUid()
     const normalized = content.trim()
@@ -264,10 +301,12 @@ export const useChatStore = defineStore('chat', () => {
     }
     try {
       const response = await chatApi.send(conversation.id, normalized)
+      if (generation !== stateGeneration) return false
       removeLocalMessage(conversation.id, clientId)
       upsertMessage(conversation.id, response.data)
       return true
     } catch (reason) {
+      if (generation !== stateGeneration) return false
       updateDeliveryStatus(conversation.id, clientId, 'failed', extractApiError(reason, '发送失败'))
       return false
     }
@@ -294,6 +333,10 @@ export const useChatStore = defineStore('chat', () => {
 
   function handleSocketEvent(event: SocketEvent) {
     const uid = currentUid()
+    if (event.type === 'system_message.created') {
+      unread.markSystemMessagesUnread()
+      return
+    }
     if (event.type === 'message.created') {
       const message = typeof event.message === 'object' && event.message !== null
         ? event.message
@@ -340,15 +383,19 @@ export const useChatStore = defineStore('chat', () => {
   function startPolling() {
     if (pollTimer !== undefined) return
     pollTimer = window.setInterval(() => {
-      if (activeConversationId.value !== null) {
-        const conversationId = activeConversationId.value
-        void (async () => {
+      void (async () => {
+        const generation = stateGeneration
+        if (activeConversationId.value !== null) {
+          const conversationId = activeConversationId.value
           await loadMessages(conversationId)
-          await markRead(conversationId)
-        })()
-      } else {
-        void loadConversations()
-      }
+          if (generation !== stateGeneration) return
+          if (activeConversationId.value === conversationId) {
+            await markRead(conversationId)
+          }
+        }
+        if (generation !== stateGeneration) return
+        await loadConversations()
+      })()
     }, 5000)
   }
 
@@ -381,6 +428,7 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
     connection.onmessage = (message) => {
+      if (socket.value !== connection) return
       try {
         handleSocketEvent(JSON.parse(message.data) as SocketEvent)
       } catch {
@@ -388,12 +436,15 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
     connection.onerror = () => {
+      if (socket.value !== connection) return
       socketError.value = '实时消息连接失败，已切换为轮询'
     }
     connection.onclose = () => {
-      if (socket.value === connection) socket.value = null
+      if (socket.value !== connection) return
+      socket.value = null
       socketStatus.value = 'offline'
       remoteTyping.value = {}
+      if (!shouldReconnect) return
       startPolling()
       scheduleReconnect()
     }
@@ -406,9 +457,26 @@ export const useChatStore = defineStore('chat', () => {
     reconnectTimer = undefined
     pollTimer = undefined
     setTyping(false)
-    socket.value?.close()
+    const connection = socket.value
     socket.value = null
+    connection?.close()
     socketStatus.value = 'offline'
+  }
+
+  function reset() {
+    stateGeneration += 1
+    disconnect()
+    conversations.value = []
+    messagesByConversation.value = {}
+    cursors.value = {}
+    loadedConversations.value = {}
+    activeConversationId.value = null
+    remoteTyping.value = {}
+    error.value = ''
+    socketError.value = ''
+    loadingConversations.value = false
+    loadingMessages.value = false
+    loadingOlderMessages.value = false
   }
 
   function closeConversation() {
@@ -430,6 +498,8 @@ export const useChatStore = defineStore('chat', () => {
     socketStatus,
     socketError,
     isTyping,
+    unreadMessageCount,
+    hasUnreadMessages,
     loadConversations,
     loadMessages,
     openConversation,
@@ -441,5 +511,6 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     connect,
     disconnect,
+    reset,
   }
 })

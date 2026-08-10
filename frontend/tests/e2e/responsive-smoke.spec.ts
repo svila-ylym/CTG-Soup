@@ -31,7 +31,7 @@ for (const viewport of viewports) {
             json: { items: [], total: 0, page: 1, page_size: 5, total_pages: 0 },
           }))
           await page.route('http://127.0.0.1:10000/api/turtle-soups**', request => request.fulfill({
-            json: { items: [], total: 0, page: 1, page_size: 20, total_pages: 0 },
+            json: { items: [], total: 0, page: 1, page_size: 30, total_pages: 0 },
           }))
           await page.route('http://127.0.0.1:10000/api/tags**', request => request.fulfill({
             json: { items: [], total: 0, page: 1, page_size: 20, total_pages: 0 },
@@ -93,6 +93,8 @@ test('soup people fields are text and the solution reveals only after a click', 
     id: 7,
     title: '密室',
     puzzle: '门从里面锁着。',
+    puzzle_images: [],
+    solution_images: [],
     solution_available: true,
     is_solution_public: true,
     genre: '本格',
@@ -104,7 +106,7 @@ test('soup people fields are text and the solution reveals only after a click', 
     author: { uid: 1, username: 'author', nickname: '作者' },
     average_score: 0,
     rating_count: 0,
-    bayesian_rating: 0,
+    comment_count: 0,
     like_count: 0,
     favorite_count: 0,
     view_count: 1,
@@ -113,6 +115,7 @@ test('soup people fields are text and the solution reveals only after a click', 
     is_favorited: false,
     my_rating: null,
     can_manage: false,
+    can_edit: true,
     created_at: '2026-08-08T00:00:00Z',
     updated_at: '2026-08-08T00:00:00Z',
   }
@@ -133,6 +136,7 @@ test('soup people fields are text and the solution reveals only after a click', 
   await expect(page.getByText('汤底已隐藏，确认后才会显示。')).toBeVisible()
   await page.getByRole('button', { name: '揭示汤底' }).click()
   await expect(page.getByText('凶手从窗户离开。')).toBeVisible()
+  await expect(page.getByText('汤底已隐藏，确认后才会显示。')).toHaveCount(0)
   expect(pageErrors).toEqual([])
 })
 

@@ -13,10 +13,14 @@ export interface User {
   email: string
   avatar_url?: string
   avatar_asset_id?: number | null
+  profile_background_url?: string | null
+  profile_background_asset_id?: number | null
   bio?: string
   role: 'user' | 'admin' | 'root'
   status: 'pending_email' | 'active' | 'banned' | 'silenced'
   points: number
+  level?: number
+  level_band?: string
   consecutive_signin_days: number
   allow_bulk_email: boolean
   theme_preference: ThemePreference
@@ -88,6 +92,16 @@ export interface SoupAuthor {
   uid: number
   username: string
   nickname: string
+  avatar_url?: string | null
+  level?: number
+  level_band?: string
+}
+
+export interface SoupImageRef {
+  id: number
+  public_url: string
+  mime_type: string
+  size: number
 }
 
 export interface TurtleSoup {
@@ -95,6 +109,8 @@ export interface TurtleSoup {
   title: string
   puzzle: string
   solution?: string | null
+  puzzle_images: SoupImageRef[]
+  solution_images: SoupImageRef[]
   solution_available: boolean
   is_solution_public: boolean
   genre: SoupGenre
@@ -106,7 +122,7 @@ export interface TurtleSoup {
   tags: Tag[]
   average_score: number
   rating_count: number
-  bayesian_rating: number
+  comment_count: number
   like_count: number
   favorite_count: number
   view_count: number
@@ -115,6 +131,7 @@ export interface TurtleSoup {
   is_liked: boolean
   is_favorited: boolean
   can_manage: boolean
+  can_edit: boolean
   created_at: string
   updated_at: string
 }
@@ -129,7 +146,17 @@ export interface SoupCreate {
   secondary_player_count: string
   tag_ids: number[]
   custom_tags: string[]
+  puzzle_image_ids: number[]
+  solution_image_ids: number[]
   is_revealed?: boolean
+}
+
+export type SoupEditorState = Omit<
+  SoupCreate,
+  'puzzle_image_ids' | 'solution_image_ids'
+> & {
+  puzzle_images: SoupImageRef[]
+  solution_images: SoupImageRef[]
 }
 
 export interface SoupScore {
@@ -164,6 +191,7 @@ export interface Post {
   created_at: string
   updated_at: string
   mentions: MentionRef[]
+  can_edit: boolean
 }
 
 export interface MentionRef {
@@ -193,7 +221,7 @@ export interface Competition {
   end_time: string
   creator_uid: number
   required_tag_ids: number[]
-  score_type: 'average' | 'top_score'
+  score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
   status: 'pending' | 'ongoing' | 'completed'
@@ -210,10 +238,13 @@ export interface CompetitionCreate {
   start_time: string
   end_time: string
   required_tag_ids: number[]
-  score_type: 'average' | 'top_score'
+  custom_tags: string[]
+  score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
 }
+
+export type CompetitionUpdate = CompetitionCreate
 
 export interface CompetitionEntry {
   competition_id: number
@@ -481,12 +512,15 @@ export interface PublicProfileUser {
   username: string
   nickname: string
   avatar_url?: string | null
+  profile_background_url?: string | null
   bio?: string | null
   role: 'user' | 'admin' | 'root'
   level: number
+  level_band: string
   experience_points: number
   level_start: number
   next_level_start: number | null
+  registration_date: string
   created_at: string
 }
 

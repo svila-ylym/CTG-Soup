@@ -9,6 +9,7 @@ from app.schemas.community import (
     TargetUserAction,
     UserPageResponse,
 )
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
@@ -23,11 +24,14 @@ def _target(db: Session, current_user: User, target_uid: int) -> User:
 
 
 def _user_payload(user: User) -> dict:
+    progress = level_progress(user.points)
     return {
         "uid": user.uid,
         "username": user.username,
         "nickname": user.nickname,
         "avatar_url": user.avatar_url,
+        "level": progress.level,
+        "level_band": level_band(progress.level),
     }
 
 

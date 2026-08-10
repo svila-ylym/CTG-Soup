@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -74,7 +77,16 @@ def test_comments_create_list_reply_and_paginate_with_minimal_author_contract():
 
     first = client.post(f"/api/turtle-soups/{soup_id}/comments", json={"content": "第一条"})
     assert first.status_code == 201
-    assert set(first.json()) == {"id", "content", "author_uid", "parent_id", "created_at", "replies"}
+    assert set(first.json()) == {
+        "id",
+        "content",
+        "author_uid",
+        "author",
+        "parent_id",
+        "created_at",
+        "replies",
+        "mentions",
+    }
     reply = client.post(
         f"/api/turtle-soups/{soup_id}/comments",
         json={"content": "回复", "parent_id": first.json()["id"]},
@@ -144,17 +156,139 @@ def test_rating_is_unique_per_user_and_soup():
             raise AssertionError("duplicate ratings must be rejected")
 
 
-def test_repeated_interactions_and_ratings_are_idempotent():
+def test_repeated_interactions_are_idempotent():
     client, engine, soup_id, users, _current = _test_app()
 
     assert client.put(f"/api/turtle-soups/{soup_id}/like", json={"active": True}).status_code == 200
     assert client.put(f"/api/turtle-soups/{soup_id}/like", json={"active": True}).status_code == 200
     assert client.put(f"/api/turtle-soups/{soup_id}/favorite", json={"active": True}).status_code == 200
     assert client.put(f"/api/turtle-soups/{soup_id}/favorite", json={"active": True}).status_code == 200
-    assert client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8}).status_code == 200
-    assert client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 9}).status_code == 200
 
     with Session(engine) as session:
-        assert len(session.exec(select(Rating).where(Rating.user_uid == users[1].uid, Rating.soup_id == soup_id)).all()) == 1
         soup = session.get(Soup, soup_id)
-        assert (soup.like_count, soup.favorite_count, soup.rating_count, soup.avg_rating) == (1, 1, 1, 9)
+        assert (soup.like_count, soup.favorite_count) == (1, 1)
+
+
+def test_confirmed_rating_cannot_be_changed():
+    client, engine, soup_id, users, _current = _test_app()
+
+    first = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8})
+    repeated = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 9})
+
+    assert first.status_code == 200
+    assert repeated.status_code == 409
+    assert repeated.json()["detail"] == {
+        "code": "RATING_ALREADY_SUBMITTED",
+        "message": "评分确认后不可修改",
+    }
+    with Session(engine) as session:
+        rating = session.exec(
+            select(Rating).where(
+                Rating.user_uid == users[1].uid,
+                Rating.soup_id == soup_id,
+            )
+        ).one()
+        soup = session.get(Soup, soup_id)
+        assert rating.score == 8
+        assert (soup.rating_count, soup.avg_rating) == (1, 8)
+
+
+def test_comment_count_is_independent_from_ratings_and_excludes_replies():
+    client, _engine, soup_id, _users, _current = _test_app()
+
+    rated = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8})
+    assert rated.status_code == 200
+    after_rating = client.get(f"/api/turtle-soups/{soup_id}").json()
+    assert after_rating["rating_count"] == 1
+    assert after_rating["comment_count"] == 0
+
+    root = client.post(
+        f"/api/turtle-soups/{soup_id}/comments",
+        json={"content": "顶级评论"},
+    )
+    assert root.status_code == 201
+    reply = client.post(
+        f"/api/turtle-soups/{soup_id}/comments",
+        json={"content": "一级回复", "parent_id": root.json()["id"]},
+    )
+    assert reply.status_code == 201
+
+    detail = client.get(f"/api/turtle-soups/{soup_id}").json()
+    listing = client.get("/api/turtle-soups").json()["items"][0]
+    assert detail["rating_count"] == 1
+    assert detail["comment_count"] == 1
+    assert listing["comment_count"] == 1
+
+
+def test_rating_aggregate_refresh_locks_the_soup_row():
+    statement = turtle_soups._rating_soup_statement(42)
+
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+
+    assert "WHERE soups.id = %(id_1)s FOR UPDATE" in compiled
+
+
+def test_concurrent_duplicate_rating_returns_locked_conflict(tmp_path):
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrent-rating.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    Soup.__table__.create(engine)
+    Rating.__table__.create(engine)
+
+    with Session(engine) as setup_session:
+        soup = Soup(
+            author_uid=1,
+            title="并发评分",
+            puzzle="谜面",
+            solution="汤底",
+        )
+        setup_session.add(soup)
+        setup_session.commit()
+        setup_session.refresh(soup)
+        soup_id = soup.id
+
+    current_user = User(
+        uid=2,
+        username="concurrent-rater",
+        nickname="评分者",
+        email="concurrent@example.com",
+        hashed_password="x",
+        status=UserStatus.ACTIVE,
+    )
+
+    with Session(engine) as session:
+        inserted = False
+
+        def insert_competing_rating(_session, _flush_context, _instances):
+            nonlocal inserted
+            if inserted or not any(isinstance(item, Rating) for item in session.new):
+                return
+            inserted = True
+            with Session(engine) as competing_session:
+                competing_session.add(
+                    Rating(user_uid=current_user.uid, soup_id=soup_id, score=6.5)
+                )
+                competing_session.commit()
+
+        event.listen(session, "before_flush", insert_competing_rating)
+        try:
+            with pytest.raises(HTTPException) as captured:
+                turtle_soups.rate_soup(
+                    soup_id,
+                    turtle_soups.RatingInput(score=9),
+                    current_user,
+                    session,
+                )
+        finally:
+            event.remove(session, "before_flush", insert_competing_rating)
+
+        assert captured.value.status_code == 409
+        assert captured.value.detail == {
+            "code": "RATING_ALREADY_SUBMITTED",
+            "message": "评分确认后不可修改",
+        }
+
+    with Session(engine) as session:
+        stored = session.exec(select(Rating)).one()
+        assert stored.score == 6.5

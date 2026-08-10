@@ -3,12 +3,13 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_active_user, get_current_user, get_optional_current_user
-from app.models.database import Comment, CommentTargetType, Favorite, Like, MentionTargetType, Rating, Soup, SoupTag, Tag, TagKind, TagStatus, User, get_db
+from app.models.database import Comment, CommentTargetType, Favorite, Like, MentionTargetType, OperationLog, Rating, Soup, SoupImage, SoupTag, Tag, UploadedAsset, User, get_db
 from app.schemas.soups import (
     AuthorSummary,
     SoupCreate,
@@ -18,9 +19,14 @@ from app.schemas.soups import (
     TagResponse,
 )
 from app.services.soup_rules import validate_score
-from app.services.competition_entries import evaluate_soup_competitions
+from app.services.competition_entries import (
+    evaluate_soup_competitions,
+    remove_soup_from_unsettled_competitions,
+    refresh_soup_competition_scores,
+)
 from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
-from app.services.tag_rules import normalize_tag_name
+from app.services.tag_resolution import TagSelectionError, resolve_active_tags
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
@@ -53,7 +59,7 @@ class CommentInput(BaseModel):
             raise ValueError("评论不能为空")
         if "<" in normalized or ">" in normalized:
             raise ValueError("评论不允许 HTML")
-        return normalized
+        return value
 
 
 def _comment_payload(
@@ -90,10 +96,13 @@ def _refresh_soup_interaction_count(db: Session, soup: Soup, kind: str) -> None:
 
 def _author(db: Session, uid: int) -> AuthorSummary:
     user = db.get(User, uid)
+    progress = level_progress(user.points if user else 0)
     return AuthorSummary(
         uid=uid,
         username=user.username if user else "unknown",
         nickname=user.nickname if user else "未知用户",
+        level=progress.level,
+        level_band=level_band(progress.level),
     )
 
 
@@ -106,6 +115,34 @@ def _tags(db: Session, soup_id: int) -> list[Tag]:
     ).all()
 
 
+def _soup_images(db: Session, soup_id: int, placement: str) -> list[UploadedAsset]:
+    return db.exec(
+        select(UploadedAsset)
+        .join(SoupImage, SoupImage.asset_id == UploadedAsset.id)
+        .where(
+            SoupImage.soup_id == soup_id,
+            SoupImage.placement == placement,
+        )
+        .order_by(SoupImage.sort_order)
+    ).all()
+
+
+def _soup_comment_counts(db: Session, soup_ids: list[int]) -> dict[int, int]:
+    if not soup_ids:
+        return {}
+    rows = db.exec(
+        select(Comment.target_id, func.count(Comment.id))
+        .where(
+            Comment.target_type == CommentTargetType.SOUP,
+            Comment.target_id.in_(soup_ids),
+            Comment.parent_id.is_(None),
+            Comment.status == "published",
+        )
+        .group_by(Comment.target_id)
+    ).all()
+    return {target_id: count for target_id, count in rows}
+
+
 def _can_reveal_solution(soup: Soup, reveal: bool) -> bool:
     return reveal and soup.status in {"published", "revealed"}
 
@@ -115,6 +152,7 @@ def _payload(
     db: Session,
     current_user: Optional[User],
     reveal: bool = False,
+    comment_count: Optional[int] = None,
 ) -> dict:
     is_author = bool(current_user and current_user.uid == soup.author_uid)
     can_manage = bool(
@@ -122,6 +160,10 @@ def _payload(
         and (is_author or current_user.role.value in {"admin", "root"})
     )
     shown = _can_reveal_solution(soup, reveal)
+    puzzle_images = _soup_images(db, soup.id, "puzzle")
+    solution_images = _soup_images(db, soup.id, "solution") if shown else []
+    if comment_count is None:
+        comment_count = _soup_comment_counts(db, [soup.id]).get(soup.id, 0)
     liked = favorited = False
     my_rating = None
     if current_user:
@@ -151,6 +193,8 @@ def _payload(
         "title": soup.title,
         "puzzle": soup.puzzle,
         "solution": soup.solution if shown else None,
+        "puzzle_images": puzzle_images,
+        "solution_images": solution_images,
         "solution_available": True,
         "is_solution_public": soup.status in {"published", "revealed"},
         "genre": soup.genre,
@@ -162,7 +206,7 @@ def _payload(
         "author": _author(db, soup.author_uid),
         "average_score": soup.avg_rating,
         "rating_count": soup.rating_count,
-        "bayesian_rating": soup.bayesian_rating,
+        "comment_count": comment_count,
         "like_count": soup.like_count,
         "favorite_count": soup.favorite_count,
         "view_count": soup.view_count,
@@ -171,6 +215,7 @@ def _payload(
         "is_favorited": favorited,
         "my_rating": my_rating,
         "can_manage": can_manage,
+        "can_edit": is_author,
         "created_at": soup.created_at,
         "updated_at": soup.updated_at,
     }
@@ -186,38 +231,108 @@ def _get_soup(db: Session, soup_id: int) -> Soup:
     return soup
 
 
-def _resolve_tags(db: Session, tag_ids: list[int], custom_names: list[str]) -> list[Tag]:
-    tags: list[Tag] = []
-    seen: set[int] = set()
-    for tag_id in tag_ids:
-        tag = db.get(Tag, tag_id)
-        if not tag or tag.status != TagStatus.ACTIVE:
-            raise HTTPException(
-                status_code=422,
-                detail={"code": "TAG_NOT_ACTIVE", "message": "标签不存在或已停用"},
-            )
-        if tag.id not in seen:
-            tags.append(tag)
-            seen.add(tag.id)
+def _rating_soup_statement(soup_id: int):
+    return select(Soup).where(Soup.id == soup_id).with_for_update()
 
-    for raw_name in custom_names:
-        name, slug = normalize_tag_name(raw_name)
-        tag = db.exec(select(Tag).where(Tag.slug == slug)).first()
-        if tag and tag.status != TagStatus.ACTIVE:
-            raise HTTPException(
-                status_code=422,
-                detail={"code": "TAG_NOT_ACTIVE", "message": "标签不存在或已停用"},
-            )
-        if not tag:
-            tag = Tag(name=name, slug=slug, kind=TagKind.CUSTOM, status=TagStatus.ACTIVE)
-            db.add(tag)
-            db.flush()
-        if tag.id not in seen:
-            tags.append(tag)
-            seen.add(tag.id)
-    if len(tags) > 10:
-        raise HTTPException(status_code=422, detail={"code": "TOO_MANY_TAGS", "message": "单个海龟汤最多使用10个标签"})
-    return tags
+
+def _get_soup_for_rating(db: Session, soup_id: int) -> Soup:
+    soup = db.exec(_rating_soup_statement(soup_id)).first()
+    if not soup or soup.status == "deleted":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SOUP_NOT_FOUND", "message": "海龟汤不存在"},
+        )
+    return soup
+
+
+def _resolve_tags(db: Session, tag_ids: list[int], custom_names: list[str]) -> list[Tag]:
+    try:
+        return resolve_active_tags(
+            db,
+            tag_ids,
+            custom_names,
+            min_count=0,
+            max_count=10,
+        )
+    except TagSelectionError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+def _resolve_owned_images(
+    db: Session,
+    owner_uid: int,
+    puzzle_ids: list[int],
+    solution_ids: list[int],
+) -> tuple[list[UploadedAsset], list[UploadedAsset]]:
+    all_ids = [*puzzle_ids, *solution_ids]
+    if len(all_ids) != len(set(all_ids)):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "DUPLICATE_SOUP_IMAGE", "message": "同一图片不能重复添加"},
+        )
+    if not all_ids:
+        return [], []
+    assets = db.exec(
+        select(UploadedAsset).where(UploadedAsset.id.in_(all_ids))
+    ).all()
+    by_id = {asset.id: asset for asset in assets}
+    if any(
+        asset_id not in by_id
+        or by_id[asset_id].owner_uid != owner_uid
+        or by_id[asset_id].kind != "image"
+        for asset_id in all_ids
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_SOUP_IMAGE", "message": "图片不存在或不属于当前用户"},
+        )
+    return (
+        [by_id[asset_id] for asset_id in puzzle_ids],
+        [by_id[asset_id] for asset_id in solution_ids],
+    )
+
+
+def _validate_content_presence(
+    puzzle: str,
+    solution: str,
+    puzzle_assets: list[UploadedAsset],
+    solution_assets: list[UploadedAsset],
+) -> None:
+    if not puzzle.strip() and not puzzle_assets:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "PUZZLE_CONTENT_REQUIRED", "message": "谜面需要文字或图片"},
+        )
+    if not solution.strip() and not solution_assets:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "SOLUTION_CONTENT_REQUIRED", "message": "汤底需要文字或图片"},
+        )
+
+
+def _sync_soup_images(
+    db: Session,
+    soup_id: int,
+    puzzle_assets: list[UploadedAsset],
+    solution_assets: list[UploadedAsset],
+) -> None:
+    for row in db.exec(select(SoupImage).where(SoupImage.soup_id == soup_id)).all():
+        db.delete(row)
+    for placement, assets in (
+        ("puzzle", puzzle_assets),
+        ("solution", solution_assets),
+    ):
+        for sort_order, asset in enumerate(assets):
+            db.add(SoupImage(
+                soup_id=soup_id,
+                asset_id=asset.id,
+                placement=placement,
+                sort_order=sort_order,
+            ))
+    db.flush()
 
 
 def _sync_tags(db: Session, soup: Soup, tags: list[Tag]) -> None:
@@ -262,21 +377,28 @@ def list_soups(
     if soup_color:
         query = query.where(Soup.soup_color == soup_color)
     order = (
-        Soup.bayesian_rating.desc()
-        if sort_by in {"bayesian", "bayesian_rating"}
-        else Soup.avg_rating.desc()
+        (
+            Soup.avg_rating.desc(),
+            Soup.rating_count.desc(),
+            Soup.created_at.desc(),
+            Soup.id.desc(),
+        )
         if sort_by in {"score", "average_score"}
-        else Soup.like_count.desc()
+        else (Soup.like_count.desc(),)
         if sort_by in {"likes", "like_count"}
-        else Soup.created_at.desc()
+        else (Soup.created_at.desc(),)
     )
     total = len(db.exec(query).all())
-    rows = db.exec(query.order_by(order).offset((page - 1) * page_size).limit(page_size)).all()
+    rows = db.exec(query.order_by(*order).offset((page - 1) * page_size).limit(page_size)).all()
     if selected_tag and rows:
         selected_tag.view_count += 1
         db.commit()
+    comment_counts = _soup_comment_counts(db, [row.id for row in rows])
     return {
-        "items": [_payload(row, db, None) for row in rows],
+        "items": [
+            _payload(row, db, None, comment_count=comment_counts.get(row.id, 0))
+            for row in rows
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -291,6 +413,13 @@ def create_soup(
     db: Session = Depends(get_db),
 ):
     tags = _resolve_tags(db, data.tag_ids, data.custom_tags)
+    puzzle_assets, solution_assets = _resolve_owned_images(
+        db,
+        current_user.uid,
+        data.puzzle_image_ids,
+        data.solution_image_ids,
+    )
+    _validate_content_presence(data.puzzle, data.solution, puzzle_assets, solution_assets)
     soup = Soup(
         author_uid=current_user.uid,
         title=data.title,
@@ -304,11 +433,13 @@ def create_soup(
     )
     db.add(soup)
     db.flush()
+    _sync_soup_images(db, soup.id, puzzle_assets, solution_assets)
     _sync_tags(db, soup, tags)
     db.flush()
     evaluate_soup_competitions(db, soup)
+    db.commit()
     db.refresh(soup)
-    return _payload(soup, db, current_user, True)
+    return _payload(soup, db, current_user, True, comment_count=0)
 
 
 @router.get("/{soup_id}", response_model=SoupResponse)
@@ -333,10 +464,33 @@ def update_soup(
     db: Session = Depends(get_db),
 ):
     soup = _get_soup(db, soup_id)
-    is_admin = current_user.role.value in {"admin", "root"}
-    if soup.author_uid != current_user.uid and not is_admin:
+    if soup.author_uid != current_user.uid:
         raise HTTPException(status_code=403, detail={"code": "SOUP_UPDATE_FORBIDDEN", "message": "无权更新此作品"})
     values = data.model_dump(exclude_unset=True)
+    current_puzzle_assets = _soup_images(db, soup.id, "puzzle")
+    current_solution_assets = _soup_images(db, soup.id, "solution")
+    puzzle_ids = values.pop(
+        "puzzle_image_ids",
+        [asset.id for asset in current_puzzle_assets],
+    )
+    solution_ids = values.pop(
+        "solution_image_ids",
+        [asset.id for asset in current_solution_assets],
+    )
+    puzzle_assets, solution_assets = _resolve_owned_images(
+        db,
+        current_user.uid,
+        puzzle_ids,
+        solution_ids,
+    )
+    effective_puzzle = values.get("puzzle", soup.puzzle)
+    effective_solution = values.get("solution", soup.solution)
+    _validate_content_presence(
+        effective_puzzle,
+        effective_solution,
+        puzzle_assets,
+        solution_assets,
+    )
     tag_values_present = "tag_ids" in values or "custom_tags" in values
     if tag_values_present:
         tags = _resolve_tags(db, values.pop("tag_ids", []), values.pop("custom_tags", []))
@@ -346,11 +500,44 @@ def update_soup(
         soup.status = "revealed" if data.is_revealed else "published"
     for key, value in values.items():
         setattr(soup, key, value)
+    _sync_soup_images(db, soup.id, puzzle_assets, solution_assets)
     soup.updated_at = datetime.utcnow()
     db.flush()
     evaluate_soup_competitions(db, soup)
+    db.commit()
     db.refresh(soup)
     return _payload(soup, db, current_user, True)
+
+
+@router.delete("/{soup_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_soup(
+    soup_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    soup = _get_soup(db, soup_id)
+    if soup.author_uid != current_user.uid and current_user.role.value not in {"admin", "root"}:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "SOUP_DELETE_FORBIDDEN", "message": "无权删除此海龟汤"},
+        )
+    previous_status = soup.status
+    soup.status = "deleted"
+    soup.updated_at = datetime.utcnow()
+    removed_entries = remove_soup_from_unsettled_competitions(db, soup.id)
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="delete",
+        target_type="soup",
+        target_id=soup.id,
+        details={
+            "title": soup.title,
+            "previous_status": previous_status,
+            "removed_competition_entries": removed_entries,
+        },
+    ))
+    db.commit()
 
 
 @router.get("/{soup_id}/comments")
@@ -472,27 +659,32 @@ def delete_comment(
     db.commit()
 
 
+def _rating_already_submitted() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "RATING_ALREADY_SUBMITTED",
+            "message": "评分确认后不可修改",
+        },
+    )
+
+
 @router.put("/{soup_id}/rating")
 def rate_soup(soup_id: int, data: RatingInput, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    soup = _get_soup(db, soup_id)
+    soup = _get_soup_for_rating(db, soup_id)
     if soup.author_uid == current_user.uid:
         raise HTTPException(400, detail={"code": "SELF_RATING_FORBIDDEN", "message": "不能给自己的作品评分"})
     rating = db.exec(select(Rating).where(Rating.user_uid == current_user.uid, Rating.soup_id == soup_id)).first()
     if rating:
-        rating.score = data.score
-        rating.updated_at = datetime.utcnow()
-    else:
-        try:
-            with db.begin_nested():
-                db.add(Rating(user_uid=current_user.uid, soup_id=soup_id, score=data.score))
-                db.flush()
-        except IntegrityError:
-            rating = db.exec(select(Rating).where(Rating.user_uid == current_user.uid, Rating.soup_id == soup_id)).first()
-            if rating is None:
-                raise
-            rating.score = data.score
-            rating.updated_at = datetime.utcnow()
+        raise _rating_already_submitted()
+    try:
+        with db.begin_nested():
+            db.add(Rating(user_uid=current_user.uid, soup_id=soup_id, score=data.score))
+            db.flush()
+    except IntegrityError as exc:
+        raise _rating_already_submitted() from exc
     _refresh_soup_rating(db, soup)
+    refresh_soup_competition_scores(db, soup)
     db.commit()
     db.refresh(soup)
     return {"average_score": soup.avg_rating, "rating_count": soup.rating_count, "my_rating": data.score}

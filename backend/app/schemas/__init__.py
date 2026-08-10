@@ -43,6 +43,7 @@ class UserUpdate(BaseModel):
     nickname: Optional[str] = Field(None, min_length=1, max_length=50)
     email: Optional[EmailStr] = None
     avatar_asset_id: Optional[int] = Field(default=None, gt=0)
+    profile_background_asset_id: Optional[int] = Field(default=None, gt=0)
     bio: Optional[str] = None
     notice_preferences: Optional[Dict[str, bool]] = None
 
@@ -58,10 +59,14 @@ class UserResponse(UserBase):
     status: UserStatus
     avatar_url: Optional[str] = None
     avatar_asset_id: Optional[int] = None
+    profile_background_asset_id: Optional[int] = None
+    profile_background_url: Optional[str] = None
     bio: Optional[str] = None
     points: int
+    level: int = 0
+    level_band: str = "black"
     consecutive_signin_days: int
-    allow_bulk_email: bool = False
+    allow_bulk_email: bool = True
     theme_preference: ThemePreference = ThemePreference.SYSTEM
     created_at: datetime
     
@@ -96,6 +101,28 @@ class EmailVerificationRequest(BaseModel):
 
 class EmailVerificationResendRequest(BaseModel):
     email: EmailStr
+
+
+class PasswordResetEmailRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=4096)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if not any(character.isupper() for character in value):
+            raise ValueError("密码必须包含大写字母")
+        if not any(character.islower() for character in value):
+            raise ValueError("密码必须包含小写字母")
+        if not any(character.isdigit() for character in value):
+            raise ValueError("密码必须包含数字")
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("密码不能超过72字节")
+        return value
 
 
 class MessageResponse(BaseModel):

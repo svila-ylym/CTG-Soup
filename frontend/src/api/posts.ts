@@ -18,4 +18,16 @@ export const postsApi = {
       parent_id: parentId,
     })
   },
+
+  delete(postId: number) {
+    return http.delete(`/posts/${postId}`)
+  },
+
+  update(postId: number, data: Pick<Post, 'title' | 'content' | 'section'>) {
+    return http.put<Post>(`/posts/${postId}`, data)
+  },
+
+  deleteComment(postId: number, commentId: number) {
+    return http.delete(`/posts/${postId}/comments/${commentId}`)
+  },
 }

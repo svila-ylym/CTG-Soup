@@ -11,12 +11,15 @@ class PublicProfileUser(BaseModel):
     username: str
     nickname: str
     avatar_url: str | None = None
+    profile_background_url: str | None = None
     bio: str | None = None
     role: UserRole
     level: int
+    level_band: str
     experience_points: int
     level_start: int
     next_level_start: int | None
+    registration_date: str = "2026-08-10"
     created_at: datetime
 
 

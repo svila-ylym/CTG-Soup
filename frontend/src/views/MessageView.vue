@@ -6,13 +6,17 @@ import {
   ArrowPathIcon,
   CheckIcon,
   FaceSmileIcon,
+  FlagIcon,
   PaperAirplaneIcon,
   SignalIcon,
   SignalSlashIcon,
 } from '@heroicons/vue/24/outline'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatItem } from '@/stores/chat'
+import ReportDialog from '@/components/ReportDialog.vue'
+import { formatChinaMessageTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +27,7 @@ const composerInput = ref<HTMLTextAreaElement | null>(null)
 const messageEnd = ref<HTMLElement | null>(null)
 const showEmoji = ref(false)
 const sending = ref(false)
+const reportMessageId = ref<number | null>(null)
 const mobileDetail = computed(() => chat.activeConversationId !== null)
 let typingTimer: number | undefined
 
@@ -33,21 +38,18 @@ const statusLabel = computed(() => {
   return '轮询模式'
 })
 
-function formatMessageTime(value: string) {
-  const date = new Date(value)
-  const today = new Date()
-  if (date.toDateString() === today.toDateString()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
-}
-
 function avatarInitial(conversation: { other_user: { nickname: string } }) {
   return conversation.other_user.nickname.slice(0, 1).toUpperCase() || '?'
 }
 
 function isMine(message: ChatItem) {
   return message.sender_uid === currentUid.value
+}
+
+function messageLevel(message: ChatItem) {
+  return isMine(message)
+    ? auth.user?.level || Math.max(0, Math.floor((auth.user?.points || 0) / 100))
+    : chat.activeConversation?.other_user.level || 0
 }
 
 function scrollToBottom() {
@@ -171,7 +173,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopTyping()
-  chat.disconnect()
+  chat.closeConversation()
 })
 </script>
 
@@ -193,7 +195,7 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <div class="mt-5 grid h-[clamp(32rem,calc(100dvh-12rem),45rem)] overflow-hidden border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div class="mt-5 grid h-[calc(100dvh-12rem)] min-h-0 overflow-hidden border border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-950 lg:h-[clamp(32rem,calc(100dvh-12rem),45rem)] lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside :class="[mobileDetail ? 'hidden lg:flex' : 'flex', 'min-h-0 flex-col border-r border-slate-200 dark:border-neutral-800']">
           <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-neutral-800">
             <h2 class="font-semibold">会话</h2>
@@ -206,27 +208,28 @@ onUnmounted(() => {
           </div>
           <div v-else-if="!chat.conversations.length" class="p-6 text-center text-sm text-slate-500">暂无会话</div>
           <div v-else class="min-h-0 flex-1 overflow-y-auto">
-            <button
+            <div
               v-for="conversation in chat.conversations"
               :key="conversation.id"
               class="flex min-h-20 w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 dark:border-neutral-800 dark:hover:bg-neutral-800"
               :class="chat.activeConversationId === conversation.id ? 'bg-blue-50 dark:bg-blue-950/30' : ''"
-              type="button"
-              @click="selectConversation(conversation.id)"
             >
-              <img v-if="conversation.other_user.avatar_url" :src="conversation.other_user.avatar_url" alt="" class="h-10 w-10 shrink-0 rounded-full object-cover">
-              <span v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">{{ avatarInitial(conversation) }}</span>
-              <span class="min-w-0 flex-1">
+              <router-link :to="`/profile/${conversation.other_user.uid}`" class="shrink-0" :aria-label="`查看 ${conversation.other_user.nickname} 的个人主页`" :title="`查看 ${conversation.other_user.nickname} 的个人主页`" @click.stop>
+                <img v-if="conversation.other_user.avatar_url" :src="conversation.other_user.avatar_url" alt="" class="h-10 w-10 rounded-full object-cover">
+                <span v-else class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">{{ avatarInitial(conversation) }}</span>
+              </router-link>
+              <button class="min-w-0 flex-1 text-left" type="button" @click="selectConversation(conversation.id)">
                 <span class="flex items-center justify-between gap-2">
                   <strong class="truncate text-sm">{{ conversation.other_user.nickname }}</strong>
-                  <time v-if="conversation.last_message_at" class="shrink-0 text-[11px] text-slate-400">{{ formatMessageTime(conversation.last_message_at) }}</time>
+                  <LevelBadge :level="conversation.other_user.level" :band="conversation.other_user.level_band" compact />
+                  <time v-if="conversation.last_message_at" class="shrink-0 text-[11px] text-slate-400">{{ formatChinaMessageTime(conversation.last_message_at) }}</time>
                 </span>
                 <span class="mt-1 flex items-center justify-between gap-2">
                   <span class="truncate text-xs text-slate-500">{{ conversation.last_message?.content || '开始聊天' }}</span>
-                  <span v-if="conversation.unread_count" class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] text-white">{{ conversation.unread_count }}</span>
+                  <span v-if="conversation.unread_count" class="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" aria-label="有未读私信"></span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -236,10 +239,13 @@ onUnmounted(() => {
               <button class="p-1 text-slate-500 hover:text-blue-600 lg:hidden" type="button" aria-label="返回会话列表" title="返回会话列表" @click="backToList">
                 <ArrowLeftIcon class="h-5 w-5" aria-hidden="true" />
               </button>
-              <img v-if="chat.activeConversation.other_user.avatar_url" :src="chat.activeConversation.other_user.avatar_url" alt="" class="h-9 w-9 rounded-full object-cover">
-              <span v-else class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">{{ avatarInitial(chat.activeConversation) }}</span>
+              <router-link :to="`/profile/${chat.activeConversation.other_user.uid}`" class="shrink-0" :aria-label="`查看 ${chat.activeConversation.other_user.nickname} 的个人主页`" :title="`查看 ${chat.activeConversation.other_user.nickname} 的个人主页`">
+                <img v-if="chat.activeConversation.other_user.avatar_url" :src="chat.activeConversation.other_user.avatar_url" alt="" class="h-9 w-9 rounded-full object-cover">
+                <span v-else class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">{{ avatarInitial(chat.activeConversation) }}</span>
+              </router-link>
               <div class="min-w-0">
                 <h2 class="truncate font-semibold">{{ chat.activeConversation.other_user.nickname }}</h2>
+                <LevelBadge :level="chat.activeConversation.other_user.level" :band="chat.activeConversation.other_user.level_band" compact />
                 <p class="truncate text-xs text-slate-500">@{{ chat.activeConversation.other_user.username }}</p>
               </div>
             </header>
@@ -253,9 +259,11 @@ onUnmounted(() => {
               <div v-else class="space-y-4">
                 <div v-for="message in chat.activeMessages" :key="message.clientId || message.id" class="flex" :class="isMine(message) ? 'justify-end' : 'justify-start'">
                   <div class="max-w-[min(85%,38rem)]">
+                    <div class="mb-1 flex items-center gap-2 text-xs" :class="isMine(message) ? 'justify-end' : 'justify-start'"><LevelBadge :level="messageLevel(message)" compact /></div>
                     <div class="break-words whitespace-pre-wrap px-4 py-2.5 text-sm" :class="isMine(message) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-neutral-900 dark:text-slate-100'" :data-testid="isMine(message) ? 'outgoing-message' : 'incoming-message'">{{ message.content }}</div>
                     <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" :class="isMine(message) ? 'justify-end' : 'justify-start'">
-                      <time>{{ formatMessageTime(message.created_at) }}</time>
+                      <time>{{ formatChinaMessageTime(message.created_at) }}</time>
+                      <button v-if="!isMine(message) && message.id > 0" class="inline-flex items-center gap-1 text-red-600 hover:underline" type="button" @click="reportMessageId = message.id"><FlagIcon class="h-3 w-3" aria-hidden="true" />举报</button>
                       <template v-if="isMine(message)">
                         <span v-if="message.deliveryStatus === 'sending'">发送中…</span>
                         <button v-else-if="message.deliveryStatus === 'failed'" class="inline-flex items-center gap-1 text-red-600 hover:underline" type="button" @click="retry(message)">
@@ -272,14 +280,14 @@ onUnmounted(() => {
               <div ref="messageEnd" class="h-px"></div>
             </div>
 
-            <div class="border-t border-slate-200 p-3 dark:border-neutral-800 sm:p-4">
+            <div class="border-t border-slate-200 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-neutral-800 sm:p-4">
               <div v-if="chat.socketError" class="mb-2 text-xs text-amber-700 dark:text-amber-300">{{ chat.socketError }}</div>
               <div class="relative flex items-end gap-2">
                 <button class="flex h-10 w-10 shrink-0 items-center justify-center text-slate-500 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-neutral-800" type="button" aria-label="打开表情" title="打开表情" @click="showEmoji = !showEmoji">
                   <FaceSmileIcon class="h-5 w-5" aria-hidden="true" />
                 </button>
                 <EmojiPicker v-if="showEmoji" @select="insertEmoji" />
-                <textarea ref="composerInput" v-model="composer" class="form-control min-h-10 max-h-36 resize-y py-2.5" rows="1" maxlength="4000" aria-label="消息内容" placeholder="输入消息…" @input="onComposerInput" @blur="stopTyping" @keydown.enter.exact.prevent="send"></textarea>
+                <textarea ref="composerInput" v-model="composer" class="form-control min-h-10 min-w-0 max-h-36 flex-1 resize-y py-2.5" rows="1" maxlength="4000" aria-label="消息内容" placeholder="输入消息…" @input="onComposerInput" @blur="stopTyping" @keydown.enter.exact.prevent="send"></textarea>
                 <button class="btn-primary h-10 w-10 shrink-0 p-0" type="button" aria-label="发送" title="发送" :disabled="sending || !composer.trim()" @click="send">
                   <PaperAirplaneIcon class="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -295,6 +303,7 @@ onUnmounted(() => {
           </div>
         </section>
       </div>
+      <ReportDialog v-if="reportMessageId" :open="true" target-type="message" :target-id="reportMessageId" @close="reportMessageId = null" />
     </div>
   </main>
 </template>

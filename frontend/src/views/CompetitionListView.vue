@@ -5,12 +5,14 @@ import { PlusIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { formatChinaDateTime } from '@/utils/datetime'
 import type { Competition, PageResult } from '@/types'
 const router = useRouter(); const competitions = ref<Competition[]>([]); const loading = ref(true); const error = ref(''); const status = ref('')
 const auth = useAuthStore()
 async function load() { loading.value = true; error.value = ''; try { const res = await http.get<PageResult<Competition>>('/competitions', { params: { page: 1, page_size: 30, status_filter: status.value || undefined } }); competitions.value = res.data.items || [] } catch (cause) { error.value = extractApiError(cause, '比赛暂时无法加载') } finally { loading.value = false } }
 onMounted(load)
 function statusText(value: string) { return value === 'ongoing' ? '进行中' : value === 'pending' ? '即将开始' : '已结束' }
+function descriptionText(value: string) { return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() }
 </script>
 <template>
   <main class="page-shell">
@@ -46,9 +48,9 @@ function statusText(value: string) { return value === 'ongoing' ? '进行中' : 
             <h2 class="min-w-0 break-words text-xl font-semibold">{{ competition.name }}</h2>
             <span class="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">{{ statusText(competition.status) }}</span>
           </div>
-          <p class="mt-3 line-clamp-3 flex-1 break-words text-sm leading-6 text-slate-600 dark:text-slate-300">{{ competition.description }}</p>
+          <p class="mt-3 line-clamp-3 flex-1 break-words text-sm leading-6 text-slate-600 dark:text-slate-300">{{ descriptionText(competition.description) }}</p>
           <div class="mt-4 border-t border-slate-200 pt-4 text-xs text-slate-500">
-            <p>{{ new Date(competition.start_time).toLocaleString() }} 至 {{ new Date(competition.end_time).toLocaleString() }}</p>
+            <p>{{ formatChinaDateTime(competition.start_time) }} 至 {{ formatChinaDateTime(competition.end_time) }}（UTC+8）</p>
             <p class="mt-2">{{ competition.required_tag_ids.length }} 个必需标签 · 前 {{ competition.top_n }} 名</p>
           </div>
         </article>

@@ -35,7 +35,7 @@ from app.schemas.profiles import (
     ProfileSoupSummary,
     PublicProfileResponse,
 )
-from app.services.levels import level_progress
+from app.services.levels import level_band, level_progress
 from app.services import levels
 from app.schemas.levels import SigninStatusResponse
 from app.core.config import get_settings
@@ -53,7 +53,15 @@ async def get_user_by_uid(uid: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.uid == uid).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    return user
+    progress = level_progress(user.points)
+    return {
+        "uid": user.uid,
+        "username": user.username,
+        "nickname": user.nickname,
+        "avatar_url": user.avatar_url,
+        "level": progress.level,
+        "level_band": level_band(progress.level),
+    }
 
 
 @router.put("/me", response_model=UserResponse)
@@ -91,10 +99,36 @@ async def update_me(
                 )
             current_user.avatar_asset_id = asset.id
             current_user.avatar_url = asset.public_url
+    if "profile_background_asset_id" in user_data.model_fields_set:
+        preferences = dict(current_user.notification_prefs or {})
+        if user_data.profile_background_asset_id is None:
+            preferences.pop("profile_background_asset_id", None)
+            preferences.pop("profile_background_url", None)
+        else:
+            asset = db.query(UploadedAsset).filter(
+                UploadedAsset.id == user_data.profile_background_asset_id,
+                UploadedAsset.kind == "image",
+            ).first()
+            if asset is None or asset.owner_uid != current_user.uid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "BACKGROUND_NOT_OWNED",
+                        "message": "只能选择自己上传的背景图片",
+                    },
+                )
+            preferences["profile_background_asset_id"] = asset.id
+            preferences["profile_background_url"] = asset.public_url
+        current_user.notification_prefs = preferences
     if user_data.bio is not None:
         current_user.bio = user_data.bio
     if user_data.notice_preferences is not None:
-        current_user.notification_prefs = user_data.notice_preferences
+        preferences = dict(user_data.notice_preferences)
+        existing_preferences = dict(current_user.notification_prefs or {})
+        for key in ("profile_background_asset_id", "profile_background_url", "registration_date"):
+            if key in existing_preferences:
+                preferences[key] = existing_preferences[key]
+        current_user.notification_prefs = preferences
     
     current_user.updated_at = datetime.utcnow()
     db.commit()
@@ -482,12 +516,15 @@ async def get_user_profile(
             "username": user.username,
             "nickname": user.nickname,
             "avatar_url": user.avatar_url,
+            "profile_background_url": user.profile_background_url,
             "bio": user.bio,
             "role": user.role,
             "level": progress.level,
+            "level_band": level_band(progress.level),
             "experience_points": progress.experience_points,
             "level_start": progress.level_start,
             "next_level_start": progress.next_level_start,
+            "registration_date": user.registration_date,
             "created_at": user.created_at,
         },
         "stats": {
