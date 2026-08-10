@@ -2,13 +2,16 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, text
+from sqlalchemy import delete, func, or_, text
 from sqlmodel import Session, select
 
 from app.models.database import (
     EmailVerification,
+    Notification,
+    Punishment,
     ReusableUserUid,
     User,
+    UserPermissionGroup,
     UserStatus,
     UserUidAllocator,
 )
@@ -55,6 +58,23 @@ def allocate_user_uid(db: Session) -> int:
     return uid
 
 
+def delete_pending_account_dependencies(db: Session, uid: int) -> None:
+    """Remove rows that reference a pending account before deleting its user row."""
+    db.exec(delete(EmailVerification).where(EmailVerification.user_uid == uid))
+    db.exec(delete(UserPermissionGroup).where(UserPermissionGroup.user_uid == uid))
+    db.exec(delete(Notification).where(Notification.recipient_uid == uid))
+    # A revoked punishment remains an audit row, but cannot outlive its user FK.
+    db.exec(
+        delete(Punishment).where(
+            or_(
+                Punishment.target_uid == uid,
+                Punishment.operator_uid == uid,
+                Punishment.revoked_by == uid,
+            )
+        )
+    )
+
+
 def cleanup_expired_pending_users(
     db: Session,
     now: datetime | None = None,
@@ -72,11 +92,6 @@ def cleanup_expired_pending_users(
     deleted_uids: list[int] = []
     try:
         for uid in candidate_uids:
-            verifications = db.exec(
-                select(EmailVerification)
-                .where(EmailVerification.user_uid == uid)
-                .with_for_update()
-            ).all()
             user = db.exec(
                 select(User).where(User.uid == uid).with_for_update()
             ).first()
@@ -86,8 +101,7 @@ def cleanup_expired_pending_users(
                 or user.created_at > cutoff
             ):
                 continue
-            for verification in verifications:
-                db.delete(verification)
+            delete_pending_account_dependencies(db, uid)
             if db.get(ReusableUserUid, uid) is None:
                 db.add(ReusableUserUid(uid=uid, released_at=current_time))
             db.delete(user)
