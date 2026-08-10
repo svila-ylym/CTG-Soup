@@ -377,14 +377,19 @@ def list_soups(
     if soup_color:
         query = query.where(Soup.soup_color == soup_color)
     order = (
-        Soup.avg_rating.desc()
+        (
+            Soup.avg_rating.desc(),
+            Soup.rating_count.desc(),
+            Soup.created_at.desc(),
+            Soup.id.desc(),
+        )
         if sort_by in {"score", "average_score"}
-        else Soup.like_count.desc()
+        else (Soup.like_count.desc(),)
         if sort_by in {"likes", "like_count"}
-        else Soup.created_at.desc()
+        else (Soup.created_at.desc(),)
     )
     total = len(db.exec(query).all())
-    rows = db.exec(query.order_by(order).offset((page - 1) * page_size).limit(page_size)).all()
+    rows = db.exec(query.order_by(*order).offset((page - 1) * page_size).limit(page_size)).all()
     if selected_tag and rows:
         selected_tag.view_count += 1
         db.commit()
