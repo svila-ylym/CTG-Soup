@@ -52,7 +52,7 @@ async function submit() {
     const { puzzle_images, solution_images, ...fields } = state.value
     await soupApi.update(Number(route.params.id), {
       ...fields,
-      title: fields.title.trim(),
+      title: fields.title,
       puzzle: fields.puzzle,
       solution: fields.solution,
       puzzle_image_ids: puzzle_images.map(image => image.id),

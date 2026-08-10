@@ -333,7 +333,7 @@ async function submitComment() {
   commentSubmitting.value = true
   commentError.value = ''
   try {
-    await soupApi.createComment(soup.value.id, commentText.value.trim())
+    await soupApi.createComment(soup.value.id, commentText.value)
     commentText.value = ''
     await loadComments()
   } catch (cause: any) {
@@ -357,7 +357,7 @@ async function submitReply() {
   replySubmitting.value = true
   commentError.value = ''
   try {
-    await soupApi.createComment(soup.value.id, replyText.value.trim(), replyParentId.value)
+    await soupApi.createComment(soup.value.id, replyText.value, replyParentId.value)
     cancelReply()
     await loadComments()
   } catch (cause: any) {

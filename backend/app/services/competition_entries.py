@@ -27,6 +27,11 @@ def _lock_competition_collection(db: Session) -> None:
         )
 
 
+def lock_competition_collection(db: Session) -> None:
+    """Serialize competition edits, collection and settlement in one transaction."""
+    _lock_competition_collection(db)
+
+
 def competition_tag_ids(competition: Competition) -> list[int]:
     """Return normalized tag IDs from the canonical JSON storage column."""
     normalized: list[int] = []

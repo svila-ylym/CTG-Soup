@@ -88,9 +88,9 @@ def create_post(
 ):
     post = Post(
         author_uid=current_user.uid,
-        title=data.title.strip(),
-        content=data.content.strip(),
-        section=data.section.strip(),
+        title=data.title,
+        content=data.content,
+        section=data.section,
         post_type=data.post_type,
         tags=list(dict.fromkeys(tag.strip() for tag in data.tags if tag.strip())),
     )
@@ -165,7 +165,7 @@ def update_post(
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(post, key, value)
     if data.content is not None:
-        post.content = data.content.strip()
+        post.content = data.content
         sync_mentions(
             db,
             current_user.uid,

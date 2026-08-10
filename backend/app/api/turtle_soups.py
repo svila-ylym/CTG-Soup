@@ -59,7 +59,7 @@ class CommentInput(BaseModel):
             raise ValueError("评论不能为空")
         if "<" in normalized or ">" in normalized:
             raise ValueError("评论不允许 HTML")
-        return normalized
+        return value
 
 
 def _comment_payload(

@@ -18,6 +18,13 @@ class CompetitionCreate(BaseModel):
     top_n: int = Field(default=10, ge=1, le=100)
     custom_page_config: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("name")
+    @classmethod
+    def non_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("比赛名称不能为空")
+        return value
+
     @field_validator("required_tag_ids")
     @classmethod
     def unique_positive_tag_ids(cls, value: list[int]) -> list[int]:
@@ -37,6 +44,10 @@ class CompetitionCreate(BaseModel):
         if self.start_time >= self.end_time:
             raise ValueError("开始时间必须早于结束时间")
         return self
+
+
+class CompetitionUpdate(CompetitionCreate):
+    pass
 
 
 class CompetitionEntryResponse(BaseModel):

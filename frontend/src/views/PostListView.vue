@@ -82,7 +82,7 @@ async function createPost() {
   if (!draft.value.title.trim() || !draft.value.content.trim()) return
   submitting.value = true; submitMessage.value = ''
   try {
-    await http.post('/posts', { title: draft.value.title.trim(), content: draft.value.content.trim(), section: draft.value.section.trim() || 'general', post_type: 'normal', tags: [] })
+    await http.post('/posts', { title: draft.value.title, content: draft.value.content, section: draft.value.section.trim() ? draft.value.section : 'general', post_type: 'normal', tags: [] })
     draft.value = emptyPostDraft(); removeDraft(postDraftKey); composerOpen.value = false; submitMessage.value = '帖子发布成功'; await load()
   } catch (cause) { submitMessage.value = extractApiError(cause, '发布失败，请先登录并重试') } finally { submitting.value = false }
 }

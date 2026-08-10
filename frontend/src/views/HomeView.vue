@@ -4,6 +4,7 @@
       ref="heroRef"
       class="hero-scene relative isolate min-h-[36rem] overflow-hidden border-b border-sky-100 bg-[#dff4ff] sm:min-h-[40rem] lg:min-h-[43rem] dark:border-slate-800 dark:bg-[#071d2e]"
       :class="`scene-${scenePeriod}`"
+      :data-scene-transitioning="sceneTransitioning || undefined"
       :style="sceneStyle"
       @pointermove="handlePointerMove"
       @pointerleave="resetPointer"
@@ -93,7 +94,7 @@
               去解一碗汤
               <ArrowRightIcon class="h-5 w-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </router-link>
-            <router-link to="/soups/create" class="hero-secondary-button inline-flex min-h-12 items-center gap-2 rounded-md border-2 border-sky-800/20 bg-white/70 px-5 py-3 font-bold text-sky-900 shadow-[0_5px_0_rgba(14,116,144,.16)] backdrop-blur-sm transition hover:-translate-y-1 hover:border-sky-800/35 hover:bg-white active:translate-y-1 active:shadow-none dark:border-cyan-400/30 dark:bg-slate-950/70 dark:text-cyan-100 dark:hover:border-cyan-300/50 dark:hover:bg-slate-900">
+            <router-link to="/soups/create" class="hero-secondary-button inline-flex min-h-12 items-center gap-2 rounded-md border-2 px-5 py-3 font-bold shadow-[0_5px_0_rgba(14,116,144,.16)] backdrop-blur-sm transition hover:-translate-y-1 active:translate-y-1 active:shadow-none">
               发布我的谜面
               <PencilSquareIcon class="h-5 w-5" aria-hidden="true" />
             </router-link>
@@ -229,6 +230,7 @@ const scenePosition = ref({ x: 0, y: 0 })
 const hitokotoText = ref('每一条线索都算数')
 type ScenePeriod = 'sunrise' | 'morning' | 'noon' | 'evening' | 'sunset' | 'night'
 const scenePeriod = ref<ScenePeriod>('noon')
+const sceneTransitioning = ref(false)
 const titleCharacters = Array.from('汤吧社区')
 const featureCards = [
   { to: '/soups', eyebrow: 'Find a clue', title: '发现海龟汤', description: '从热门、标签和排行榜找到下一道值得追的谜题。', icon: PuzzlePieceIcon },
@@ -239,6 +241,7 @@ let pointerFrame = 0
 let hitokotoController: AbortController | null = null
 let hitokotoTimeout = 0
 let sceneClock = 0
+let sceneTransitionTimer = 0
 
 const sceneStyle = computed<CSSProperties>(() => ({
   '--far-x': `${scenePosition.value.x * 0.18}px`,
@@ -289,12 +292,17 @@ function chinaMinutes(date = new Date()) {
 
 function updateScenePeriod() {
   const minutes = chinaMinutes()
-  if (minutes >= 390 && minutes < 420) scenePeriod.value = 'sunrise'
-  else if (minutes >= 420 && minutes < 540) scenePeriod.value = 'morning'
-  else if (minutes >= 540 && minutes < 1020) scenePeriod.value = 'noon'
-  else if (minutes >= 1020 && minutes < 1140) scenePeriod.value = 'evening'
-  else if (minutes >= 1140 && minutes < 1200) scenePeriod.value = 'sunset'
-  else scenePeriod.value = 'night'
+  const nextPeriod: ScenePeriod = minutes >= 390 && minutes < 420 ? 'sunrise'
+    : minutes >= 420 && minutes < 540 ? 'morning'
+      : minutes >= 540 && minutes < 1020 ? 'noon'
+        : minutes >= 1020 && minutes < 1140 ? 'evening'
+          : minutes >= 1140 && minutes < 1200 ? 'sunset'
+            : 'night'
+  if (scenePeriod.value === nextPeriod) return
+  scenePeriod.value = nextPeriod
+  sceneTransitioning.value = true
+  window.clearTimeout(sceneTransitionTimer)
+  sceneTransitionTimer = window.setTimeout(() => { sceneTransitioning.value = false }, 1900)
 }
 
 async function loadLeaderboardPreview() {
@@ -344,6 +352,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelAnimationFrame(pointerFrame)
   window.clearInterval(sceneClock)
+  window.clearTimeout(sceneTransitionTimer)
   window.clearTimeout(hitokotoTimeout)
   hitokotoController?.abort()
   hitokotoController = null
@@ -371,6 +380,20 @@ onBeforeUnmount(() => {
   --lake-y: 0px;
   --front-x: 0px;
   --front-y: 0px;
+}
+
+.hero-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--sky-middle);
+  opacity: 0;
+}
+
+.hero-scene[data-scene-transitioning]::after {
+  animation: scene-color-wash 1.8s cubic-bezier(.22,.61,.36,1) both;
 }
 
 .sky-stop-top { stop-color: var(--sky-top); }
@@ -411,8 +434,11 @@ onBeforeUnmount(() => {
 .hero-scene,
 .hero-sky,
 .hero-sun,
-.landscape {
-  transition: background-color 1.5s ease, background 1.5s ease, filter 1.5s ease, opacity 1.5s ease, box-shadow 1.5s ease;
+.landscape,
+.hero-scene .sky-stop-top,
+.hero-scene .sky-stop-middle,
+.hero-scene .sky-stop-bottom {
+  transition: background-color 1.8s cubic-bezier(.22,.61,.36,1), background 1.8s cubic-bezier(.22,.61,.36,1), filter 1.8s ease, opacity 1.8s ease, box-shadow 1.8s ease, right 1.8s cubic-bezier(.22,.61,.36,1), top 1.8s cubic-bezier(.22,.61,.36,1), stop-color 1.8s cubic-bezier(.22,.61,.36,1);
 }
 
 .scene-sunrise { --sky-top: #7485ba; --sky-middle: #ffad82; --sky-bottom: #ffe5ac; --scene-copy: #182b49; --scene-copy-muted: rgba(24, 43, 73, .84); --scene-link: #173f68; --scene-title-one: #182b49; --scene-title-two: #124e78; --scene-title-three: #245b43; --scene-title-four: #8c3f1f; background: #ffd8ad; }
@@ -477,7 +503,32 @@ onBeforeUnmount(() => {
 .hero-lede { color: var(--scene-copy-muted) !important; }
 .hero-quick-links, .hero-quick-links a, .hero-scroll-cue { color: var(--scene-link) !important; }
 .hero-quick-links a:hover, .hero-scroll-cue:hover { color: var(--scene-copy) !important; }
-.hero-secondary-button { color: var(--scene-copy) !important; }
+.hero-secondary-button {
+  color: var(--scene-copy) !important;
+  background: rgba(255, 255, 255, .74) !important;
+  border-color: color-mix(in srgb, var(--scene-copy) 26%, transparent) !important;
+}
+.hero-title-character,
+.hero-kicker,
+.hero-lede,
+.hero-quick-links,
+.hero-quick-links a,
+.hero-scroll-cue,
+.hero-secondary-button {
+  transition: color 1.8s ease, border-color 1.8s ease, background-color 1.8s ease;
+}
+.scene-sunset .hero-secondary-button,
+.scene-night .hero-secondary-button {
+  background: rgba(3, 15, 28, .72) !important;
+}
+.hero-secondary-button:hover {
+  background: rgba(255, 255, 255, .92) !important;
+  border-color: color-mix(in srgb, var(--scene-copy) 44%, transparent) !important;
+}
+.scene-sunset .hero-secondary-button:hover,
+.scene-night .hero-secondary-button:hover {
+  background: rgba(7, 28, 48, .9) !important;
+}
 
 .hero-puzzle-stage { animation: puzzle-stage-enter 800ms cubic-bezier(.18,.8,.25,1) 420ms both; perspective: 900px; }
 .puzzle-note { backface-visibility: hidden; transform-origin: center bottom; animation: note-enter 800ms cubic-bezier(.18,1.2,.3,1) both, note-float 6s ease-in-out 1.2s infinite; }
@@ -519,6 +570,7 @@ onBeforeUnmount(() => {
 @keyframes bowl-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-.3rem) rotate(2deg); } }
 @keyframes steam-rise { 0%, 100% { opacity: .35; transform: translateY(.3rem) scale(.85); } 50% { opacity: 1; transform: translateY(-.35rem) scale(1); } }
 @keyframes mist-drift { 0%, 100% { transform: translateX(-2%); } 50% { transform: translateX(2%); } }
+@keyframes scene-color-wash { 0% { opacity: .38; } 100% { opacity: 0; } }
 
 @media (max-width: 639px) {
   .hero-sun { right: -2rem; top: 8%; width: 7rem; height: 7rem; }

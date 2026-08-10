@@ -19,11 +19,13 @@ from app.schemas.competitions import (
     CompetitionCreate,
     CompetitionPageResponse,
     CompetitionResponse,
+    CompetitionUpdate,
 )
 from app.services.competition_entries import (
     collect_competition_entries,
     competition_tag_ids,
     delete_competition_entries,
+    lock_competition_collection,
     settle_competition,
 )
 from app.services.tag_resolution import TagSelectionError, resolve_active_tags
@@ -91,14 +93,9 @@ def _payload(db: Session, competition: Competition, include_entries: bool = Fals
     }
 
 
-@router.post("", response_model=CompetitionResponse, status_code=status.HTTP_201_CREATED)
-def create_competition(
-    data: CompetitionCreate,
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
+def _resolve_competition_tags(db: Session, data: CompetitionCreate | CompetitionUpdate):
     try:
-        tags = resolve_active_tags(
+        return resolve_active_tags(
             db,
             data.required_tag_ids,
             data.custom_tags,
@@ -106,46 +103,68 @@ def create_competition(
             max_count=10,
         )
     except TagSelectionError as exc:
-        code = (
-            "COMPETITION_TAG_NOT_ACTIVE"
-            if exc.code == "TAG_NOT_ACTIVE"
-            else exc.code
-        )
+        code = "COMPETITION_TAG_NOT_ACTIVE" if exc.code == "TAG_NOT_ACTIVE" else exc.code
         raise HTTPException(
             status_code=422,
             detail={"code": code, "message": exc.message},
         ) from exc
 
+
+def _competition_content(
+    db: Session,
+    data: CompetitionCreate | CompetitionUpdate,
+    owner_uid: int,
+) -> tuple[str, dict]:
     description = sanitize_rich_html(data.description)
     text_description = re.sub(r"<[^>]+>", "", description).strip()
     if not text_description and "<img" not in description:
         raise HTTPException(status_code=422, detail="比赛说明不能为空")
+
     image_asset_ids = [
         int(value)
         for value in data.custom_page_config.get("image_asset_ids", [])
         if str(value).isdigit()
     ]
-    if len(set(image_asset_ids)) > 20:
+    unique_image_asset_ids = list(dict.fromkeys(image_asset_ids))
+    if len(unique_image_asset_ids) > 20:
         raise HTTPException(status_code=422, detail="比赛图片最多 20 张")
+
     owned_urls: set[str] = set()
-    if image_asset_ids:
+    if unique_image_asset_ids:
         owned = db.exec(
             select(UploadedAsset).where(
-                UploadedAsset.owner_uid == current_user.uid,
-                UploadedAsset.id.in_(list(set(image_asset_ids))),
+                UploadedAsset.owner_uid == owner_uid,
+                UploadedAsset.id.in_(unique_image_asset_ids),
             )
         ).all()
-        if len(owned) != len(set(image_asset_ids)):
+        if len(owned) != len(unique_image_asset_ids):
             raise HTTPException(status_code=403, detail="比赛图片必须使用本人上传的图片")
         owned_urls = {asset.public_url for asset in owned}
-    image_sources = set(re.findall(r"<img[^>]+src=[\"']([^\"']+)[\"']", description, flags=re.IGNORECASE))
+
+    image_sources = set(re.findall(
+        r"<img[^>]+src=[\"']([^\"']+)[\"']",
+        description,
+        flags=re.IGNORECASE,
+    ))
     if any(source not in owned_urls for source in image_sources):
         raise HTTPException(status_code=422, detail="比赛正文图片必须来自已上传的图片")
+
     custom_page_config = dict(data.custom_page_config)
     custom_page_config.update({
         "format": "rich_html",
-        "image_asset_ids": list(dict.fromkeys(image_asset_ids)),
+        "image_asset_ids": unique_image_asset_ids,
     })
+    return description, custom_page_config
+
+
+@router.post("", response_model=CompetitionResponse, status_code=status.HTTP_201_CREATED)
+def create_competition(
+    data: CompetitionCreate,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    tags = _resolve_competition_tags(db, data)
+    description, custom_page_config = _competition_content(db, data, current_user.uid)
     now = datetime.utcnow()
     current_status = (
         CompetitionStatus.PENDING
@@ -156,7 +175,7 @@ def create_competition(
     )
     competition = Competition(
         creator_uid=current_user.uid,
-        name=data.name.strip(),
+        name=data.name,
         description=description,
         start_time=data.start_time,
         end_time=data.end_time,
@@ -167,6 +186,43 @@ def create_competition(
         status=current_status,
     )
     db.add(competition)
+    db.flush()
+    collect_competition_entries(db, competition)
+    db.commit()
+    db.refresh(competition)
+    return _payload(db, competition, include_entries=True)
+
+
+@router.put("/{competition_id}", response_model=CompetitionResponse)
+def update_competition(
+    competition_id: int,
+    data: CompetitionUpdate,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    competition = db.get(Competition, competition_id)
+    if competition is None:
+        raise HTTPException(status_code=404, detail="比赛不存在")
+    if competition.creator_uid != current_user.uid:
+        raise HTTPException(status_code=403, detail="只能修改自己发布的比赛")
+    lock_competition_collection(db)
+    db.refresh(competition)
+    if competition.settled_at is not None:
+        raise HTTPException(status_code=409, detail="已结算的比赛不能修改")
+
+    tags = _resolve_competition_tags(db, data)
+    description, custom_page_config = _competition_content(db, data, current_user.uid)
+    competition.name = data.name
+    competition.description = description
+    competition.start_time = data.start_time
+    competition.end_time = data.end_time
+    competition.required_tag_ids = [tag.id for tag in tags]
+    competition.score_type = data.score_type
+    competition.top_n = data.top_n
+    competition.custom_page_config = custom_page_config
+    competition.status = _current_status(competition, datetime.utcnow())
+    competition.updated_at = datetime.utcnow()
+    delete_competition_entries(db, competition.id)
     db.flush()
     collect_competition_entries(db, competition)
     db.commit()

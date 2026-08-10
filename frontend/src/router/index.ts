@@ -99,6 +99,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '发布比赛', requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/competitions/:id/edit',
+    name: 'EditCompetition',
+    component: () => import('@/views/CompetitionCreateView.vue'),
+    meta: { title: '修改比赛', requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/competitions/:id',
     name: 'CompetitionDetail',
     component: () => import('@/views/CompetitionDetailView.vue'),

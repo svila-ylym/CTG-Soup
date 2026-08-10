@@ -34,8 +34,8 @@ async function submit() {
   error.value = ''
   try {
     await postsApi.update(Number(route.params.id), {
-      title: form.title.trim(),
-      section: form.section.trim(),
+      title: form.title,
+      section: form.section,
       content: form.content,
     })
     await router.push(`/posts/${route.params.id}`)

@@ -53,6 +53,13 @@ class SoupCreate(BaseModel):
     solution_image_ids: list[int] = Field(default_factory=list, max_length=5)
     is_revealed: bool = False
 
+    @field_validator("title")
+    @classmethod
+    def non_blank_title(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("标题不能为空")
+        return value
+
     @field_validator("tag_ids")
     @classmethod
     def unique_tag_ids(cls, values: list[int]) -> list[int]:
@@ -88,6 +95,13 @@ class SoupUpdate(BaseModel):
     puzzle_image_ids: Optional[list[int]] = Field(default=None, max_length=5)
     solution_image_ids: Optional[list[int]] = Field(default=None, max_length=5)
     is_revealed: Optional[bool] = None
+
+    @field_validator("title")
+    @classmethod
+    def non_blank_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.strip():
+            raise ValueError("标题不能为空")
+        return value
 
     @field_validator("tag_ids")
     @classmethod

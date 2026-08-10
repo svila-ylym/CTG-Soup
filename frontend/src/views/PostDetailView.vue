@@ -125,7 +125,7 @@ async function submitReply() {
   replySubmitting.value = true
   commentError.value = ''
   try {
-    await postsApi.createComment(post.value.id, replyText.value.trim(), replyParentId.value)
+    await postsApi.createComment(post.value.id, replyText.value, replyParentId.value)
     post.value.comment_count += 1
     cancelReply()
     await loadComments()
@@ -186,11 +186,13 @@ onMounted(load)
           <p v-else-if="!comments.length" class="py-8 text-center text-slate-500">暂无评论</p>
           <div v-else class="mt-6 divide-y divide-slate-200 dark:divide-neutral-800">
             <article v-for="comment in comments" :id="`comment-${comment.id}`" :key="comment.id" class="py-5">
-              <div class="flex items-center justify-between gap-3 text-sm">
-                <router-link :to="`/profile/${comment.author_uid}`" class="font-semibold hover:underline">
-                  {{ comment.author?.nickname || comment.author?.username || `用户 ${comment.author_uid}` }}
-                </router-link>
-                <LevelBadge :level="comment.author?.level" :band="comment.author?.level_band" compact />
+              <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div class="flex min-w-0 items-center gap-2">
+                  <router-link :to="`/profile/${comment.author_uid}`" class="font-semibold hover:underline">
+                    {{ comment.author?.nickname || comment.author?.username || `用户 ${comment.author_uid}` }}
+                  </router-link>
+                  <LevelBadge :level="comment.author?.level" :band="comment.author?.level_band" compact />
+                </div>
                 <time class="text-xs text-slate-500">{{ formatChinaDateTime(comment.created_at) }}</time>
               </div>
               <p class="mt-2 break-words whitespace-pre-wrap text-slate-700 dark:text-slate-200">

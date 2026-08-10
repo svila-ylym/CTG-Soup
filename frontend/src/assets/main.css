@@ -39,6 +39,30 @@ body {
   transition: background-color 180ms ease, color 180ms ease;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-theme-transition='to-dark']::view-transition-new(root) {
+  animation: theme-curtain-close 680ms cubic-bezier(.22,.61,.36,1) both;
+}
+
+html[data-theme-transition='to-light']::view-transition-new(root) {
+  animation: theme-curtain-open 680ms cubic-bezier(.22,.61,.36,1) both;
+}
+
+@keyframes theme-curtain-close {
+  from { clip-path: polygon(0 0, 0 0, 0 0, 0 0); }
+  to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+@keyframes theme-curtain-open {
+  from { clip-path: polygon(100% 100%, 100% 100%, 100% 100%, 100% 100%); }
+  to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -207,4 +231,5 @@ html {
   .page-shell > .page-container {
     animation: none;
   }
+
 }

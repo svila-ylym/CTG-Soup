@@ -244,6 +244,8 @@ export interface CompetitionCreate {
   custom_page_config: Record<string, unknown>
 }
 
+export type CompetitionUpdate = CompetitionCreate
+
 export interface CompetitionEntry {
   competition_id: number
   soup_id: number

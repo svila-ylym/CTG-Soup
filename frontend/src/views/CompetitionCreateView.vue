@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useRouter } from 'vue-router'
 import { ArrowLeftIcon, ArrowPathIcon, PaperAirplaneIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
@@ -10,11 +11,14 @@ import type { Competition, CompetitionCreate, Tag } from '@/types'
 import CompetitionRichTextEditor from '@/components/CompetitionRichTextEditor.vue'
 
 const router = useRouter()
+const route = useRoute()
+const isEdit = computed(() => Boolean(route.params.id))
 const tags = ref<Tag[]>([])
 const loadingTags = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const newKeyword = ref('')
+const pageConfig = ref<Record<string, unknown>>({})
 
 const form = reactive<{
   name: string
@@ -51,6 +55,19 @@ function addKeyword() {
 
 function removeKeyword(keyword: string) {
   form.custom_tags = form.custom_tags.filter(item => item !== keyword)
+}
+
+function utcToLocalInput(value: string): string {
+  const date = new Date(value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(date).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value
+    return result
+  }, {})
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}:${parts.second}`
 }
 
 async function loadTags() {
@@ -93,26 +110,55 @@ async function submit() {
   submitting.value = true
   try {
     const payload: CompetitionCreate = {
-      name: form.name.trim(),
-      description: form.description.trim(),
+      name: form.name,
+      description: form.description,
       start_time: startTime,
       end_time: endTime,
       required_tag_ids: form.required_tag_ids,
       custom_tags: form.custom_tags,
       score_type: 'average',
       top_n: form.top_n,
-      custom_page_config: { format: 'rich_html', image_asset_ids: form.image_asset_ids },
+      custom_page_config: { ...pageConfig.value, format: 'rich_html', image_asset_ids: form.image_asset_ids },
     }
-    const response = await http.post<Competition>('/competitions', payload)
+    const response = isEdit.value
+      ? await http.put<Competition>(`/competitions/${route.params.id}`, payload)
+      : await http.post<Competition>('/competitions', payload)
     await router.push(`/competitions/${response.data.id}`)
   } catch (cause) {
-    error.value = extractApiError(cause, '比赛发布失败')
+    error.value = extractApiError(cause, isEdit.value ? '比赛修改失败' : '比赛发布失败')
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(loadTags)
+async function loadCompetition() {
+  if (!isEdit.value) return
+  try {
+    const competition = (await http.get<Competition>(`/competitions/${route.params.id}`)).data
+    if (competition.creator_uid !== Number(localStorage.getItem('user_uid'))) {
+      error.value = '只能修改自己发布的比赛'
+      return
+    }
+    if (competition.settled_at) {
+      error.value = '已结算的比赛不能修改'
+      return
+    }
+    form.name = competition.name
+    form.description = competition.description
+    pageConfig.value = { ...competition.custom_page_config }
+    form.start_time = utcToLocalInput(competition.start_time)
+    form.end_time = utcToLocalInput(competition.end_time)
+    form.required_tag_ids = [...competition.required_tag_ids]
+    form.custom_tags = []
+    const imageIds = competition.custom_page_config?.image_asset_ids
+    form.image_asset_ids = Array.isArray(imageIds) ? imageIds.map(Number).filter(Number.isFinite) : []
+    form.top_n = competition.top_n
+  } catch (cause) {
+    error.value = extractApiError(cause, '比赛加载失败')
+  }
+}
+
+onMounted(() => { void Promise.all([loadTags(), loadCompetition()]) })
 </script>
 
 <template>
@@ -123,12 +169,12 @@ onMounted(loadTags)
         返回比赛列表
       </router-link>
 
-      <h1 class="section-title text-3xl">发布比赛</h1>
+      <h1 class="section-title text-3xl">{{ isEdit ? '修改比赛' : '发布比赛' }}</h1>
 
       <form class="mt-7 space-y-6 border-y border-slate-200 py-7 dark:border-neutral-800" @submit.prevent="submit">
         <label class="block">
           <span class="mb-2 block text-sm font-medium">比赛名称</span>
-          <input v-model.trim="form.name" class="form-control" maxlength="200" required>
+          <input v-model="form.name" class="form-control" maxlength="200" required>
         </label>
 
         <label class="block">
@@ -139,11 +185,11 @@ onMounted(loadTags)
         <div class="grid gap-5 sm:grid-cols-2">
           <label class="block">
             <span class="mb-2 block text-sm font-medium">开始时间（UTC+8）</span>
-            <input v-model="form.start_time" class="form-control" type="datetime-local" required>
+            <input v-model="form.start_time" class="form-control" type="datetime-local" step="1" required>
           </label>
           <label class="block">
             <span class="mb-2 block text-sm font-medium">结束时间（UTC+8）</span>
-            <input v-model="form.end_time" class="form-control" type="datetime-local" required>
+            <input v-model="form.end_time" class="form-control" type="datetime-local" step="1" required>
           </label>
         </div>
 
@@ -194,7 +240,7 @@ onMounted(loadTags)
           <button class="btn-primary gap-2" type="submit" :disabled="submitting">
             <ArrowPathIcon v-if="submitting" class="h-5 w-5 animate-spin" aria-hidden="true" />
             <PaperAirplaneIcon v-else class="h-5 w-5" aria-hidden="true" />
-            {{ submitting ? '发布中…' : '发布比赛' }}
+            {{ submitting ? (isEdit ? '保存中…' : '发布中…') : (isEdit ? '保存修改' : '发布比赛') }}
           </button>
           <router-link class="btn-secondary" to="/competitions">取消</router-link>
         </div>

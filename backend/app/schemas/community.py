@@ -30,12 +30,26 @@ class PostCreate(BaseModel):
     post_type: PostType = PostType.NORMAL
     tags: list[str] = Field(default_factory=list, max_length=10)
 
+    @field_validator("title", "content", "section")
+    @classmethod
+    def non_blank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("文本内容不能为空")
+        return value
+
 
 class PostUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     content: str | None = Field(default=None, min_length=1, max_length=20000)
     section: str | None = Field(default=None, min_length=1, max_length=50)
     tags: list[str] | None = Field(default=None, max_length=10)
+
+    @field_validator("title", "content", "section")
+    @classmethod
+    def non_blank_update_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("文本内容不能为空")
+        return value
 
 
 class PostResponse(BaseModel):
@@ -72,7 +86,7 @@ class PostCommentCreate(BaseModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("评论不能为空")
-        return normalized
+        return value
 
 
 class PostCommentResponse(BaseModel):
