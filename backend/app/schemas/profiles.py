@@ -14,6 +14,7 @@ class PublicProfileUser(BaseModel):
     profile_background_url: str | None = None
     bio: str | None = None
     role: UserRole
+    permission_groups: list[str] = Field(default_factory=list)
     level: int
     level_band: str
     experience_points: int

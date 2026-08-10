@@ -10,6 +10,7 @@ from app.schemas.community import (
     UserPageResponse,
 )
 from app.services.levels import level_band, level_progress
+from app.services.user_display import user_display_fields
 
 router = APIRouter()
 
@@ -23,7 +24,7 @@ def _target(db: Session, current_user: User, target_uid: int) -> User:
     return target
 
 
-def _user_payload(user: User) -> dict:
+def _user_payload(db: Session, user: User) -> dict:
     progress = level_progress(user.points)
     return {
         "uid": user.uid,
@@ -32,6 +33,7 @@ def _user_payload(user: User) -> dict:
         "avatar_url": user.avatar_url,
         "level": progress.level,
         "level_band": level_band(progress.level),
+        **user_display_fields(db, user),
     }
 
 
@@ -59,7 +61,7 @@ def _user_page(db: Session, uids: list[int], page: int, page_size: int) -> dict:
     selected = uids[(page - 1) * page_size : page * page_size]
     users = [db.get(User, uid) for uid in selected]
     return {
-        "items": [_user_payload(user) for user in users if user],
+        "items": [_user_payload(db, user) for user in users if user],
         "total": total,
         "page": page,
         "page_size": page_size,

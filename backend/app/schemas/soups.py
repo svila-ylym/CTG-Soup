@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.models import TagKind, TagStatus
+from app.models.models import TagKind, TagStatus, UserRole
 from app.schemas import UploadedAssetResponse
 from app.services.tag_rules import normalize_tag_name
 
@@ -159,6 +159,8 @@ class AuthorSummary(BaseModel):
     nickname: str
     level: int = 0
     level_band: str = "black"
+    permission_groups: list[str] = Field(default_factory=list)
+    role: UserRole = UserRole.USER
 
 
 class SoupResponse(BaseModel):

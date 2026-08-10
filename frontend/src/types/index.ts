@@ -17,6 +17,7 @@ export interface User {
   profile_background_asset_id?: number | null
   bio?: string
   role: 'user' | 'admin' | 'root'
+  permission_groups: string[]
   status: 'pending_email' | 'active' | 'banned' | 'silenced'
   points: number
   level?: number
@@ -95,6 +96,8 @@ export interface SoupAuthor {
   avatar_url?: string | null
   level?: number
   level_band?: string
+  permission_groups?: string[]
+  role?: 'user' | 'admin' | 'root'
 }
 
 export interface SoupImageRef {
@@ -479,6 +482,8 @@ export interface SearchUser {
   username: string
   nickname: string
   avatar_url?: string | null
+  permission_groups?: string[]
+  role?: User['role']
 }
 
 export interface SearchPost {
@@ -515,6 +520,7 @@ export interface PublicProfileUser {
   profile_background_url?: string | null
   bio?: string | null
   role: 'user' | 'admin' | 'root'
+  permission_groups: string[]
   level: number
   level_band: string
   experience_points: number

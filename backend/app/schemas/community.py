@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.database import AchievementConditionType, NotificationType, PostType
+from app.models.database import AchievementConditionType, NotificationType, PostType, UserRole
 from app.schemas.common import PageResponse
 
 
@@ -14,6 +14,8 @@ class UserSummary(BaseModel):
     avatar_url: str | None = None
     level: int = 0
     level_band: str = "black"
+    permission_groups: list[str] = Field(default_factory=list)
+    role: UserRole = UserRole.USER
 
 
 class MentionRef(BaseModel):

@@ -8,7 +8,7 @@ import { parseUtcDateTime } from '@/utils/datetime'
 import type { ProfileSoupSummary, PublicProfile } from '@/types'
 import { ArrowDownIcon, ArrowUpIcon, FlagIcon } from '@heroicons/vue/24/outline'
 import SigninControl from '@/components/SigninControl.vue'
-import LevelBadge from '@/components/LevelBadge.vue'
+import UserBadges from '@/components/UserBadges.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 
 const route = useRoute()
@@ -150,7 +150,7 @@ watch(
     <div v-else-if="profile" class="page-container max-w-5xl">
       <div class="profile-hero relative overflow-hidden rounded-md border border-slate-200 dark:border-neutral-800" :style="profileBackgroundStyle">
         <div class="profile-hero-overlay absolute inset-0" aria-hidden="true"></div>
-        <header class="relative z-10 flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-7">
+        <header class="profile-hero-content relative z-10 flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-7">
         <div class="flex min-w-0 items-center gap-5">
           <img
             v-if="profile.user.avatar_url"
@@ -163,11 +163,11 @@ watch(
           </div>
           <div class="min-w-0">
             <h1 class="break-words text-2xl font-bold">{{ profile.user.nickname }}</h1>
-            <p class="break-words text-sm text-slate-500">@{{ profile.user.username }} · UID {{ profile.user.uid }}</p>
-            <p class="mt-1 text-xs text-slate-500">注册于 {{ profile.user.registration_date }}</p>
-            <div class="mt-2 flex items-center gap-3 text-sm">
-              <LevelBadge :level="profile.user.level" :band="profile.user.level_band" />
-              <span class="text-slate-500">{{ profile.user.experience_points }} 经验</span>
+            <p class="profile-hero-meta break-words text-sm">@{{ profile.user.username }} · UID {{ profile.user.uid }}</p>
+            <p class="profile-hero-meta mt-1 text-xs">注册于 {{ profile.user.registration_date }}</p>
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              <UserBadges :level="profile.user.level" :band="profile.user.level_band" :permission-groups="profile.user.permission_groups" :role="profile.user.role" />
+              <span class="profile-hero-meta">{{ profile.user.experience_points }} 经验</span>
             </div>
             <div class="mt-2 h-2 w-48 max-w-full overflow-hidden bg-slate-200 dark:bg-neutral-800">
               <div class="h-full bg-blue-600" :style="{ width: `${levelPercent}%` }"></div>
@@ -278,10 +278,28 @@ watch(
 }
 
 .profile-hero-overlay {
-  background: linear-gradient(90deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .78) 58%, rgba(255, 255, 255, .35));
+  background: rgba(255, 255, 255, .72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.profile-hero-content {
+  color: #0f172a;
+}
+
+.profile-hero-meta {
+  color: #475569;
 }
 
 :global(.dark) .profile-hero-overlay {
-  background: linear-gradient(90deg, rgba(3, 7, 18, .96), rgba(3, 7, 18, .82) 58%, rgba(3, 7, 18, .44));
+  background: rgba(0, 0, 0, .62);
+}
+
+:global(.dark) .profile-hero-content {
+  color: #fff;
+}
+
+:global(.dark) .profile-hero-meta {
+  color: #e2e8f0;
 }
 </style>

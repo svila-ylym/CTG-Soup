@@ -99,7 +99,6 @@ def sync_mentions(
     desired: dict[int, tuple[User, ParsedMention]] = {
         user.uid: (user, first_by_username[user.username])
         for user in users
-        if user.uid != actor_uid
     }
     existing_rows = db.exec(
         select(Mention).where(

@@ -26,6 +26,7 @@ from app.schemas.chat import (
 from app.schemas.community import PrivateMessageCreate, PrivateMessageResponse
 from app.services.message_gateway import message_gateway
 from app.services.levels import level_band, level_progress
+from app.services.user_display import user_display_fields
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ def canonical_pair(first_uid: int, second_uid: int) -> tuple[int, int]:
     return min(first_uid, second_uid), max(first_uid, second_uid)
 
 
-def _user_payload(user: User) -> dict:
+def _user_payload(db: Session, user: User) -> dict:
     progress = level_progress(user.points)
     return {
         "uid": user.uid,
@@ -45,6 +46,7 @@ def _user_payload(user: User) -> dict:
         "avatar_url": user.avatar_url,
         "level": progress.level,
         "level_band": level_band(progress.level),
+        **user_display_fields(db, user),
     }
 
 
@@ -63,8 +65,8 @@ def _message_payload(message: PrivateMessage) -> dict:
 def _legacy_message_payload(message: PrivateMessage, db: Session) -> dict:
     return {
         **_message_payload(message),
-        "sender": _user_payload(db.get(User, message.sender_uid)),
-        "receiver": _user_payload(db.get(User, message.receiver_uid)),
+        "sender": _user_payload(db, db.get(User, message.sender_uid)),
+        "receiver": _user_payload(db, db.get(User, message.receiver_uid)),
     }
 
 
@@ -165,7 +167,7 @@ def _conversation_payload(
     ).one()
     return {
         "id": conversation.id,
-        "other_user": _user_payload(other),
+        "other_user": _user_payload(db, other),
         "last_message": _message_payload(last_message) if last_message else None,
         "unread_count": unread_count,
         "last_message_at": conversation.last_message_at,

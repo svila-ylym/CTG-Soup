@@ -27,6 +27,7 @@ from app.services.competition_entries import (
 from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
 from app.services.tag_resolution import TagSelectionError, resolve_active_tags
 from app.services.levels import level_band, level_progress
+from app.services.user_display import user_display_fields
 
 router = APIRouter()
 
@@ -103,6 +104,7 @@ def _author(db: Session, uid: int) -> AuthorSummary:
         nickname=user.nickname if user else "未知用户",
         level=progress.level,
         level_band=level_band(progress.level),
+        **user_display_fields(db, user),
     )
 
 

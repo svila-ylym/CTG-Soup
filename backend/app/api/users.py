@@ -36,6 +36,7 @@ from app.schemas.profiles import (
     PublicProfileResponse,
 )
 from app.services.levels import level_band, level_progress
+from app.services.user_display import permission_group_names, user_display_fields
 from app.services import levels
 from app.schemas.levels import SigninStatusResponse
 from app.core.config import get_settings
@@ -61,7 +62,14 @@ async def get_user_by_uid(uid: int, db: Session = Depends(get_db)):
         "avatar_url": user.avatar_url,
         "level": progress.level,
         "level_band": level_band(progress.level),
+        **user_display_fields(db, user),
     }
+
+
+def _user_response(db: Session, user: User) -> UserResponse:
+    return UserResponse.model_validate(user).model_copy(
+        update={"permission_groups": permission_group_names(db, user.uid)},
+    )
 
 
 @router.put("/me", response_model=UserResponse)
@@ -134,7 +142,7 @@ async def update_me(
     db.commit()
     db.refresh(current_user)
     
-    return current_user
+    return _user_response(db, current_user)
 
 
 @router.put("/me/featured-soups", response_model=list[ProfileSoupSummary])
@@ -191,13 +199,16 @@ async def update_preferences(
     current_user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(current_user)
-    return current_user
+    return _user_response(db, current_user)
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_active_user)):
+async def get_me(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Return the authenticated user's complete public profile."""
-    return current_user
+    return _user_response(db, current_user)
 
 
 @router.get("/me/posts", response_model=PageResponse)
@@ -519,6 +530,7 @@ async def get_user_profile(
             "profile_background_url": user.profile_background_url,
             "bio": user.bio,
             "role": user.role,
+            "permission_groups": permission_group_names(db, user.uid),
             "level": progress.level,
             "level_band": level_band(progress.level),
             "experience_points": progress.experience_points,

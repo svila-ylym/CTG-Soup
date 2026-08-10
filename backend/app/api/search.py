@@ -12,6 +12,7 @@ from app.schemas.community import (
     UserSummary,
 )
 from app.services.levels import level_band, level_progress
+from app.services.user_display import user_display_fields
 
 router = APIRouter()
 
@@ -56,6 +57,7 @@ def search_users(
             avatar_url=row.avatar_url,
             level=level_progress(row.points).level,
             level_band=level_band(level_progress(row.points).level),
+            **user_display_fields(db, row),
         ).model_dump()
         for row in rows
     ]

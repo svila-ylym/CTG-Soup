@@ -56,6 +56,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     uid: int
     role: UserRole
+    permission_groups: List[str] = Field(default_factory=list)
     status: UserStatus
     avatar_url: Optional[str] = None
     avatar_asset_id: Optional[int] = None

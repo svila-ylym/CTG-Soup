@@ -38,6 +38,7 @@ from app.services.email_verification import (
 )
 from app.services.rate_limiter import rate_limiter
 from app.services.pending_accounts import allocate_user_uid
+from app.services.user_display import permission_group_names
 from app.utils.email import get_smtp_service
 
 router = APIRouter()
@@ -647,9 +648,14 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_active_user)):
+async def get_me(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """获取当前用户信息"""
-    return current_user
+    return UserResponse.model_validate(current_user).model_copy(
+        update={"permission_groups": permission_group_names(db, current_user.uid)},
+    )
 
 
 @router.put("/change-password", response_model=MessageResponse)
