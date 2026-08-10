@@ -2,8 +2,9 @@
   <nav class="sticky top-0 z-50 border-b border-slate-200 bg-white dark:border-neutral-800 dark:bg-black" data-layout-region="navigation">
     <div class="container mx-auto px-4">
       <div class="flex min-h-16 items-center gap-5 py-2">
-        <router-link to="/" class="shrink-0 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
-          汤吧社区
+        <router-link to="/" class="flex shrink-0 items-center gap-2 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
+          <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 object-contain" />
+          <span>汤吧社区</span>
         </router-link>
 
         <div class="hidden items-center gap-6 xl:flex">
@@ -89,9 +90,12 @@
         <button class="mobile-drawer-backdrop absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]" type="button" aria-label="关闭导航侧栏" @click="closeMobileMenu"></button>
         <aside class="mobile-drawer-panel absolute inset-y-0 right-0 flex w-[min(22rem,calc(100%-2rem))] flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-950">
           <header class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] dark:border-neutral-800">
-            <div class="min-w-0">
-              <p class="truncate text-lg font-bold text-slate-900 dark:text-white">汤吧社区</p>
-              <p class="mt-0.5 text-xs text-slate-500">完整导航</p>
+            <div class="flex min-w-0 items-center gap-2">
+              <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 shrink-0 object-contain" />
+              <div class="min-w-0">
+                <p class="truncate text-lg font-bold text-slate-900 dark:text-white">汤吧社区</p>
+                <p class="mt-0.5 text-xs text-slate-500">完整导航</p>
+              </div>
             </div>
             <button class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-neutral-800 dark:hover:text-white" type="button" aria-label="关闭导航侧栏" title="关闭" @click="closeMobileMenu">
               <XMarkIcon class="h-6 w-6" aria-hidden="true" />
