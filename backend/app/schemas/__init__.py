@@ -98,6 +98,28 @@ class EmailVerificationResendRequest(BaseModel):
     email: EmailStr
 
 
+class PasswordResetEmailRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=4096)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if not any(character.isupper() for character in value):
+            raise ValueError("密码必须包含大写字母")
+        if not any(character.islower() for character in value):
+            raise ValueError("密码必须包含小写字母")
+        if not any(character.isdigit() for character in value):
+            raise ValueError("密码必须包含数字")
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("密码不能超过72字节")
+        return value
+
+
 class MessageResponse(BaseModel):
     message: str
 

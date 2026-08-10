@@ -6,6 +6,7 @@
 - Add a complete forgot-password flow that verifies mailbox ownership through an emailed reset link.
 - Render private-message timestamps in UTC+8 regardless of the browser's local timezone.
 - Show turtle-soup genre and color badges in the soup list, soup detail, and homepage popular-soup cards.
+- Replace the incomplete mobile navigation grid with a hierarchical, scrollable side drawer.
 
 ## Backend Design
 
@@ -15,11 +16,13 @@ Password reset reuses the existing SMTP service and JWT secret. `POST /auth/rese
 
 ## Frontend Design
 
-The login page links to `/forgot-password`. That page submits an email address and displays the backend's generic response. The reset email links to `/reset-password?token=...`; the page validates password confirmation and calls the reset endpoint. Both routes are guest-only.
+The login page links to `/forgot-password`. That page submits an email address and displays the backend's generic response. The reset email links to `/reset-password?token=...`; the page validates password confirmation and calls the reset endpoint. Both routes remain public so stale local login tokens cannot block account recovery. A successful reset clears this browser's old login state before returning to login.
 
 The user-management table shows a destructive delete button only when the signed-in user is root and the row is `pending_email`. It requires a browser confirmation and reloads management data after success.
 
 Private messages parse timezone-less API timestamps as UTC and format both the conversation list and message bubbles using `Asia/Shanghai`. Soup metadata uses shared compact badge-style helpers so list, detail, and homepage colors stay consistent.
+
+On screens below the desktop navigation breakpoint, the top bar contains only the brand and menu button. The drawer groups links into browsing, messages, creation, administration, and account sections. Search is a full-width form at the top; notifications, private messages, and system messages remain visible with unread indicators. The drawer has a backdrop, Escape/backdrop close behavior, body-scroll locking, its own vertical scroll area, and safe-area padding so short mobile viewports do not hide lower actions.
 
 ## Error Handling And Verification
 
@@ -27,3 +30,4 @@ Private messages parse timezone-less API timestamps as UTC and format both the c
 - Invalid, expired, already-consumed, or stale reset tokens return a single invalid-or-expired message.
 - Pending-user deletion rechecks the target under a database lock to avoid deleting an account that was verified concurrently.
 - Per user instruction, no TDD or browser automation is added. Verification consists of backend compilation/import checks, the frontend production build, `git diff --check`, and a final diff review.
+- No database models, columns, tables, or migrations are changed.

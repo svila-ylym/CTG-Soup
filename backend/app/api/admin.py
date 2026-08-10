@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign, Notification, NotificationType, ReportStatus
-from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse
+from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign, EmailVerification, ReusableUserUid, Notification, NotificationType, ReportStatus
+from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse, MessageResponse
 from app.api.auth import get_current_admin_user, get_current_root_user, get_current_user
 from app.models.database import UserRole, UserStatus, PunishmentType
 from app.core.enums import ActionType
@@ -23,6 +23,7 @@ from app.services.punishments import (
 from app.api.system_messages import admin_router as system_message_admin_router
 from app.schemas.email_campaigns import EmailCampaignCreate, EmailCampaignPage, EmailCampaignSummary
 from app.services.email_campaigns import cancel_campaign, campaign_summary, create_campaign, queue_campaign
+from app.services.pending_accounts import lock_uid_allocation
 from sqlmodel import select
 
 router = APIRouter()
@@ -667,6 +668,53 @@ async def update_user_management(
         "status": target.status,
         "token_version": target.token_version,
     }
+
+
+@router.delete("/users/{uid}/pending", response_model=MessageResponse)
+async def delete_pending_user(
+    uid: int,
+    current_user: User = Depends(get_current_root_user),
+    db: Session = Depends(get_db),
+):
+    lock_uid_allocation(db)
+    verifications = db.exec(
+        select(EmailVerification)
+        .where(EmailVerification.user_uid == uid)
+        .with_for_update()
+    ).all()
+    target = db.exec(
+        select(User).where(User.uid == uid).with_for_update()
+    ).first()
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if target.status != UserStatus.PENDING_EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="只能删除待邮箱验证账号",
+        )
+
+    target_username = target.username
+    target_email = target.email
+    memberships = db.exec(
+        select(UserPermissionGroup).where(UserPermissionGroup.user_uid == target.uid)
+    ).all()
+    for verification in verifications:
+        db.delete(verification)
+    for membership in memberships:
+        db.delete(membership)
+    if db.get(ReusableUserUid, target.uid) is None:
+        db.add(ReusableUserUid(uid=target.uid, released_at=datetime.utcnow()))
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="delete_pending_user",
+        target_type="user",
+        target_id=target.uid,
+        details={"username": target_username, "email": target_email},
+    ))
+    db.delete(target)
+    db.commit()
+    return {"message": f"待验证账号 @{target_username} 已删除，UID {uid} 已回收"}
 
 
 @router.post("/punish", response_model=PunishmentResponse)

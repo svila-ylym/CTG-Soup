@@ -15,6 +15,7 @@ import EmojiPicker from '@/components/EmojiPicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatItem } from '@/stores/chat'
 import ReportDialog from '@/components/ReportDialog.vue'
+import { formatChinaMessageTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,15 +36,6 @@ const statusLabel = computed(() => {
   if (chat.socketStatus === 'connecting') return '连接中'
   return '轮询模式'
 })
-
-function formatMessageTime(value: string) {
-  const date = new Date(value)
-  const today = new Date()
-  if (date.toDateString() === today.toDateString()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
-}
 
 function avatarInitial(conversation: { other_user: { nickname: string } }) {
   return conversation.other_user.nickname.slice(0, 1).toUpperCase() || '?'
@@ -222,7 +214,7 @@ onUnmounted(() => {
               <button class="min-w-0 flex-1 text-left" type="button" @click="selectConversation(conversation.id)">
                 <span class="flex items-center justify-between gap-2">
                   <strong class="truncate text-sm">{{ conversation.other_user.nickname }}</strong>
-                  <time v-if="conversation.last_message_at" class="shrink-0 text-[11px] text-slate-400">{{ formatMessageTime(conversation.last_message_at) }}</time>
+                  <time v-if="conversation.last_message_at" class="shrink-0 text-[11px] text-slate-400">{{ formatChinaMessageTime(conversation.last_message_at) }}</time>
                 </span>
                 <span class="mt-1 flex items-center justify-between gap-2">
                   <span class="truncate text-xs text-slate-500">{{ conversation.last_message?.content || '开始聊天' }}</span>
@@ -260,7 +252,7 @@ onUnmounted(() => {
                   <div class="max-w-[min(85%,38rem)]">
                     <div class="break-words whitespace-pre-wrap px-4 py-2.5 text-sm" :class="isMine(message) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-neutral-900 dark:text-slate-100'" :data-testid="isMine(message) ? 'outgoing-message' : 'incoming-message'">{{ message.content }}</div>
                     <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" :class="isMine(message) ? 'justify-end' : 'justify-start'">
-                      <time>{{ formatMessageTime(message.created_at) }}</time>
+                      <time>{{ formatChinaMessageTime(message.created_at) }}</time>
                       <button v-if="!isMine(message) && message.id > 0" class="inline-flex items-center gap-1 text-red-600 hover:underline" type="button" @click="reportMessageId = message.id"><FlagIcon class="h-3 w-3" aria-hidden="true" />举报</button>
                       <template v-if="isMine(message)">
                         <span v-if="message.deliveryStatus === 'sending'">发送中…</span>

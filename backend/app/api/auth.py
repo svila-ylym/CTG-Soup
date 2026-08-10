@@ -12,6 +12,8 @@ from app.models.database import EmailVerification, get_db, User, UserStatus
 from app.schemas import (
     EmailVerificationRequest,
     EmailVerificationResendRequest,
+    PasswordResetEmailRequest,
+    PasswordResetRequest,
     ChangePasswordRequest,
     MessageResponse,
     RefreshTokenRequest,
@@ -264,6 +266,36 @@ def _send_verification_email(email: str, username: str, token: str) -> bool:
     return False
 
 
+def _allow_password_reset_email(ip_address: str, email: str) -> bool:
+    checks = (
+        ("password-reset-ip", ip_address, settings.EMAIL_VERIFICATION_IP_LIMIT, settings.EMAIL_VERIFICATION_IP_WINDOW_SECONDS),
+        ("password-reset-address", email, settings.EMAIL_VERIFICATION_EMAIL_LIMIT, settings.EMAIL_VERIFICATION_EMAIL_WINDOW_SECONDS),
+        ("password-reset-global", "all", settings.EMAIL_VERIFICATION_GLOBAL_LIMIT, settings.EMAIL_VERIFICATION_GLOBAL_WINDOW_SECONDS),
+    )
+    return all(
+        rate_limiter.allow(scope, key, limit, window_seconds)
+        for scope, key, limit, window_seconds in checks
+    )
+
+
+def _create_password_reset_token(user: User) -> str:
+    payload = {
+        "sub": str(user.uid),
+        "username": user.username,
+        "ver": user.token_version,
+        "exp": datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES),
+        "token_type": "password_reset",
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def _send_password_reset_email(email: str, username: str, token: str) -> bool:
+    for _ in range(settings.SMTP_VERIFICATION_RETRY_ATTEMPTS):
+        if smtp_service.send_password_reset_email(email, username, token):
+            return True
+    return False
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
@@ -421,6 +453,68 @@ async def resend_verification_email(
             detail="验证邮件发送失败，请稍后再试",
         )
     return {"message": generic_message}
+
+
+@router.post("/reset-password-request", response_model=MessageResponse)
+async def request_password_reset(
+    request: PasswordResetEmailRequest,
+    db: Session = Depends(get_db),
+    http_request: Request = None,
+):
+    generic_message = "如果该邮箱已注册，系统将发送密码重置邮件"
+    email = request.email.lower()
+    if not _allow_password_reset_email(_request_ip(http_request), email):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="请求过于频繁，请稍后再试",
+        )
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or user.status == UserStatus.PENDING_EMAIL:
+        return {"message": generic_message}
+
+    token = _create_password_reset_token(user)
+    if not _send_password_reset_email(user.email, user.username, token):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="重置邮件发送失败，请稍后再试",
+        )
+    return {"message": generic_message}
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    request: PasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    invalid_token = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"code": "PASSWORD_RESET_INVALID", "message": "重置链接无效或已过期，请重新申请"},
+    )
+    try:
+        payload = decode_token(request.token, expected_type="password_reset")
+        user_uid = int(payload["sub"])
+    except (HTTPException, TypeError, ValueError, KeyError) as exc:
+        raise invalid_token from exc
+
+    user = db.query(User).filter(User.uid == user_uid).with_for_update().first()
+    if (
+        user is None
+        or user.status == UserStatus.PENDING_EMAIL
+        or payload.get("ver") != user.token_version
+    ):
+        raise invalid_token
+    if verify_password(request.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "PASSWORD_UNCHANGED", "message": "新密码不能与原密码相同"},
+        )
+
+    user.hashed_password = get_password_hash(request.new_password)
+    user.token_version += 1
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "密码重置成功，请使用新密码登录"}
 
 
 @router.post("/login", response_model=Token)

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Execute inline in the current session. The user explicitly requested no TDD and no browser automation.
 
-**Goal:** Complete email-based password recovery, let root delete pending accounts, display private-message times in UTC+8, and expose soup genre/color throughout the soup UI.
+**Goal:** Complete email-based password recovery, let root delete pending accounts, display private-message times in UTC+8, expose soup genre/color throughout the soup UI, and make all navigation available on mobile.
 
 **Architecture:** Extend existing FastAPI auth/admin routers and SMTP/JWT helpers without a schema migration. Add two guest Vue views, reuse the existing admin table, centralize soup badge classes, and keep UTC storage unchanged while formatting timestamps at the frontend boundary.
 
@@ -13,6 +13,7 @@
 - Do not use TDD.
 - Do not run browser or Playwright tests.
 - Do not add a database migration.
+- Do not change database models or schema.
 - Preserve UTC database timestamps and display private-message times in `Asia/Shanghai`.
 - Update the existing pull request after verification.
 
@@ -61,11 +62,11 @@
 
 **Interfaces:**
 - Consumes: existing `authApi.requestPasswordReset`, `authApi.resetPassword`, and `extractApiError`.
-- Produces: `/forgot-password` and `/reset-password?token=...` guest flows.
+- Produces: public `/forgot-password` and `/reset-password?token=...` recovery flows.
 
 - [ ] Build the email request form with a generic success state.
 - [ ] Build the token reset form with password policy and confirmation validation.
-- [ ] Add guest routes and a login-page forgot-password link.
+- [ ] Add public recovery routes and a login-page forgot-password link.
 - [ ] Redirect successful reset attempts to login with a visible completion message.
 
 ### Task 4: UTC+8 Private-Message Formatting
@@ -98,7 +99,22 @@
 - [ ] Render both badges below titles in list cards and homepage popular cards.
 - [ ] Render both badges in the soup detail metadata header.
 
-### Task 6: Verification And PR Update
+### Task 6: Mobile Navigation Drawer
+
+**Files:**
+- Modify: `frontend/src/components/NavBar.vue`
+- Modify: `frontend/src/assets/main.css`
+
+**Interfaces:**
+- Consumes: current auth role, unread stores, router, and theme helpers.
+- Produces: a responsive mobile side drawer with complete navigation.
+
+- [ ] Reduce the mobile top bar to the brand and menu button.
+- [ ] Add a full-width drawer search form and grouped browsing, message, creation, administration, and account links.
+- [ ] Preserve unread indicators and role-based visibility inside the drawer.
+- [ ] Add backdrop/Escape close behavior, body-scroll locking, drawer scrolling, and safe-area padding.
+
+### Task 7: Verification And PR Update
 
 **Files:**
 - Review all modified files and the complete branch diff.

@@ -9,6 +9,10 @@
             <div class="min-w-0 flex-1">
               <p class="mb-2 break-words text-sm text-blue-500">海龟汤 · <router-link :to="`/profile/${soup.author_uid}`" class="font-medium hover:underline">{{ soup.author.nickname || soup.author.username || '未知作者' }}</router-link></p>
               <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">{{ soup.title }}</h1>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <span :class="genreBadgeClass(soup.genre)">流派 · {{ soup.genre }}</span>
+                <span :class="soupColorBadgeClass(soup.soup_color)">汤色 · {{ soup.soup_color }}</span>
+              </div>
             </div>
             <div class="shrink-0 text-right text-sm text-gray-500">
               <div class="text-2xl font-semibold text-amber-500">{{ displayScore.toFixed(1) }} 分</div>
@@ -185,6 +189,7 @@ import ReportDialog from '@/components/ReportDialog.vue'
 import MentionText from '@/components/MentionText.vue'
 import { extractApiError } from '@/utils/auth'
 import { useAuthStore } from '@/stores/auth'
+import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const route = useRoute()
 const router = useRouter()

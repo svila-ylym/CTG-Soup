@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     VERIFICATION_CODE_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
     EMAIL_DOMAIN_WHITELIST: Optional[List[str]] = None  # 邮箱域名白名单
     EMAIL_VERIFICATION_IP_LIMIT: int = 5
     EMAIL_VERIFICATION_EMAIL_LIMIT: int = 3

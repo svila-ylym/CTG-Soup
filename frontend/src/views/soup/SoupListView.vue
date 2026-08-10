@@ -95,6 +95,11 @@
               {{ soup.title }}
             </h3>
 
+            <div class="mb-3 flex flex-wrap gap-2">
+              <span :class="genreBadgeClass(soup.genre)">流派 · {{ soup.genre }}</span>
+              <span :class="soupColorBadgeClass(soup.soup_color)">汤色 · {{ soup.soup_color }}</span>
+            </div>
+
             <!-- 谜面预览 -->
             <p class="mb-4 line-clamp-3 break-words text-sm text-gray-600 dark:text-gray-400">
               {{ soup.puzzle }}
@@ -196,6 +201,7 @@ import { useSoupStore } from '@/stores/soup'
 import { parseUtcDateTime } from '@/utils/datetime'
 import { tagApi } from '@/api/tags'
 import type { CreateSoupColor, CreateSoupGenre, Tag } from '@/types'
+import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const soupStore = useSoupStore()
 

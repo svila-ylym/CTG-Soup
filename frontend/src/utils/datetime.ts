@@ -1,4 +1,26 @@
 const TIMEZONE_SUFFIX = /(?:Z|[+-]\d{2}:\d{2})$/i
+const CHINA_TIMEZONE = 'Asia/Shanghai'
+
+const chinaDateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: CHINA_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+const chinaMessageTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: CHINA_TIMEZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  hourCycle: 'h23',
+})
+
+const chinaMessageDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: CHINA_TIMEZONE,
+  month: 'numeric',
+  day: 'numeric',
+})
 
 export function parseUtcDateTime(value: string): Date {
   const normalized = TIMEZONE_SUFFIX.test(value) ? value : `${value}Z`
@@ -25,4 +47,13 @@ export function formatChinaDateTime(value: string): string {
     second: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+export function formatChinaMessageTime(value: string): string {
+  const date = parseUtcDateTime(value)
+  if (Number.isNaN(date.getTime())) return value
+  const today = new Date()
+  return chinaDateKeyFormatter.format(date) === chinaDateKeyFormatter.format(today)
+    ? chinaMessageTimeFormatter.format(date)
+    : chinaMessageDateFormatter.format(date)
 }

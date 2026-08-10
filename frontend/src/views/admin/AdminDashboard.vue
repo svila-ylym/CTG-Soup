@@ -239,6 +239,22 @@ async function saveUser(user: AdminUser) {
   }
 }
 
+async function deletePendingUser(user: AdminUser) {
+  if (!auth.isRoot || user.status !== 'pending_email' || savingKey.value) return
+  if (!window.confirm(`确定删除待验证账号 @${user.username} 吗？删除后 UID ${user.uid} 将被回收。`)) return
+  savingKey.value = `delete-user:${user.uid}`
+  error.value = ''
+  try {
+    const response = await http.delete<{ message: string }>(`/admin/users/${user.uid}/pending`)
+    message.value = response.data.message
+    await load()
+  } catch (cause) {
+    showError(cause, '待验证账号删除失败')
+  } finally {
+    savingKey.value = ''
+  }
+}
+
 async function punishUser(user: AdminUser, punishmentType: 'ban' | 'silence') {
   const reason = (punishmentReasons.value[user.uid] || '').trim()
   if (reason.length < 2) {
@@ -605,7 +621,13 @@ onMounted(load)
                   <td class="px-2 py-3"><select v-model="user.role" class="form-control w-28" :disabled="!auth.isRoot || user.uid === auth.user?.uid"><option value="user">user</option><option value="admin">admin</option><option value="root">root</option></select></td>
                   <td class="px-2 py-3"><select v-model="user.status" class="form-control w-36" :disabled="!auth.isRoot || user.uid === auth.user?.uid || user.status === 'banned' || user.status === 'silenced'"><option v-if="user.status === 'banned'" value="banned">banned</option><option v-if="user.status === 'silenced'" value="silenced">silenced</option><option value="active">active</option><option value="pending_email">pending_email</option></select></td>
                   <td class="min-w-52 px-2 py-3"><div class="space-y-1"><label v-for="group in groups" :key="group.id" class="flex items-center gap-2 text-xs"><input type="checkbox" :checked="groupContains(group, user)" :disabled="!auth.isRoot || savingKey === `group:${group.id}:${user.uid}`" @change="toggleGroupFromEvent(user, group, $event)"><span>{{ group.name }}</span></label><span v-if="!groups.length" class="text-xs text-slate-400">暂无用户组</span></div></td>
-                  <td class="px-2 py-3"><button v-if="auth.isRoot && user.uid !== auth.user?.uid" class="btn-secondary whitespace-nowrap text-xs" type="button" :disabled="savingKey === `user:${user.uid}`" @click="saveUser(user)">保存用户</button><span v-else-if="user.uid === auth.user?.uid" class="text-xs text-slate-400">当前账号</span><span v-else class="text-xs text-slate-400">ROOT 管理</span></td>
+                  <td class="px-2 py-3">
+                    <div v-if="auth.isRoot && user.uid !== auth.user?.uid" class="flex flex-wrap gap-2">
+                      <button class="btn-secondary whitespace-nowrap text-xs" type="button" :disabled="savingKey === `user:${user.uid}`" @click="saveUser(user)">保存用户</button>
+                      <button v-if="user.status === 'pending_email'" class="inline-flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50" type="button" :disabled="savingKey === `delete-user:${user.uid}`" @click="deletePendingUser(user)"><TrashIcon class="h-4 w-4" aria-hidden="true" />{{ savingKey === `delete-user:${user.uid}` ? '删除中…' : '删除待验证账号' }}</button>
+                    </div>
+                    <span v-else-if="user.uid === auth.user?.uid" class="text-xs text-slate-400">当前账号</span><span v-else class="text-xs text-slate-400">ROOT 管理</span>
+                  </td>
                   <td class="min-w-72 px-2 py-3">
                     <div v-if="activeStatusPunishment(user) && canManageUser(user)" class="flex items-center gap-2">
                       <input v-model="userRevokeReasons[user.uid]" class="form-control min-w-36" maxlength="2000" placeholder="解除原因">

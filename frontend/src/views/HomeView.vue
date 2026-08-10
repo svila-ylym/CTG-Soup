@@ -175,6 +175,10 @@
               <span class="inline-flex items-center gap-1 text-sm font-black text-amber-500"><StarIcon class="h-4 w-4" aria-hidden="true" />{{ soup.average_score.toFixed(1) }}</span>
             </div>
             <h3 class="mt-6 line-clamp-2 break-words text-xl font-black text-slate-900 dark:text-white">{{ soup.title }}</h3>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <span :class="genreBadgeClass(soup.genre)">流派 · {{ soup.genre }}</span>
+              <span :class="soupColorBadgeClass(soup.soup_color)">汤色 · {{ soup.soup_color }}</span>
+            </div>
             <p class="mt-3 line-clamp-3 min-h-[4.5rem] break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{{ soup.puzzle }}</p>
             <div class="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-400 dark:border-slate-800 dark:text-slate-500"><span class="truncate">{{ soup.author?.nickname || soup.author?.username || '匿名作者' }}</span><span class="shrink-0">{{ soup.rating_count }} 人评分</span></div>
             <span class="soup-card-shine absolute -right-16 -top-20 h-32 w-32 rounded-full bg-sky-200/35 blur-2xl transition duration-500 group-hover:right-8 group-hover:top-4 dark:bg-sky-500/10" aria-hidden="true"></span>
@@ -203,6 +207,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
+import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const soupStore = useSoupStore()
 const heroRef = ref<HTMLElement | null>(null)

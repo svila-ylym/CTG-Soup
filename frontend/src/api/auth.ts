@@ -49,11 +49,11 @@ export const authApi = {
 
   // 重置密码请求
   requestPasswordReset(email: string) {
-    return http.post('/auth/reset-password-request', { email })
+    return http.post<{ message: string }>('/auth/reset-password-request', { email })
   },
 
   // 重置密码
   resetPassword(token: string, newPassword: string) {
-    return http.post('/auth/reset-password', { token, new_password: newPassword })
+    return http.post<{ message: string }>('/auth/reset-password', { token, new_password: newPassword })
   },
 }

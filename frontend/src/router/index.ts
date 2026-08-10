@@ -27,6 +27,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '邮箱验证', requiresAuth: false },
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPasswordView.vue'),
+    meta: { title: '忘记密码', requiresAuth: false },
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPasswordView.vue'),
+    meta: { title: '重置密码', requiresAuth: false },
+  },
+  {
     path: '/soups',
     name: 'Soups',
     component: () => import('@/views/soup/SoupListView.vue'),
