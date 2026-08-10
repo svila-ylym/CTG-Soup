@@ -43,4 +43,4 @@
 ### Task 4: Verification and delivery
 
 - [x] Run backend compilation, frontend production build and `git diff --check`.
-- [ ] Review the diff, commit, push the existing PR branch, and sync changed source files to the server without restarting it.
+- [x] Review the diff, commit, push the existing PR branch, and sync changed source files to the server without restarting it.
