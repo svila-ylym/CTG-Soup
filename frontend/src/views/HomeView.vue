@@ -348,6 +348,13 @@ onBeforeUnmount(() => {
   --sky-top: #a7e2ff;
   --sky-middle: #d9f4ff;
   --sky-bottom: #fff4d6;
+  --scene-copy: #12354a;
+  --scene-copy-muted: rgba(18, 53, 74, .78);
+  --scene-link: #0f526d;
+  --scene-title-one: #12354a;
+  --scene-title-two: #075985;
+  --scene-title-three: #166534;
+  --scene-title-four: #9a3412;
   --far-x: 0px;
   --far-y: 0px;
   --mid-x: 0px;
@@ -400,37 +407,32 @@ onBeforeUnmount(() => {
   transition: background-color 1.5s ease, background 1.5s ease, filter 1.5s ease, opacity 1.5s ease, box-shadow 1.5s ease;
 }
 
-.scene-sunrise { --sky-top: #7485ba; --sky-middle: #ffad82; --sky-bottom: #ffe5ac; background: #ffd8ad; }
+.scene-sunrise { --sky-top: #7485ba; --sky-middle: #ffad82; --sky-bottom: #ffe5ac; --scene-copy: #182b49; --scene-copy-muted: rgba(24, 43, 73, .84); --scene-link: #173f68; --scene-title-one: #182b49; --scene-title-two: #124e78; --scene-title-three: #245b43; --scene-title-four: #8c3f1f; background: #ffd8ad; }
 .scene-sunrise .hero-sky { background: linear-gradient(180deg, rgba(93, 117, 177, .32), rgba(255, 153, 94, .42) 58%, rgba(255, 233, 180, .55)); }
 .scene-sunrise .hero-sun { right: 17%; top: 53%; background: #ffb24f; box-shadow: 0 0 0 1.3rem rgba(255, 178, 79, .14), 0 0 5rem 2rem rgba(255, 123, 66, .3); }
 .scene-sunrise .landscape { filter: sepia(.12) saturate(1.1) brightness(.88); }
 
-.scene-morning { --sky-top: #c1e2e9; --sky-middle: #e8f2ed; --sky-bottom: #f6f6df; background: #dff4f3; }
+.scene-morning { --sky-top: #c1e2e9; --sky-middle: #e8f2ed; --sky-bottom: #f6f6df; --scene-copy: #164e63; --scene-copy-muted: rgba(22, 78, 99, .78); --scene-link: #155e75; --scene-title-one: #164e63; --scene-title-two: #075985; --scene-title-three: #166534; --scene-title-four: #9a3412; background: #dff4f3; }
 .scene-morning .hero-sky { background: linear-gradient(180deg, rgba(182, 225, 236, .4), rgba(238, 248, 242, .45)); }
 .scene-morning .hero-sun { right: 16%; top: 25%; background: #ffe6a2; box-shadow: 0 0 4rem 1.5rem rgba(255, 230, 162, .25); }
 .scene-morning .hero-mist { opacity: .7; background: linear-gradient(180deg, transparent 35%, rgba(241, 250, 248, .76) 62%, rgba(231, 244, 242, .36) 82%, transparent); filter: blur(.4rem); animation: mist-drift 18s ease-in-out infinite; }
 .scene-morning .landscape { filter: saturate(.78) brightness(1.04); }
 
-.scene-evening { --sky-top: #7199af; --sky-middle: #dcb886; --sky-bottom: #f6dca7; background: #b9d8df; }
+.scene-evening { --sky-top: #7199af; --sky-middle: #dcb886; --sky-bottom: #f6dca7; --scene-copy: #17324d; --scene-copy-muted: rgba(23, 50, 77, .84); --scene-link: #174e6d; --scene-title-one: #17324d; --scene-title-two: #124e78; --scene-title-three: #22543d; --scene-title-four: #8c3f1f; background: #b9d8df; }
 .scene-evening .hero-sky { background: linear-gradient(180deg, rgba(91, 139, 167, .36), rgba(231, 186, 128, .42) 68%, rgba(252, 221, 166, .35)); }
 .scene-evening .hero-sun { right: 12%; top: 34%; background: #f6c76b; box-shadow: 0 0 4rem 1.4rem rgba(246, 199, 107, .25); }
 .scene-evening .landscape { filter: saturate(.88) brightness(.82); }
 
-.scene-sunset { --sky-top: #343b6d; --sky-middle: #bd6269; --sky-bottom: #ff9f60; background: #8e7584; }
+.scene-sunset { --sky-top: #343b6d; --sky-middle: #bd6269; --sky-bottom: #ff9f60; --scene-copy: #fff7ed; --scene-copy-muted: rgba(255, 247, 237, .86); --scene-link: #ffedd5; --scene-title-one: #fff7ed; --scene-title-two: #dbeafe; --scene-title-three: #dcfce7; --scene-title-four: #fed7aa; background: #8e7584; }
 .scene-sunset .hero-sky { background: linear-gradient(180deg, rgba(51, 58, 106, .5), rgba(192, 85, 89, .42) 56%, rgba(255, 161, 85, .52)); }
 .scene-sunset .hero-sun { right: 15%; top: 57%; background: #ff875d; box-shadow: 0 0 0 1.2rem rgba(255, 135, 93, .12), 0 0 5rem 2rem rgba(236, 79, 84, .32); }
 .scene-sunset .landscape { filter: sepia(.18) hue-rotate(-8deg) saturate(1.05) brightness(.57); }
 
-.scene-night { --sky-top: #050d1b; --sky-middle: #102a40; --sky-bottom: #17374b; background: #061321; }
+.scene-night { --sky-top: #050d1b; --sky-middle: #102a40; --sky-bottom: #17374b; --scene-copy: #d9f6ff; --scene-copy-muted: rgba(217, 246, 255, .84); --scene-link: #e0f2fe; --scene-title-one: #e7fbff; --scene-title-two: #67d8f0; --scene-title-three: #7ce0b2; --scene-title-four: #ffc16f; background: #061321; }
 .scene-night .hero-sky { background: radial-gradient(circle at 20% 18%, rgba(149, 199, 223, .12) 0 1px, transparent 2px), radial-gradient(circle at 67% 13%, rgba(255, 255, 255, .2) 0 1px, transparent 2px), linear-gradient(180deg, #06101f, #102a40 70%, #17374b); background-size: 9rem 8rem, 13rem 11rem, auto; }
 .scene-night .hero-sun { right: 14%; top: 13%; background: #e8eff1; box-shadow: inset -1.8rem -.6rem 0 #becdd4, 0 0 3rem 1rem rgba(211, 235, 242, .18); }
 .scene-night .hero-glint { opacity: .12; }
 .scene-night .landscape { filter: hue-rotate(8deg) saturate(.58) brightness(.32); }
-.scene-night .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #2b7588, 0 4px 0 #20596d, 0 6px 0 #153d50, 0 9px 0 rgba(1, 11, 18, .48), 0 17px 24px rgba(0, 0, 0, .42); }
-.scene-night .hero-title-character:nth-child(2) { color: #67d8f0; }
-.scene-night .hero-title-character:nth-child(3) { color: #7ce0b2; }
-.scene-night .hero-title-character:nth-child(4) { color: #ffc16f; }
-.scene-night .hero-kicker, .scene-night .hero-lede, .scene-night .hero-quick-links, .scene-night .hero-scroll-cue { color: #d9f6ff; }
 
 .landscape {
   z-index: 2;
@@ -458,10 +460,16 @@ onBeforeUnmount(() => {
 .hero-quick-links { animation-delay: 620ms; }
 
 .hero-title { perspective: 900px; text-wrap: balance; }
-.hero-title-character { display: inline-block; transform: translate3d(0, 1.8rem, 0) rotateX(-65deg) rotateZ(-4deg); transform-origin: 50% 100%; opacity: 0; text-shadow: 0 2px 0 #d7f1f3, 0 4px 0 #a9dadd, 0 6px 0 #76b9c3, 0 9px 0 rgba(24, 94, 112, .2), 0 17px 22px rgba(31, 92, 111, .2); animation: title-pop 800ms cubic-bezier(.18,1.35,.3,1) forwards; }
-.hero-title-character:nth-child(2) { color: #157d9f; }
-.hero-title-character:nth-child(3) { color: #2e9b76; }
-.hero-title-character:nth-child(4) { color: #e28b36; }
+.hero-title-character { display: inline-block; transform: translate3d(0, 1.8rem, 0) rotateX(-65deg) rotateZ(-4deg); transform-origin: 50% 100%; opacity: 0; color: var(--scene-title-one) !important; text-shadow: none !important; animation: title-pop 800ms cubic-bezier(.18,1.35,.3,1) forwards; }
+.hero-title-character:nth-child(2) { color: var(--scene-title-two) !important; }
+.hero-title-character:nth-child(3) { color: var(--scene-title-three) !important; }
+.hero-title-character:nth-child(4) { color: var(--scene-title-four) !important; }
+
+.hero-kicker { color: var(--scene-copy) !important; }
+.hero-lede { color: var(--scene-copy-muted) !important; }
+.hero-quick-links, .hero-quick-links a, .hero-scroll-cue { color: var(--scene-link) !important; }
+.hero-quick-links a:hover, .hero-scroll-cue:hover { color: var(--scene-copy) !important; }
+.hero-secondary-button { color: var(--scene-copy) !important; }
 
 .hero-puzzle-stage { animation: puzzle-stage-enter 800ms cubic-bezier(.18,.8,.25,1) 420ms both; perspective: 900px; }
 .puzzle-note { backface-visibility: hidden; transform-origin: center bottom; animation: note-enter 800ms cubic-bezier(.18,1.2,.3,1) both, note-float 6s ease-in-out 1.2s infinite; }
@@ -519,10 +527,6 @@ onBeforeUnmount(() => {
 :global(.dark) .hero-scene:not(.scene-night) .hero-sky { opacity: .88; }
 :global(.dark) .hero-scene:not(.scene-night) .hero-sun { filter: brightness(.92) saturate(.9); }
 :global(.dark) .hero-scene:not(.scene-night) .landscape { opacity: .92; }
-:global(.dark) .hero-title-character { color: #e7fbff; text-shadow: none !important; }
-:global(.dark) .hero-title-character:nth-child(2) { color: #67d8f0; }
-:global(.dark) .hero-title-character:nth-child(3) { color: #7ce0b2; }
-:global(.dark) .hero-title-character:nth-child(4) { color: #ffc16f; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-sun, .hero-glint, .cloud-drift-slow, .cloud-drift-fast, .lake-shimmer, .hero-container, .hero-copy, .hero-kicker, .hero-lede, .hero-actions, .hero-quick-links, .hero-title-character, .hero-puzzle-stage, .puzzle-note, .puzzle-sticker, .hero-scroll-cue, .feature-card, .soup-card, .soup-loader, .soup-loader span, .soup-loader span::after { animation: none !important; transition: opacity 120ms ease !important; }
