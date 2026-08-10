@@ -520,6 +520,7 @@ export interface PublicProfileUser {
   experience_points: number
   level_start: number
   next_level_start: number | null
+  registration_date: string
   created_at: string
 }
 

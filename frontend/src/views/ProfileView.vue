@@ -164,6 +164,7 @@ watch(
           <div class="min-w-0">
             <h1 class="break-words text-2xl font-bold">{{ profile.user.nickname }}</h1>
             <p class="break-words text-sm text-slate-500">@{{ profile.user.username }} · UID {{ profile.user.uid }}</p>
+            <p class="mt-1 text-xs text-slate-500">注册于 {{ profile.user.registration_date }}</p>
             <div class="mt-2 flex items-center gap-3 text-sm">
               <LevelBadge :level="profile.user.level" :band="profile.user.level_band" />
               <span class="text-slate-500">{{ profile.user.experience_points }} 经验</span>

@@ -188,6 +188,12 @@ class User(SQLModel, table=True):
         return value if isinstance(value, str) and value else None
 
     @property
+    def registration_date(self) -> str:
+        """Return the JSON-backed registration date, with a legacy fallback."""
+        value = self.notification_prefs.get("registration_date") if isinstance(self.notification_prefs, dict) else None
+        return value if isinstance(value, str) and value else "2026-08-10"
+
+    @property
     def level(self) -> int:
         return max(self.points, 0) // 100
 

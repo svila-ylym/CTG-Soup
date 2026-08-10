@@ -7,6 +7,7 @@ from typing import Optional
 from jose import JWTError, jwt
 import bcrypt
 import re
+from zoneinfo import ZoneInfo
 
 from app.models.database import EmailVerification, get_db, User, UserStatus
 from app.schemas import (
@@ -332,6 +333,7 @@ async def register(
     # 创建新用户
     hashed_password = get_password_hash(user_data.password)
     allocated_uid = allocate_user_uid(db)
+    registration_date = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     db_user = User(
         uid=allocated_uid,
         username=username,
@@ -341,6 +343,7 @@ async def register(
         role=UserRole.USER,
         status=UserStatus.PENDING_EMAIL,
         allow_bulk_email=True,
+        notification_prefs={"registration_date": registration_date},
     )
 
     try:

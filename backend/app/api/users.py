@@ -125,7 +125,7 @@ async def update_me(
     if user_data.notice_preferences is not None:
         preferences = dict(user_data.notice_preferences)
         existing_preferences = dict(current_user.notification_prefs or {})
-        for key in ("profile_background_asset_id", "profile_background_url"):
+        for key in ("profile_background_asset_id", "profile_background_url", "registration_date"):
             if key in existing_preferences:
                 preferences[key] = existing_preferences[key]
         current_user.notification_prefs = preferences
@@ -524,6 +524,7 @@ async def get_user_profile(
             "experience_points": progress.experience_points,
             "level_start": progress.level_start,
             "next_level_start": progress.next_level_start,
+            "registration_date": user.registration_date,
             "created_at": user.created_at,
         },
         "stats": {

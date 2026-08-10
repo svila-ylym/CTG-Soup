@@ -19,6 +19,7 @@ class PublicProfileUser(BaseModel):
     experience_points: int
     level_start: int
     next_level_start: int | None
+    registration_date: str = "2026-08-10"
     created_at: datetime
 
 

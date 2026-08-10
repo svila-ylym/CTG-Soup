@@ -5,7 +5,6 @@
       class="hero-scene relative isolate min-h-[36rem] overflow-hidden border-b border-sky-100 bg-[#dff4ff] sm:min-h-[40rem] lg:min-h-[43rem] dark:border-slate-800 dark:bg-[#071d2e]"
       :class="`scene-${scenePeriod}`"
       :data-scene-transitioning="sceneTransitioning || undefined"
-      :style="sceneStyle"
       @pointermove="handlePointerMove"
       @pointerleave="resetPointer"
     >
@@ -196,7 +195,6 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { CSSProperties } from 'vue'
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
@@ -226,7 +224,6 @@ const leaderboardPreview = ref<TurtleSoup[]>([])
 const isLeaderboardPreviewLoading = ref(true)
 const leaderboardPreviewError = ref<string | null>(null)
 const heroRef = ref<HTMLElement | null>(null)
-const scenePosition = ref({ x: 0, y: 0 })
 const hitokotoText = ref('每一条线索都算数')
 type ScenePeriod = 'sunrise' | 'morning' | 'noon' | 'evening' | 'sunset' | 'night'
 const scenePeriod = ref<ScenePeriod>('noon')
@@ -243,16 +240,16 @@ let hitokotoTimeout = 0
 let sceneClock = 0
 let sceneTransitionTimer = 0
 
-const sceneStyle = computed<CSSProperties>(() => ({
-  '--far-x': `${scenePosition.value.x * 0.18}px`,
-  '--far-y': `${scenePosition.value.y * 0.18}px`,
-  '--mid-x': `${scenePosition.value.x * 0.38}px`,
-  '--mid-y': `${scenePosition.value.y * 0.38}px`,
-  '--lake-x': `${scenePosition.value.x * 0.62}px`,
-  '--lake-y': `${scenePosition.value.y * 0.62}px`,
-  '--front-x': `${scenePosition.value.x}px`,
-  '--front-y': `${scenePosition.value.y}px`,
-}))
+function setScenePosition(element: HTMLElement, x: number, y: number) {
+  element.style.setProperty('--far-x', `${x * 0.18}px`)
+  element.style.setProperty('--far-y', `${y * 0.18}px`)
+  element.style.setProperty('--mid-x', `${x * 0.38}px`)
+  element.style.setProperty('--mid-y', `${y * 0.38}px`)
+  element.style.setProperty('--lake-x', `${x * 0.62}px`)
+  element.style.setProperty('--lake-y', `${y * 0.62}px`)
+  element.style.setProperty('--front-x', `${x}px`)
+  element.style.setProperty('--front-y', `${y}px`)
+}
 
 function handlePointerMove(event: PointerEvent) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || event.pointerType === 'touch') return
@@ -262,13 +259,13 @@ function handlePointerMove(event: PointerEvent) {
   const y = Math.max(-10, Math.min(10, ((event.clientY - bounds.top) / bounds.height - 0.5) * 20))
   cancelAnimationFrame(pointerFrame)
   pointerFrame = requestAnimationFrame(() => {
-    scenePosition.value = { x, y }
+    setScenePosition(element, x, y)
   })
 }
 
 function resetPointer() {
   cancelAnimationFrame(pointerFrame)
-  scenePosition.value = { x: 0, y: 0 }
+  if (heroRef.value) setScenePosition(heroRef.value, 0, 0)
 }
 
 function rankClass(index: number) {
@@ -380,6 +377,7 @@ onBeforeUnmount(() => {
   --lake-y: 0px;
   --front-x: 0px;
   --front-y: 0px;
+  contain: paint;
 }
 
 .hero-scene::after {
@@ -413,7 +411,8 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: #ffe38b;
   box-shadow: 0 0 0 1.5rem rgba(255, 227, 139, 0.14), 0 0 5rem 2rem rgba(255, 230, 153, 0.35);
-  animation: sun-breathe 6s ease-in-out infinite;
+  animation: sun-breathe 10s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .hero-glint {
@@ -421,10 +420,10 @@ onBeforeUnmount(() => {
   width: 15rem;
   height: 4rem;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.34);
-  filter: blur(1rem);
+  background: radial-gradient(ellipse, rgba(255, 255, 255, .42), rgba(255, 255, 255, .14) 48%, transparent 74%);
   transform: rotate(-22deg);
-  animation: glint-drift 9s ease-in-out infinite;
+  animation: glint-drift 14s ease-in-out infinite;
+  will-change: transform;
 }
 
 .hero-glint-one { left: 8%; top: 18%; }
@@ -449,7 +448,7 @@ onBeforeUnmount(() => {
 .scene-morning { --sky-top: #c1e2e9; --sky-middle: #e8f2ed; --sky-bottom: #f6f6df; --scene-copy: #164e63; --scene-copy-muted: rgba(22, 78, 99, .78); --scene-link: #155e75; --scene-title-one: #164e63; --scene-title-two: #075985; --scene-title-three: #166534; --scene-title-four: #9a3412; background: #dff4f3; }
 .scene-morning .hero-sky { background: linear-gradient(180deg, rgba(182, 225, 236, .4), rgba(238, 248, 242, .45)); }
 .scene-morning .hero-sun { right: 16%; top: 25%; background: #ffe6a2; box-shadow: 0 0 4rem 1.5rem rgba(255, 230, 162, .25); }
-.scene-morning .hero-mist { opacity: .7; background: linear-gradient(180deg, transparent 35%, rgba(241, 250, 248, .76) 62%, rgba(231, 244, 242, .36) 82%, transparent); filter: blur(.4rem); animation: mist-drift 18s ease-in-out infinite; }
+.scene-morning .hero-mist { opacity: .7; background: linear-gradient(180deg, transparent 35%, rgba(241, 250, 248, .76) 62%, rgba(231, 244, 242, .36) 82%, transparent); animation: mist-drift 28s ease-in-out infinite; }
 .scene-morning .landscape { filter: saturate(.78) brightness(1.04); }
 
 .scene-evening { --sky-top: #7199af; --sky-middle: #dcb886; --sky-bottom: #f6dca7; --scene-copy: #17324d; --scene-copy-muted: rgba(23, 50, 77, .84); --scene-link: #174e6d; --scene-title-one: #17324d; --scene-title-two: #124e78; --scene-title-three: #22543d; --scene-title-four: #8c3f1f; background: #b9d8df; }
@@ -473,7 +472,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.landscape-layer { transform-box: fill-box; transform-origin: center; transition: transform 700ms cubic-bezier(.2,.75,.25,1); }
+.landscape-layer { transform-box: fill-box; transform-origin: center; transition: transform 500ms cubic-bezier(.2,.75,.25,1); will-change: transform; }
 .layer-far { transform: translate3d(var(--far-x), var(--far-y), 0); }
 .layer-mid { transform: translate3d(var(--mid-x), var(--mid-y), 0); }
 .layer-lake { transform: translate3d(var(--lake-x), var(--lake-y), 0); }
@@ -481,9 +480,9 @@ onBeforeUnmount(() => {
 .layer-cloud-back { transform: translate3d(var(--far-x), var(--far-y), 0); }
 .layer-cloud-front { transform: translate3d(var(--mid-x), var(--mid-y), 0); }
 
-.cloud-drift-slow { animation: cloud-drift 32s linear infinite; }
-.cloud-drift-fast { animation: cloud-drift 22s linear infinite reverse; }
-.lake-shimmer { animation: lake-shimmer 8s ease-in-out infinite; }
+.cloud-drift-slow { animation: cloud-drift 44s linear infinite; }
+.cloud-drift-fast { animation: cloud-drift 34s linear infinite reverse; }
+.lake-shimmer { animation: lake-shimmer 14s ease-in-out infinite; }
 
 .hero-container { animation: hero-settle 700ms cubic-bezier(.18,.8,.25,1) both; }
 .hero-copy { animation: copy-enter 650ms cubic-bezier(.16,.8,.25,1) 100ms both; }
@@ -531,7 +530,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-puzzle-stage { animation: puzzle-stage-enter 800ms cubic-bezier(.18,.8,.25,1) 420ms both; perspective: 900px; }
-.puzzle-note { backface-visibility: hidden; transform-origin: center bottom; animation: note-enter 800ms cubic-bezier(.18,1.2,.3,1) both, note-float 6s ease-in-out 1.2s infinite; }
+.puzzle-note { backface-visibility: hidden; transform-origin: center bottom; animation: note-enter 800ms cubic-bezier(.18,1.2,.3,1) both, note-float 9s ease-in-out 1.2s infinite; will-change: transform; }
 .puzzle-note-back { --note-rotate: -9deg; animation-delay: 650ms, -1.4s; }
 .puzzle-note-middle { --note-rotate: 8deg; animation-delay: 760ms, -3.6s; }
 .puzzle-note-front { --note-rotate: -3deg; animation-delay: 870ms, -2.3s; }
@@ -558,7 +557,7 @@ onBeforeUnmount(() => {
 @keyframes title-pop { 0% { opacity: 0; transform: translate3d(0, 1.8rem, 0) rotateX(-65deg) rotateZ(-4deg); } 68% { opacity: 1; transform: translate3d(0, -.35rem, 0) rotateX(8deg) rotateZ(1deg); } 100% { opacity: 1; transform: translate3d(0, 0, 0) rotateX(0) rotateZ(0); } }
 @keyframes puzzle-stage-enter { from { opacity: 0; transform: translate3d(1.2rem, 1rem, 0) rotateY(-9deg); } to { opacity: 1; transform: translate3d(0, 0, 0) rotateY(0); } }
 @keyframes note-enter { from { opacity: 0; transform: translate3d(0, 2rem, 0) rotate(var(--note-rotate, 0deg)) scale(.86); } to { opacity: 1; transform: translate3d(0, 0, 0) rotate(var(--note-rotate, 0deg)) scale(1); } }
-@keyframes note-float { 0%, 100% { margin-top: 0; } 50% { margin-top: -.55rem; } }
+@keyframes note-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -.45rem; } }
 @keyframes sticker-pop { from { opacity: 0; transform: scale(.2) rotate(-30deg); } to { opacity: 1; transform: scale(1) rotate(12deg); } }
 @keyframes sticker-wiggle { 0%, 100% { rotate: 12deg; } 50% { rotate: 7deg; } }
 @keyframes sun-breathe { 0%, 100% { transform: scale(1); opacity: .86; } 50% { transform: scale(1.06); opacity: 1; } }
@@ -574,8 +573,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 639px) {
   .hero-sun { right: -2rem; top: 8%; width: 7rem; height: 7rem; }
-  .hero-glint-two, .cloud-drift-fast { display: none; }
-  .puzzle-note { padding: 1rem; }
+  .hero-glint, .cloud-drift-fast { display: none; }
+  .hero-sun, .hero-mist, .cloud-drift-slow, .lake-shimmer { animation: none; }
+  .puzzle-note { padding: 1rem; animation: note-enter 700ms cubic-bezier(.18,1.2,.3,1) both; }
+  .puzzle-note-back { animation-delay: 500ms; }
+  .puzzle-note-middle { animation-delay: 600ms; }
+  .puzzle-note-front { animation-delay: 700ms; }
+  .puzzle-sticker { animation: sticker-pop 600ms cubic-bezier(.2,1.45,.3,1) 900ms both; }
   .puzzle-note p { font-size: 1rem; line-height: 1.5rem; }
   .puzzle-note-back { left: 0; width: 76%; }
   .puzzle-note-middle { right: 0; width: 73%; }

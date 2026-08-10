@@ -62,4 +62,4 @@ def signin_day(now: datetime, timezone_name: str) -> date:
 
 def signin_reward(streak: int = 1) -> int:
     del streak
-    return random.randint(5, 15)
+    return random.randint(1, 150)
