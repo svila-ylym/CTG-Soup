@@ -85,8 +85,10 @@
           <h1 class="hero-title text-[3.25rem] font-black leading-[.94] text-sky-950 sm:text-[4.8rem] lg:text-[6.2rem] dark:text-white" aria-label="汤吧社区">
             <span v-for="(character, index) in titleCharacters" :key="`${character}-${index}`" class="hero-title-character" aria-hidden="true" :style="{ animationDelay: `${180 + index * 90}ms` }">{{ character }}</span>
           </h1>
-          <p class="hero-lede mt-7 max-w-xl text-base font-medium leading-7 text-sky-950/75 sm:text-xl sm:leading-8 dark:text-slate-200">
-            一碗汤，一群人，一场从“为什么”开始的推理冒险。读故事、问线索、把藏起来的真相一点点拼完整。
+          <p class="hero-lede mt-7 min-h-[5.25rem] max-w-xl text-base font-medium leading-7 text-sky-950/75 sm:min-h-16 sm:text-xl sm:leading-8 dark:text-slate-200">
+            <Transition name="hero-copy-carousel" mode="out-in">
+              <span :key="homeLineIndex" class="block">{{ currentHomeLine }}</span>
+            </Transition>
           </p>
           <div class="hero-actions mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
             <router-link to="/soups" class="hero-primary-button group inline-flex min-h-12 items-center gap-2 rounded-md bg-sky-700 px-5 py-3 font-bold text-white shadow-[0_8px_0_#155e75,0_15px_24px_rgba(14,116,144,.25)] transition hover:-translate-y-1 hover:bg-sky-600 hover:shadow-[0_10px_0_#155e75,0_19px_28px_rgba(14,116,144,.32)] active:translate-y-1 active:shadow-[0_4px_0_#155e75,0_9px_16px_rgba(14,116,144,.22)]">
@@ -225,6 +227,10 @@ const isLeaderboardPreviewLoading = ref(true)
 const leaderboardPreviewError = ref<string | null>(null)
 const heroRef = ref<HTMLElement | null>(null)
 const hitokotoText = ref('每一条线索都算数')
+const DEFAULT_HOME_LINE = '一碗汤，一群人，一场从“为什么”开始的推理冒险。读故事、问线索、把藏起来的真相一点点拼完整。'
+const homeLines = ref([DEFAULT_HOME_LINE])
+const homeLineIndex = ref(0)
+const currentHomeLine = computed(() => homeLines.value[homeLineIndex.value] || DEFAULT_HOME_LINE)
 type ScenePeriod = 'sunrise' | 'morning' | 'noon' | 'evening' | 'sunset' | 'night'
 const scenePeriod = ref<ScenePeriod>('noon')
 const sceneTransitioning = ref(false)
@@ -239,6 +245,7 @@ let hitokotoController: AbortController | null = null
 let hitokotoTimeout = 0
 let sceneClock = 0
 let sceneTransitionTimer = 0
+let homeLineClock = 0
 
 function setScenePosition(element: HTMLElement, x: number, y: number) {
   element.style.setProperty('--far-x', `${x * 0.18}px`)
@@ -339,11 +346,45 @@ async function loadHitokoto() {
   }
 }
 
+function startHomeLineCarousel() {
+  window.clearInterval(homeLineClock)
+  if (homeLines.value.length < 2) return
+  homeLineClock = window.setInterval(() => {
+    homeLineIndex.value = (homeLineIndex.value + 1) % homeLines.value.length
+  }, 6000)
+}
+
+async function loadHomeLines() {
+  try {
+    const response = await fetch('/api/home/lines', { headers: { Accept: 'application/json' } })
+    if (!response.ok) return
+
+    const payload: unknown = await response.json()
+    const values = payload && typeof payload === 'object'
+      ? (payload as { lines?: unknown }).lines
+      : null
+    if (!Array.isArray(values)) return
+
+    const lines = values
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+      .map((value) => value.trim())
+    if (!lines.length) return
+
+    homeLines.value = lines
+    homeLineIndex.value = 0
+  } catch {
+    // Keep the bundled fallback when the local content endpoint is unavailable.
+  } finally {
+    startHomeLineCarousel()
+  }
+}
+
 onMounted(() => {
   updateScenePeriod()
   sceneClock = window.setInterval(updateScenePeriod, 60_000)
   void loadLeaderboardPreview()
   void loadHitokoto()
+  void loadHomeLines()
 })
 
 onBeforeUnmount(() => {
@@ -351,6 +392,7 @@ onBeforeUnmount(() => {
   window.clearInterval(sceneClock)
   window.clearTimeout(sceneTransitionTimer)
   window.clearTimeout(hitokotoTimeout)
+  window.clearInterval(homeLineClock)
   hitokotoController?.abort()
   hitokotoController = null
   heroRef.value = null
@@ -500,6 +542,9 @@ onBeforeUnmount(() => {
 
 .hero-kicker { color: var(--scene-copy) !important; }
 .hero-lede { color: var(--scene-copy-muted) !important; }
+.hero-copy-carousel-enter-active, .hero-copy-carousel-leave-active { transition: opacity 260ms ease, transform 260ms ease; }
+.hero-copy-carousel-enter-from { opacity: 0; transform: translateY(.35rem); }
+.hero-copy-carousel-leave-to { opacity: 0; transform: translateY(-.35rem); }
 .hero-quick-links, .hero-quick-links a, .hero-scroll-cue { color: var(--scene-link) !important; }
 .hero-quick-links a:hover, .hero-scroll-cue:hover { color: var(--scene-copy) !important; }
 .hero-secondary-button {
@@ -595,5 +640,6 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .hero-sun, .hero-glint, .cloud-drift-slow, .cloud-drift-fast, .lake-shimmer, .hero-container, .hero-copy, .hero-kicker, .hero-lede, .hero-actions, .hero-quick-links, .hero-title-character, .hero-puzzle-stage, .puzzle-note, .puzzle-sticker, .hero-scroll-cue, .feature-card, .soup-card, .soup-loader, .soup-loader span, .soup-loader span::after { animation: none !important; transition: opacity 120ms ease !important; }
   .landscape-layer { transition: none; transform: none !important; }
+  .hero-copy-carousel-enter-active, .hero-copy-carousel-leave-active { transition: none; }
 }
 </style>
