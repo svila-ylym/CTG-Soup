@@ -123,7 +123,12 @@ async def update_me(
     if user_data.bio is not None:
         current_user.bio = user_data.bio
     if user_data.notice_preferences is not None:
-        current_user.notification_prefs = user_data.notice_preferences
+        preferences = dict(user_data.notice_preferences)
+        existing_preferences = dict(current_user.notification_prefs or {})
+        for key in ("profile_background_asset_id", "profile_background_url"):
+            if key in existing_preferences:
+                preferences[key] = existing_preferences[key]
+        current_user.notification_prefs = preferences
     
     current_user.updated_at = datetime.utcnow()
     db.commit()

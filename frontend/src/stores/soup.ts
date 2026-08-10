@@ -145,6 +145,12 @@ export const useSoupStore = defineStore('soup', () => {
     }
   }
 
+  // 获取首页预览，不改写排行榜页面使用的完整榜单缓存。
+  async function fetchLeaderboardPreview(limit = 10) {
+    const res = await soupApi.getLeaderboard({ limit })
+    return res.data.items
+  }
+
   // 搜索
   async function search(keyword: string, page = 1, pageSize = 20) {
     isLoading.value = true
@@ -179,6 +185,7 @@ export const useSoupStore = defineStore('soup', () => {
     toggleLike,
     toggleFavorite,
     fetchLeaderboard,
+    fetchLeaderboardPreview,
     search,
     clearCurrent,
   }

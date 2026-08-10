@@ -166,12 +166,12 @@
           <router-link to="/leaderboard" class="group inline-flex items-center gap-2 text-sm font-bold text-sky-700 transition hover:text-sky-500 dark:text-sky-300">打开完整榜单 <ArrowRightIcon class="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" /></router-link>
         </div>
 
-        <div v-if="soupStore.isLoading" class="loading-bowl flex min-h-64 items-center justify-center rounded-md border border-sky-100 bg-white/70 dark:border-slate-800 dark:bg-slate-900/70">
+        <div v-if="isLeaderboardPreviewLoading" class="loading-bowl flex min-h-64 items-center justify-center rounded-md border border-sky-100 bg-white/70 dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex flex-col items-center gap-4 text-sm font-bold text-sky-700 dark:text-sky-300"><span class="soup-loader" aria-hidden="true"><span></span></span><span>正在把好汤端上来…</span></div>
         </div>
-        <div v-else-if="soupStore.error" class="rounded-md border border-rose-200 bg-rose-50 p-8 text-center text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">热门汤暂时没端上来，去列表看看吧。</div>
-        <div v-else-if="soupStore.leaderboard.length" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          <article v-for="(soup, index) in soupStore.leaderboard.slice(0, 6)" :key="soup.id" class="soup-card group relative cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white p-6 shadow-[5px_7px_0_rgba(86,139,165,.12)] transition hover:-translate-y-2 hover:shadow-[9px_13px_0_rgba(86,139,165,.2)] dark:border-slate-800 dark:bg-slate-950" :style="{ animationDelay: `${index * 80 + 120}ms` }" @click="$router.push(`/soups/${soup.id}`)">
+        <div v-else-if="leaderboardPreviewError" class="rounded-md border border-rose-200 bg-rose-50 p-8 text-center text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">热门汤暂时没端上来，去列表看看吧。</div>
+        <div v-else-if="leaderboardPreview.length" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <article v-for="(soup, index) in leaderboardPreview.slice(0, 6)" :key="soup.id" class="soup-card group relative cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white p-6 shadow-[5px_7px_0_rgba(86,139,165,.12)] transition hover:-translate-y-2 hover:shadow-[9px_13px_0_rgba(86,139,165,.2)] dark:border-slate-800 dark:bg-slate-950" :style="{ animationDelay: `${index * 80 + 120}ms` }" @click="$router.push(`/soups/${soup.id}`)">
             <div class="flex items-start justify-between gap-4">
               <span class="rank-badge flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-black text-white" :class="rankClass(index)">{{ index + 1 }}</span>
               <span class="inline-flex items-center gap-1 text-sm font-black text-amber-500"><StarIcon class="h-4 w-4" aria-hidden="true" />{{ soup.average_score.toFixed(1) }}</span>
@@ -209,9 +209,13 @@ import {
 } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
+import type { TurtleSoup } from '@/types'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const soupStore = useSoupStore()
+const leaderboardPreview = ref<TurtleSoup[]>([])
+const isLeaderboardPreviewLoading = ref(true)
+const leaderboardPreviewError = ref<string | null>(null)
 const heroRef = ref<HTMLElement | null>(null)
 const scenePosition = ref({ x: 0, y: 0 })
 const hitokotoText = ref('每一条线索都算数')
@@ -285,6 +289,18 @@ function updateScenePeriod() {
   else scenePeriod.value = 'night'
 }
 
+async function loadLeaderboardPreview() {
+  isLeaderboardPreviewLoading.value = true
+  leaderboardPreviewError.value = null
+  try {
+    leaderboardPreview.value = await soupStore.fetchLeaderboardPreview(10)
+  } catch {
+    leaderboardPreviewError.value = '获取排行榜失败'
+  } finally {
+    isLeaderboardPreviewLoading.value = false
+  }
+}
+
 async function loadHitokoto() {
   hitokotoController?.abort()
   const controller = new AbortController()
@@ -313,7 +329,7 @@ async function loadHitokoto() {
 onMounted(() => {
   updateScenePeriod()
   sceneClock = window.setInterval(updateScenePeriod, 60_000)
-  void soupStore.fetchLeaderboard(10).catch(() => undefined)
+  void loadLeaderboardPreview()
   void loadHitokoto()
 })
 
@@ -500,10 +516,9 @@ onBeforeUnmount(() => {
 }
 
 :global(.dark) .hero-scene { border-color: #193247; }
-:global(.dark) .hero-sky { background: linear-gradient(135deg, rgba(24, 103, 132, .18), transparent 45%), linear-gradient(180deg, rgba(4, 14, 24, .08), rgba(3, 11, 20, .62)); }
-:global(.dark) .hero-sun { background: #f5c75c; box-shadow: 0 0 0 1.5rem rgba(245, 199, 92, .08), 0 0 5rem 2rem rgba(245, 199, 92, .16); }
-:global(.dark) .scene-noon .landscape { filter: brightness(.78) saturate(.9) contrast(1.04); opacity: .94; }
-:global(.dark) .hero-scene:not(.scene-night) .landscape { filter: brightness(.64) saturate(.86) contrast(1.06); opacity: .92; }
+:global(.dark) .hero-scene:not(.scene-night) .hero-sky { opacity: .88; }
+:global(.dark) .hero-scene:not(.scene-night) .hero-sun { filter: brightness(.92) saturate(.9); }
+:global(.dark) .hero-scene:not(.scene-night) .landscape { opacity: .92; }
 :global(.dark) .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #2b7588, 0 4px 0 #20596d, 0 6px 0 #153d50, 0 9px 0 rgba(1, 11, 18, .48), 0 17px 24px rgba(0, 0, 0, .42); }
 :global(.dark) .hero-title-character:nth-child(2) { color: #67d8f0; }
 :global(.dark) .hero-title-character:nth-child(3) { color: #7ce0b2; }
