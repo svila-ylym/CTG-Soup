@@ -519,7 +519,7 @@ onBeforeUnmount(() => {
 :global(.dark) .hero-scene:not(.scene-night) .hero-sky { opacity: .88; }
 :global(.dark) .hero-scene:not(.scene-night) .hero-sun { filter: brightness(.92) saturate(.9); }
 :global(.dark) .hero-scene:not(.scene-night) .landscape { opacity: .92; }
-:global(.dark) .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #2b7588, 0 4px 0 #20596d, 0 6px 0 #153d50, 0 9px 0 rgba(1, 11, 18, .48), 0 17px 24px rgba(0, 0, 0, .42); }
+:global(.dark) .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #27667a, 0 10px 18px rgba(0, 0, 0, .34); }
 :global(.dark) .hero-title-character:nth-child(2) { color: #67d8f0; }
 :global(.dark) .hero-title-character:nth-child(3) { color: #7ce0b2; }
 :global(.dark) .hero-title-character:nth-child(4) { color: #ffc16f; }
