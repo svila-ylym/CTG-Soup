@@ -77,6 +77,7 @@
 
       <div class="hero-container relative z-10 mx-auto grid min-h-[36rem] max-w-7xl items-center gap-8 px-5 pb-16 pt-14 sm:min-h-[40rem] sm:px-8 sm:pt-16 lg:min-h-[43rem] lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,.95fr)] lg:gap-12 lg:px-10 lg:pb-20">
         <div class="hero-copy max-w-2xl">
+          <p v-if="accountStatus" class="mb-4 w-fit border px-3 py-1.5 text-sm font-black" :class="accountStatus.className">{{ accountStatus.label }}</p>
           <p class="hero-kicker mb-5 inline-flex max-w-full items-center gap-2 text-sm font-bold text-sky-800 sm:text-base dark:text-cyan-200">
             <SparklesIcon class="h-5 w-5" aria-hidden="true" />
             <span class="min-w-0 break-words">情境推理 · {{ hitokotoText }}</span>
@@ -209,10 +210,17 @@ import {
 } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
+import { useAuthStore } from '@/stores/auth'
 import type { TurtleSoup } from '@/types'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const soupStore = useSoupStore()
+const authStore = useAuthStore()
+const accountStatus = computed(() => (authStore.user?.status || authStore.restrictionStatus) === 'banned'
+  ? { label: '已封禁', className: 'border-red-300 bg-red-50 text-red-700' }
+  : (authStore.user?.status || authStore.restrictionStatus) === 'silenced'
+    ? { label: '已禁言', className: 'border-amber-300 bg-amber-50 text-amber-800' }
+    : null)
 const leaderboardPreview = ref<TurtleSoup[]>([])
 const isLeaderboardPreviewLoading = ref(true)
 const leaderboardPreviewError = ref<string | null>(null)

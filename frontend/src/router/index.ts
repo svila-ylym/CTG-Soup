@@ -152,6 +152,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotificationView.vue'),
     meta: { title: '通知', requiresAuth: true },
   },
+  {
+    path: '/error/:code(4\\d\\d|5\\d\\d)',
+    name: 'Error',
+    component: () => import('@/views/ErrorView.vue'),
+    meta: { title: '错误' },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/ErrorView.vue'),
+    meta: { title: '页面不存在' },
+  },
 ]
 
 const router = createRouter({

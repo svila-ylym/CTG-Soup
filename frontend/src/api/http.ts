@@ -33,6 +33,9 @@ class HttpClient {
           localStorage.removeItem('refresh_token')
           window.location.href = '/login'
         }
+        if (error.response?.status >= 500 && !window.location.pathname.startsWith('/error/')) {
+          window.location.href = '/error/500'
+        }
         return Promise.reject(error)
       }
     )

@@ -7,6 +7,7 @@ import { tagApi } from '@/api/tags'
 import { extractApiError } from '@/utils/auth'
 import { chinaLocalDateTimeToUtcIso } from '@/utils/datetime'
 import type { Competition, CompetitionCreate, Tag } from '@/types'
+import CompetitionRichTextEditor from '@/components/CompetitionRichTextEditor.vue'
 
 const router = useRouter()
 const tags = ref<Tag[]>([])
@@ -23,6 +24,7 @@ const form = reactive<{
   required_tag_ids: number[]
   custom_tags: string[]
   top_n: number
+  image_asset_ids: number[]
 }>({
   name: '',
   description: '',
@@ -31,6 +33,7 @@ const form = reactive<{
   required_tag_ids: [],
   custom_tags: [],
   top_n: 10,
+  image_asset_ids: [],
 })
 const keywordCount = computed(() => form.required_tag_ids.length + form.custom_tags.length)
 
@@ -98,7 +101,7 @@ async function submit() {
       custom_tags: form.custom_tags,
       score_type: 'average',
       top_n: form.top_n,
-      custom_page_config: {},
+      custom_page_config: { format: 'rich_html', image_asset_ids: form.image_asset_ids },
     }
     const response = await http.post<Competition>('/competitions', payload)
     await router.push(`/competitions/${response.data.id}`)
@@ -130,7 +133,7 @@ onMounted(loadTags)
 
         <label class="block">
           <span class="mb-2 block text-sm font-medium">比赛说明</span>
-          <textarea v-model="form.description" class="form-control min-h-40 resize-y" maxlength="5000" required></textarea>
+          <CompetitionRichTextEditor v-model="form.description" v-model:image-asset-ids="form.image_asset_ids" />
         </label>
 
         <div class="grid gap-5 sm:grid-cols-2">

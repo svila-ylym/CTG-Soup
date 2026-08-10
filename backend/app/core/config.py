@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # 应用配置
     APP_NAME: str = "汤吧社区"
-    APP_VERSION: str = "1.1.0"
+    APP_VERSION: str = "1.2.0"
     DEBUG: bool = True
     APP_URL: Optional[str] = "http://localhost:10000"  # 前端地址
     PUBLIC_WEB_URL: Optional[str] = None

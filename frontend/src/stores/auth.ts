@@ -10,6 +10,9 @@ export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string>(localStorage.getItem('access_token') || '')
   const refreshToken = ref<string>(localStorage.getItem('refresh_token') || '')
   const isLoading = ref(false)
+  const restrictionStatus = ref<'banned' | 'silenced' | null>(
+    localStorage.getItem('account_restriction') as 'banned' | 'silenced' | null,
+  )
 
   const isAuthenticated = computed(() => !!accessToken.value && !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin' || user.value?.role === 'root')
@@ -23,9 +26,16 @@ export const useAuthStore = defineStore('auth', () => {
       logout()
       setTokens(res.data)
       await fetchCurrentUser()
+      restrictionStatus.value = user.value?.status === 'silenced' ? 'silenced' : null
+      if (restrictionStatus.value) localStorage.setItem('account_restriction', restrictionStatus.value)
+      else localStorage.removeItem('account_restriction')
       return { success: true }
     } catch (error: any) {
-      return { success: false, message: extractApiError(error, '登录失败') }
+      const message = extractApiError(error, '登录失败')
+      if (message.includes('封禁')) restrictionStatus.value = 'banned'
+      else if (message.includes('禁言')) restrictionStatus.value = 'silenced'
+      if (restrictionStatus.value) localStorage.setItem('account_restriction', restrictionStatus.value)
+      return { success: false, message }
     } finally {
       isLoading.value = false
     }
@@ -99,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isRoot,
+    restrictionStatus,
     login,
     register,
     logout,

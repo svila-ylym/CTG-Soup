@@ -7,8 +7,10 @@ import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
 import { formatChinaDateTime, parseUtcDateTime } from '@/utils/datetime'
 import type { Competition } from '@/types'
+import DOMPurify from 'dompurify'
 const route = useRoute(); const router = useRouter(); const competition = ref<Competition | null>(null); const loading = ref(true); const error = ref(''); const settling = ref(false); const settleMessage = ref('')
 const auth = useAuthStore()
+const safeDescription = computed(() => DOMPurify.sanitize(competition.value?.description || '', { USE_PROFILES: { html: true }, ADD_TAGS: ['img'], ADD_ATTR: ['src', 'alt', 'title'] }))
 const canSettle = computed(() => auth.isAdmin
   && competition.value !== null
   && competition.value.settled_at === null
@@ -35,7 +37,7 @@ onMounted(load)
             </div>
             <span class="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">{{ competition.status }}</span>
           </div>
-          <p class="mt-6 break-words whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{{ competition.description }}</p>
+          <div class="competition-description mt-6 break-words leading-7 text-slate-700 dark:text-slate-200" v-html="safeDescription"></div>
           <dl class="mt-8 grid gap-4 border-t border-slate-200 pt-6 sm:grid-cols-3">
             <div><dt class="text-sm text-slate-500">时间（UTC+8）</dt><dd class="mt-1 text-sm">{{ formatChinaDateTime(competition.start_time) }}<br>至 {{ formatChinaDateTime(competition.end_time) }}</dd></div>
             <div><dt class="text-sm text-slate-500">评分方式</dt><dd class="mt-1">平均分 · 前 {{ competition.top_n }} 名</dd></div>

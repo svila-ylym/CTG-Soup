@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List, Sequence
 from fastapi import HTTPException, status
 import logging
+from html import escape
 
 from app.core.config import get_settings
 
@@ -313,7 +314,10 @@ class SMTPService:
         }
         
         icon = type_icons.get(notification_type, "📧")
-        
+        safe_username = escape(username)
+        safe_title = escape(title)
+        safe_content = escape(content).replace("\n", "<br>")
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -331,13 +335,13 @@ class SMTPService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{icon} {title}</h1>
+                    <h1>{icon} {safe_title}</h1>
                     <p>您有一条新的通知</p>
                 </div>
                 <div class="content">
-                    <h2>亲爱的 {username}：</h2>
+                    <h2>亲爱的 {safe_username}：</h2>
                     <div class="notification">
-                        <p>{content}</p>
+                        <p>{safe_content}</p>
                     </div>
                     <p>登录汤吧社区查看更多详情。</p>
                 </div>

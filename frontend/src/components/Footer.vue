@@ -15,7 +15,7 @@
         <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>&copy; 2026 汤吧社区</span>
           <span class="text-slate-400 dark:text-neutral-600" aria-hidden="true">·</span>
-          <span>版本 1.1.0</span>
+          <span>版本 1.2.0</span>
         </p>
       </div>
     </div>

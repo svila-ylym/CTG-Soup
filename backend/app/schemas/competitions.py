@@ -9,7 +9,7 @@ from app.schemas.common import PageResponse
 
 class CompetitionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    description: str = Field(min_length=1, max_length=5000)
+    description: str = Field(min_length=1, max_length=50000)
     start_time: datetime
     end_time: datetime
     required_tag_ids: list[int] = Field(default_factory=list)

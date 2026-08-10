@@ -24,6 +24,7 @@ from app.api.system_messages import admin_router as system_message_admin_router
 from app.schemas.email_campaigns import EmailCampaignCreate, EmailCampaignPage, EmailCampaignSummary
 from app.services.email_campaigns import cancel_campaign, campaign_summary, create_campaign, queue_campaign
 from app.services.pending_accounts import lock_uid_allocation
+from app.services.notification_dispatch import notify_user, notify_users
 from sqlmodel import select
 
 router = APIRouter()
@@ -486,6 +487,41 @@ async def submit_report(
         reason=data.reason.strip(),
     )
     db.add(report)
+    db.flush()
+    reporter_content = f"你的举报 #{report.id} 已提交，管理员会尽快处理。"
+    notify_user(
+        db,
+        current_user,
+        NotificationType.REPORT_RESULT,
+        "举报已提交",
+        reporter_content,
+        related_entity_type="report",
+        related_entity_id=report.id,
+    )
+    if target.author_uid:
+        target_user = db.get(User, target.author_uid)
+        notify_user(
+            db,
+            target_user,
+            NotificationType.REPORT_RESULT,
+            "收到举报提醒",
+            f"你的内容或账号收到举报 #{report.id}，管理员将进行审核。",
+            related_entity_type="report",
+            related_entity_id=report.id,
+        )
+    admins = db.query(User).filter(
+        User.role.in_([UserRole.ADMIN, UserRole.ROOT]),
+        User.status.in_([UserStatus.ACTIVE, UserStatus.SILENCED]),
+    ).all()
+    notify_users(
+        db,
+        admins,
+        NotificationType.REPORT_RESULT,
+        "新的举报",
+        f"用户 @{current_user.username} 提交了举报 #{report.id}，目标为 {target.target_type.value} #{target.target_id}。",
+        related_entity_type="report",
+        related_entity_id=report.id,
+    )
     db.commit()
     db.refresh(report)
     return report
@@ -525,14 +561,29 @@ async def decide_report_endpoint(
         target_id=report.id,
         details={"accepted": data.accepted, "result": data.result},
     ))
-    db.add(Notification(
-        recipient_uid=report.reporter_uid,
-        notification_type=NotificationType.REPORT_RESULT,
-        title="举报处理结果",
-        content=f"你提交的举报 #{report.id} 已{'采纳' if data.accepted else '驳回'}：{report.handle_result}",
+    decision_label = "采纳" if data.accepted else "未采纳"
+    decision_content = f"你提交的举报 #{report.id} 已{decision_label}：{report.handle_result}。操作人：@{current_user.username}（UID {current_user.uid}）"
+    reporter = db.get(User, report.reporter_uid)
+    notify_user(
+        db,
+        reporter,
+        NotificationType.REPORT_RESULT,
+        "举报处理结果",
+        decision_content,
         related_entity_type="report",
         related_entity_id=report.id,
-    ))
+    )
+    target = inspect_report_target(db, report.target_type, report.target_id)
+    if target.author_uid and target.author_uid != report.reporter_uid:
+        notify_user(
+            db,
+            db.get(User, target.author_uid),
+            NotificationType.REPORT_RESULT,
+            "举报处理结果",
+            f"涉及你的举报 #{report.id} 已{decision_label}。操作人：@{current_user.username}（UID {current_user.uid}）",
+            related_entity_type="report",
+            related_entity_id=report.id,
+        )
     db.commit()
     db.refresh(report)
     return report
@@ -796,14 +847,16 @@ async def create_punishment(
         details={"punishment_type": punishment_type.value, "reason": reason},
     )
     db.add(log)
-    db.add(Notification(
-        recipient_uid=target_user.uid,
-        notification_type=NotificationType.PUNISHMENT,
-        title="账号处罚通知",
-        content=f"你的账号受到{('封禁' if punishment_type == PunishmentType.BAN else '禁言' if punishment_type == PunishmentType.SILENCE else '处罚')}：{reason}",
+    action_label = '封禁' if punishment_type == PunishmentType.BAN else '禁言' if punishment_type == PunishmentType.SILENCE else '处罚'
+    notify_user(
+        db,
+        target_user,
+        NotificationType.PUNISHMENT,
+        "账号处罚通知",
+        f"你的账号受到{action_label}：{reason}。操作人：@{current_user.username}（UID {current_user.uid}）",
         related_entity_type="punishment",
         related_entity_id=db_punishment.id,
-    ))
+    )
 
     db.commit()
     db.refresh(db_punishment)
@@ -881,14 +934,15 @@ async def revoke_punishment(
     )
     db.add(log)
     if target_user:
-        db.add(Notification(
-            recipient_uid=target_user.uid,
-            notification_type=NotificationType.PUNISHMENT_REVOKED,
-            title="处罚已撤销",
-            content=f"处罚 #{punishment.id} 已撤销：{punishment.revoke_reason}",
+        notify_user(
+            db,
+            target_user,
+            NotificationType.PUNISHMENT_REVOKED,
+            "处罚已撤销",
+            f"处罚 #{punishment.id} 已撤销：{punishment.revoke_reason}。操作人：@{current_user.username}（UID {current_user.uid}）",
             related_entity_type="punishment",
             related_entity_id=punishment.id,
-        ))
+        )
 
     db.commit()
 

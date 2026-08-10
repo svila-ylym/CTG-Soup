@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +12,7 @@ from app.models.database import (
     CompetitionStatus,
     OperationLog,
     User,
+    UploadedAsset,
     get_db,
 )
 from app.schemas.competitions import (
@@ -25,6 +27,7 @@ from app.services.competition_entries import (
     settle_competition,
 )
 from app.services.tag_resolution import TagSelectionError, resolve_active_tags
+from app.services.safe_html import sanitize_rich_html
 
 router = APIRouter()
 
@@ -113,6 +116,36 @@ def create_competition(
             detail={"code": code, "message": exc.message},
         ) from exc
 
+    description = sanitize_rich_html(data.description)
+    text_description = re.sub(r"<[^>]+>", "", description).strip()
+    if not text_description and "<img" not in description:
+        raise HTTPException(status_code=422, detail="比赛说明不能为空")
+    image_asset_ids = [
+        int(value)
+        for value in data.custom_page_config.get("image_asset_ids", [])
+        if str(value).isdigit()
+    ]
+    if len(set(image_asset_ids)) > 20:
+        raise HTTPException(status_code=422, detail="比赛图片最多 20 张")
+    owned_urls: set[str] = set()
+    if image_asset_ids:
+        owned = db.exec(
+            select(UploadedAsset).where(
+                UploadedAsset.owner_uid == current_user.uid,
+                UploadedAsset.id.in_(list(set(image_asset_ids))),
+            )
+        ).all()
+        if len(owned) != len(set(image_asset_ids)):
+            raise HTTPException(status_code=403, detail="比赛图片必须使用本人上传的图片")
+        owned_urls = {asset.public_url for asset in owned}
+    image_sources = set(re.findall(r"<img[^>]+src=[\"']([^\"']+)[\"']", description, flags=re.IGNORECASE))
+    if any(source not in owned_urls for source in image_sources):
+        raise HTTPException(status_code=422, detail="比赛正文图片必须来自已上传的图片")
+    custom_page_config = dict(data.custom_page_config)
+    custom_page_config.update({
+        "format": "rich_html",
+        "image_asset_ids": list(dict.fromkeys(image_asset_ids)),
+    })
     now = datetime.utcnow()
     current_status = (
         CompetitionStatus.PENDING
@@ -124,13 +157,13 @@ def create_competition(
     competition = Competition(
         creator_uid=current_user.uid,
         name=data.name.strip(),
-        description=data.description.strip(),
+        description=description,
         start_time=data.start_time,
         end_time=data.end_time,
         required_tag_ids=[tag.id for tag in tags],
         score_type=data.score_type,
         top_n=data.top_n,
-        custom_page_config=data.custom_page_config,
+        custom_page_config=custom_page_config,
         status=current_status,
     )
     db.add(competition)
