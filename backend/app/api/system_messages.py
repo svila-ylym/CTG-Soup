@@ -34,6 +34,7 @@ from app.schemas.system_messages import (
     SystemMessageSendResponse,
 )
 from app.services.safe_markdown import render_safe_markdown
+from app.services.message_gateway import message_gateway
 
 
 router = APIRouter()
@@ -136,21 +137,25 @@ def _message_detail_payload(
 def list_system_messages(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    unread_only: bool = False,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    recipient_filters = [SystemMessageRecipient.user_uid == current_user.uid]
+    if unread_only:
+        recipient_filters.append(SystemMessageRecipient.read_at.is_(None))
     base = (
         select(SystemMessageRecipient, SystemMessage)
         .join(
             SystemMessage,
             SystemMessage.id == SystemMessageRecipient.system_message_id,
         )
-        .where(SystemMessageRecipient.user_uid == current_user.uid)
+        .where(*recipient_filters)
     )
     total = db.exec(
         select(func.count())
         .select_from(SystemMessageRecipient)
-        .where(SystemMessageRecipient.user_uid == current_user.uid)
+        .where(*recipient_filters)
     ).one()
     rows = db.exec(
         base.order_by(SystemMessage.created_at.desc(), SystemMessage.id.desc())
@@ -410,7 +415,7 @@ def _selected_attachments(
     response_model=SystemMessageSendResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def send_system_message(
+async def send_system_message(
     data: SystemMessageCreate,
     current_user: User = Depends(get_current_root_user),
     db: Session = Depends(get_db),
@@ -451,6 +456,15 @@ def send_system_message(
     )
     db.commit()
     db.refresh(message)
+    await message_gateway.broadcast(
+        message.id,
+        {
+            "type": "system_message.created",
+            "system_message_id": message.id,
+            "created_at": message.created_at,
+        },
+        recipient_uids={user.uid for user in recipients},
+    )
     return {
         "id": message.id,
         "title": message.title,

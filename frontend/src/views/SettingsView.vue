@@ -30,8 +30,10 @@ const profile = reactive({ nickname: '', email: '', bio: '' })
 const password = reactive({ old: '', next: '', confirm: '' })
 const selectedAvatarId = ref<number | null>(null)
 const avatarChanged = ref(false)
+const selectedBackgroundId = ref<number | null>(null)
+const backgroundChanged = ref(false)
 const assets = ref<UploadedAsset[]>([])
-const allowBulkEmail = ref(false)
+const allowBulkEmail = ref(true)
 const themePreference = ref<ThemePreference>('system')
 const busy = ref(false)
 const uploading = ref(false)
@@ -44,7 +46,8 @@ function populate(user: User | null) {
   profile.email = user.email
   profile.bio = user.bio || ''
   selectedAvatarId.value = user.avatar_asset_id ?? null
-  allowBulkEmail.value = user.allow_bulk_email ?? false
+  selectedBackgroundId.value = user.profile_background_asset_id ?? null
+  allowBulkEmail.value = user.allow_bulk_email ?? true
   themePreference.value = user.theme_preference || 'system'
 }
 
@@ -69,9 +72,11 @@ async function saveProfile() {
       bio: profile.bio,
     }
     if (avatarChanged.value) payload.avatar_asset_id = selectedAvatarId.value
+    if (backgroundChanged.value) payload.profile_background_asset_id = selectedBackgroundId.value
     const response = await http.put<User>('/users/me', payload)
     auth.setUser(response.data)
     avatarChanged.value = false
+    backgroundChanged.value = false
     message.value = '资料已保存'
   } catch (reason) {
     error.value = extractApiError(reason, '保存失败')
@@ -94,6 +99,31 @@ async function uploadAvatar(event: Event) {
     message.value = '头像已上传，保存资料后生效'
   } catch (reason) {
     error.value = extractApiError(reason, '头像上传失败')
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+function selectBackground(assetId: number | null) {
+  selectedBackgroundId.value = assetId
+  backgroundChanged.value = true
+}
+
+async function uploadBackground(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploading.value = true
+  clearFeedback()
+  try {
+    const result = (await uploadApi.image(file)).data
+    await loadAssets()
+    selectedBackgroundId.value = result.asset_id
+    backgroundChanged.value = true
+    message.value = '背景图已上传，保存资料后生效'
+  } catch (reason) {
+    error.value = extractApiError(reason, '背景图上传失败')
   } finally {
     uploading.value = false
     input.value = ''
@@ -207,6 +237,31 @@ onMounted(async () => {
             </label>
           </div>
 
+          <div>
+            <span class="mb-2 block text-sm font-medium">个人主页背景图</span>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <button
+                v-for="asset in assets"
+                :key="`background-${asset.id}`"
+                class="aspect-[16/7] overflow-hidden rounded-md border-2 bg-slate-100 shadow-sm dark:bg-neutral-900"
+                :class="selectedBackgroundId === asset.id ? 'border-blue-600' : 'border-transparent'"
+                type="button"
+                :aria-label="`选择背景图 ${asset.id}`"
+                @click="selectBackground(asset.id)"
+              >
+                <img :src="asset.public_url" alt="" class="h-full w-full object-cover transition hover:scale-105">
+              </button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-3">
+              <label class="btn-secondary inline-flex cursor-pointer">
+                {{ uploading ? '上传中…' : '上传背景图' }}
+                <input class="sr-only" type="file" accept="image/jpeg,image/png,image/gif,image/webp" :disabled="uploading" @change="uploadBackground">
+              </label>
+              <button v-if="selectedBackgroundId !== null" class="btn-secondary" type="button" @click="selectBackground(null)">移除背景图</button>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">背景图只使用你上传的图片，并会显示在个人主页头部。</p>
+          </div>
+
           <label class="block">
             <span class="mb-2 block text-sm font-medium">昵称</span>
             <input v-model.trim="profile.nickname" class="form-control" required maxlength="50">
@@ -239,7 +294,7 @@ onMounted(async () => {
           <input v-model="allowBulkEmail" class="mt-1 h-4 w-4" type="checkbox">
           <span>
             <strong class="block text-sm">接收社区批量邮件</strong>
-            <span class="mt-1 block text-sm text-slate-500">仅在主动开启后接收管理员发布的活动和社区邮件。</span>
+            <span class="mt-1 block text-sm text-slate-500">用于接收管理员发布的活动和社区邮件，可随时关闭。</span>
           </span>
         </label>
         <button class="btn-primary mt-5" :disabled="busy" @click="savePreferences({ allow_bulk_email: allowBulkEmail })">保存通知设置</button>

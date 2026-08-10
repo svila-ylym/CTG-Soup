@@ -12,19 +12,31 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue'),
-    meta: { title: '登录', requiresAuth: false },
+    meta: { title: '登录', guestOnly: true },
   },
   {
     path: '/register',
     name: 'Register',
     component: () => import('@/views/RegisterView.vue'),
-    meta: { title: '注册', requiresAuth: false },
+    meta: { title: '注册', guestOnly: true },
   },
   {
     path: '/verify-email',
     name: 'VerifyEmail',
     component: () => import('@/views/VerifyEmailView.vue'),
     meta: { title: '邮箱验证', requiresAuth: false },
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPasswordView.vue'),
+    meta: { title: '忘记密码', requiresAuth: false },
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPasswordView.vue'),
+    meta: { title: '重置密码', requiresAuth: false },
   },
   {
     path: '/soups',
@@ -37,6 +49,12 @@ const routes: RouteRecordRaw[] = [
     name: 'CreateSoup',
     component: () => import('@/views/SoupCreateView.vue'),
     meta: { title: '发布海龟汤', requiresAuth: true },
+  },
+  {
+    path: '/soups/:id/edit',
+    name: 'EditSoup',
+    component: () => import('@/views/SoupEditView.vue'),
+    meta: { title: '修改海龟汤', requiresAuth: true },
   },
   {
     path: '/soups/:id',
@@ -57,6 +75,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '论坛' },
   },
   {
+    path: '/posts/:id/edit',
+    name: 'EditPost',
+    component: () => import('@/views/PostEditView.vue'),
+    meta: { title: '修改帖子', requiresAuth: true },
+  },
+  {
     path: '/posts/:id',
     name: 'PostDetail',
     component: () => import('@/views/PostDetailView.vue'),
@@ -73,6 +97,12 @@ const routes: RouteRecordRaw[] = [
     name: 'CreateCompetition',
     component: () => import('@/views/CompetitionCreateView.vue'),
     meta: { title: '发布比赛', requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/competitions/:id/edit',
+    name: 'EditCompetition',
+    component: () => import('@/views/CompetitionCreateView.vue'),
+    meta: { title: '修改比赛', requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/competitions/:id',
@@ -128,6 +158,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotificationView.vue'),
     meta: { title: '通知', requiresAuth: true },
   },
+  {
+    path: '/error/:code(4\\d\\d|5\\d\\d)',
+    name: 'Error',
+    component: () => import('@/views/ErrorView.vue'),
+    meta: { title: '错误' },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/ErrorView.vue'),
+    meta: { title: '页面不存在' },
+  },
 ]
 
 const router = createRouter({
@@ -142,11 +184,17 @@ router.beforeEach((to, _from, next) => {
   
   const token = localStorage.getItem('access_token')
   const requiresAuth = to.meta.requiresAuth === true
+  const guestOnly = to.meta.guestOnly === true
   const requiresAdmin = to.meta.requiresAdmin === true
   const requiresRoot = to.meta.requiresRoot === true
   
   if (requiresAuth && !token) {
     next({ name: 'Login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  if (guestOnly && token) {
+    next({ name: 'Home' })
     return
   }
   

@@ -130,11 +130,11 @@ export const useSoupStore = defineStore('soup', () => {
   }
 
   // 获取排行榜
-  async function fetchLeaderboard(limit = 10, type: 'average' | 'bayesian' = 'bayesian') {
+  async function fetchLeaderboard(limit = 10) {
     isLoading.value = true
     error.value = null
     try {
-      const res = await soupApi.getLeaderboard({ limit, type })
+      const res = await soupApi.getLeaderboard({ limit })
       leaderboard.value = res.data.items
       return res.data.items
     } catch (e: any) {
@@ -143,6 +143,12 @@ export const useSoupStore = defineStore('soup', () => {
     } finally {
       isLoading.value = false
     }
+  }
+
+  // 获取首页预览，不改写排行榜页面使用的完整榜单缓存。
+  async function fetchLeaderboardPreview(limit = 10) {
+    const res = await soupApi.getLeaderboard({ limit })
+    return res.data.items
   }
 
   // 搜索
@@ -179,6 +185,7 @@ export const useSoupStore = defineStore('soup', () => {
     toggleLike,
     toggleFavorite,
     fetchLeaderboard,
+    fetchLeaderboardPreview,
     search,
     clearCurrent,
   }

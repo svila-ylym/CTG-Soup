@@ -18,6 +18,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { reportsApi, type ReportTarget } from '@/api/reports'
+import { extractApiError } from '@/utils/auth'
 
 const props = defineProps<{ open: boolean; targetType: ReportTarget; targetId: number }>()
 const emit = defineEmits<{ close: []; submitted: [] }>()
@@ -34,8 +35,8 @@ async function submit() {
     reason.value = ''
     emit('submitted')
     emit('close')
-  } catch (e: any) {
-    error.value = e.response?.data?.detail || '举报提交失败'
+  } catch (cause) {
+    error.value = extractApiError(cause, '举报提交失败')
   } finally {
     submitting.value = false
   }

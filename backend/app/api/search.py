@@ -11,6 +11,7 @@ from app.schemas.community import (
     UserPageResponse,
     UserSummary,
 )
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
@@ -53,6 +54,8 @@ def search_users(
             username=row.username,
             nickname=row.nickname,
             avatar_url=row.avatar_url,
+            level=level_progress(row.points).level,
+            level_band=level_band(level_progress(row.points).level),
         ).model_dump()
         for row in rows
     ]
@@ -118,7 +121,7 @@ def search_soups(
         select(Soup)
         .where(*filters)
         .order_by(
-            Soup.bayesian_rating.desc(),
+            Soup.avg_rating.desc(),
             Soup.created_at.desc(),
             Soup.id.desc(),
         )

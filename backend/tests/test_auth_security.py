@@ -11,7 +11,14 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 import app.api.auth as auth
 from app.core.config import Settings
-from app.models.models import EmailVerification, User, UserRole, UserStatus
+from app.models.models import (
+    EmailVerification,
+    ReusableUserUid,
+    User,
+    UserRole,
+    UserStatus,
+    UserUidAllocator,
+)
 from app.schemas import (
     EmailVerificationRequest,
     EmailVerificationResendRequest,
@@ -78,7 +85,12 @@ def session():
     )
     SQLModel.metadata.create_all(
         engine,
-        tables=[User.__table__, EmailVerification.__table__],
+        tables=[
+            User.__table__,
+            EmailVerification.__table__,
+            UserUidAllocator.__table__,
+            ReusableUserUid.__table__,
+        ],
     )
     with Session(engine) as value:
         yield value
@@ -165,6 +177,7 @@ def test_registration_stores_only_token_hash_and_leaves_user_pending(monkeypatch
     verification = session.exec(select(EmailVerification)).one()
 
     assert user.status == UserStatus.PENDING_EMAIL
+    assert user.role == UserRole.ROOT
     assert len(smtp.tokens) == 1
     assert verification.token_hash == hash_verification_token(smtp.tokens[0])
     assert verification.token_hash != smtp.tokens[0]

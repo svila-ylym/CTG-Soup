@@ -25,9 +25,10 @@
 
           <!-- 密码 -->
           <div>
-            <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              密码
-            </label>
+            <div class="flex items-center justify-between gap-3">
+              <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">密码</label>
+              <router-link to="/forgot-password" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">忘记密码？</router-link>
+            </div>
             <input
               id="password"
               v-model="formData.password"
@@ -41,6 +42,9 @@
           <!-- 错误提示 -->
           <div v-if="errorMessage" class="break-words rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
             {{ errorMessage }}
+          </div>
+          <div v-if="resetMessage" class="break-words rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+            {{ resetMessage }}
           </div>
 
           <!-- 提交按钮 -->
@@ -68,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { safeRedirect } from '@/utils/auth'
@@ -84,6 +88,7 @@ const formData = reactive({
 
 const isLoading = ref(false)
 const errorMessage = ref('')
+const resetMessage = computed(() => route.query.reset === 'success' ? '密码已重置，请使用新密码登录。' : '')
 
 const handleLogin = async () => {
   isLoading.value = true

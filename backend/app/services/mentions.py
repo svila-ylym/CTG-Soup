@@ -13,6 +13,7 @@ from app.models.database import (
     NotificationType,
     User,
 )
+from app.services.notification_dispatch import notify_user
 
 
 MENTION_RE = re.compile(r"(?<!\S)@([^\s@]+)(?=\s|$)")
@@ -131,15 +132,14 @@ def sync_mentions(
                     end_offset=parsed_mention.end_offset,
                 )
             )
-            db.add(
-                Notification(
-                    recipient_uid=mentioned_uid,
-                    notification_type=NotificationType.MENTION,
-                    title="有人提到了你",
-                    content=f"{actor.nickname if actor else '一位用户'} 在内容中提到了你",
-                    related_entity_type=notification_type,
-                    related_entity_id=notification_id,
-                )
+            notify_user(
+                db,
+                user,
+                NotificationType.MENTION,
+                "有人提到了你",
+                f"{actor.nickname if actor else '一位用户'} 在内容中提到了你",
+                related_entity_type=notification_type,
+                related_entity_id=notification_id,
             )
         else:
             mention.actor_uid = actor_uid

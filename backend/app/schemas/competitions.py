@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -9,13 +9,21 @@ from app.schemas.common import PageResponse
 
 class CompetitionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    description: str = Field(min_length=1, max_length=5000)
+    description: str = Field(min_length=1, max_length=50000)
     start_time: datetime
     end_time: datetime
-    required_tag_ids: list[int] = Field(min_length=1)
-    score_type: CompetitionScoreType = CompetitionScoreType.AVERAGE
+    required_tag_ids: list[int] = Field(default_factory=list)
+    custom_tags: list[str] = Field(default_factory=list)
+    score_type: Literal[CompetitionScoreType.AVERAGE] = CompetitionScoreType.AVERAGE
     top_n: int = Field(default=10, ge=1, le=100)
     custom_page_config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("name")
+    @classmethod
+    def non_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("比赛名称不能为空")
+        return value
 
     @field_validator("required_tag_ids")
     @classmethod
@@ -26,13 +34,20 @@ class CompetitionCreate(BaseModel):
 
     @model_validator(mode="after")
     def valid_time_range(self) -> "CompetitionCreate":
-        if self.start_time.tzinfo is not None:
-            self.start_time = self.start_time.astimezone(timezone.utc).replace(tzinfo=None)
-        if self.end_time.tzinfo is not None:
-            self.end_time = self.end_time.astimezone(timezone.utc).replace(tzinfo=None)
+        china_timezone = timezone(timedelta(hours=8))
+        if self.start_time.tzinfo is None:
+            self.start_time = self.start_time.replace(tzinfo=china_timezone)
+        if self.end_time.tzinfo is None:
+            self.end_time = self.end_time.replace(tzinfo=china_timezone)
+        self.start_time = self.start_time.astimezone(timezone.utc).replace(tzinfo=None)
+        self.end_time = self.end_time.astimezone(timezone.utc).replace(tzinfo=None)
         if self.start_time >= self.end_time:
             raise ValueError("开始时间必须早于结束时间")
         return self
+
+
+class CompetitionUpdate(CompetitionCreate):
+    pass
 
 
 class CompetitionEntryResponse(BaseModel):

@@ -15,6 +15,19 @@ def _legacy_engine():
                 ")"
             )
         )
+        connection.execute(
+            text(
+                "CREATE TABLE users ("
+                "uid INTEGER PRIMARY KEY, username TEXT NOT NULL, role TEXT NOT NULL"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO users (uid, username, role) "
+                "VALUES (1, 'SkyUnreal', 'user')"
+            )
+        )
     return engine
 
 

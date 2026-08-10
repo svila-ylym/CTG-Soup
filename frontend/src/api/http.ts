@@ -7,9 +7,6 @@ class HttpClient {
     this.instance = axios.create({
       baseURL,
       timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
     })
 
     // 请求拦截器
@@ -35,6 +32,9 @@ class HttpClient {
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
           window.location.href = '/login'
+        }
+        if (error.response?.status >= 500 && !window.location.pathname.startsWith('/error/')) {
+          window.location.href = '/error/500'
         }
         return Promise.reject(error)
       }

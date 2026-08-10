@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { signinApi } from '@/api/signin'
 import { extractApiError } from '@/utils/auth'
 import type { SigninStatus } from '@/types'
+import LevelBadge from '@/components/LevelBadge.vue'
 
 const status = ref<SigninStatus | null>(null)
 const loading = ref(false)
@@ -62,8 +63,8 @@ onUnmounted(() => {
       @click="signIn"
     >
       <span class="flex items-center justify-between gap-2">
-        <strong>Lv.{{ status?.level ?? '-' }}</strong>
-        <span>{{ status?.signed_in ? '已签到' : '签到' }}</span>
+        <LevelBadge :level="status?.level" compact />
+        <span>{{ status?.signed_in ? `+${status.experience_gained} 经验` : '签到' }}</span>
       </span>
       <span class="mt-1 block h-1 bg-slate-200 dark:bg-neutral-800">
         <span class="block h-full bg-blue-600" :style="{ width: `${progress}%` }"></span>

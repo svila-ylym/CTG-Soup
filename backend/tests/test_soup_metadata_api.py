@@ -10,6 +10,7 @@ from app.api import tags, turtle_soups
 from app.api.auth import get_current_active_user, get_optional_current_user
 from app.models.database import (
     Soup,
+    SoupImage,
     SoupTag,
     Tag,
     TagKind,
@@ -17,6 +18,7 @@ from app.models.database import (
     User,
     UserRole,
     UserStatus,
+    UploadedAsset,
     get_db,
 )
 
@@ -204,15 +206,14 @@ def test_tags_endpoint_returns_active_tags_only():
     assert [tag["name"] for tag in response.json()["items"]] == ["悬疑"]
 
 
-def test_list_supports_bayesian_rating_sort():
+def test_list_supports_average_rating_sort():
     client, engine, _, _, existing_soup_id, _, _ = _client()
     with Session(engine) as session:
         existing = session.get(Soup, existing_soup_id)
         existing.avg_rating = 9.0
-        existing.bayesian_rating = 2.0
         second = Soup(
             author_uid=existing.author_uid,
-            title="贝叶斯优先",
+            title="低平均分作品",
             puzzle="谜面",
             solution="汤底",
             genre="本格",
@@ -220,18 +221,16 @@ def test_list_supports_bayesian_rating_sort():
             main_player_count="👩‍🚀/AI",
             secondary_player_count="不确定",
             avg_rating=3.0,
-            bayesian_rating=8.0,
             created_at=datetime(2020, 1, 1),
         )
         session.add(second)
         session.commit()
         session.refresh(second)
-        second_id = second.id
 
-    response = client.get("/api/turtle-soups", params={"sort_by": "bayesian"})
+    response = client.get("/api/turtle-soups", params={"sort_by": "score"})
 
     assert response.status_code == 200
-    assert response.json()["items"][0]["id"] == second_id
+    assert response.json()["items"][0]["id"] == existing_soup_id
 
 
 @pytest.mark.parametrize(
@@ -263,3 +262,128 @@ def test_soup_people_fields_accept_arbitrary_text(main, secondary):
     assert response.status_code == 201
     assert response.json()["main_player_count"] == main
     assert response.json()["secondary_player_count"] == secondary
+
+
+def test_soup_text_preserves_leading_trailing_spaces_and_blank_lines():
+    client, engine, _, _, _, _, _ = _client()
+    puzzle = "\n  第一行\n第二行  \n"
+    solution = "\n汤底第一行\n\n汤底第三行  \n"
+
+    response = client.post(
+        "/api/turtle-soups",
+        json={
+            "title": "保留排版",
+            "puzzle": puzzle,
+            "solution": solution,
+            "genre": "本格",
+            "soup_color": "清汤",
+            "main_player_count": "",
+            "secondary_player_count": "",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["puzzle"] == puzzle
+    assert response.json()["solution"] == solution
+    with Session(engine) as session:
+        soup = session.exec(select(Soup).where(Soup.title == "保留排版")).one()
+        assert soup.puzzle == puzzle
+        assert soup.solution == solution
+
+
+def test_image_only_soup_hides_solution_assets_until_reveal():
+    client, engine, _, _, _, _, _ = _client()
+    with Session(engine) as session:
+        author = session.exec(select(User).where(User.username == "api-author")).one()
+        assets = [
+            UploadedAsset(
+                owner_uid=author.uid,
+                kind="image",
+                storage_key=f"soups/image-{index}.png",
+                public_url=f"/storage/soups/image-{index}.png",
+                mime_type="image/png",
+                size=100 + index,
+            )
+            for index in range(2)
+        ]
+        session.add_all(assets)
+        session.commit()
+        for asset in assets:
+            session.refresh(asset)
+        puzzle_image_id, solution_image_id = [asset.id for asset in assets]
+
+    created = client.post(
+        "/api/turtle-soups",
+        json={
+            "title": "纯图片汤",
+            "puzzle": "",
+            "solution": "",
+            "genre": "变格",
+            "soup_color": "红汤",
+            "main_player_count": "",
+            "secondary_player_count": "",
+            "puzzle_image_ids": [puzzle_image_id],
+            "solution_image_ids": [solution_image_id],
+        },
+    )
+
+    assert created.status_code == 201
+    soup_id = created.json()["id"]
+    hidden = client.get(f"/api/turtle-soups/{soup_id}")
+    revealed = client.get(f"/api/turtle-soups/{soup_id}", params={"reveal": True})
+    assert [item["id"] for item in hidden.json()["puzzle_images"]] == [puzzle_image_id]
+    assert hidden.json()["solution"] is None
+    assert hidden.json()["solution_images"] == []
+    assert [item["id"] for item in revealed.json()["solution_images"]] == [solution_image_id]
+    with Session(engine) as session:
+        links = session.exec(
+            select(SoupImage).where(SoupImage.soup_id == soup_id).order_by(SoupImage.sort_order)
+        ).all()
+        assert [(link.placement, link.asset_id) for link in links] == [
+            ("puzzle", puzzle_image_id),
+            ("solution", solution_image_id),
+        ]
+
+
+def test_soup_images_must_be_owned_and_cannot_be_reused_across_sections():
+    client, engine, _, _, _, _, _ = _client()
+    with Session(engine) as session:
+        other = session.exec(select(User).where(User.username == "api-other")).one()
+        asset = UploadedAsset(
+            owner_uid=other.uid,
+            kind="image",
+            storage_key="soups/other.png",
+            public_url="/storage/soups/other.png",
+            mime_type="image/png",
+            size=100,
+        )
+        session.add(asset)
+        session.commit()
+        session.refresh(asset)
+
+    base = {
+        "title": "图片校验",
+        "puzzle": "谜面",
+        "solution": "汤底",
+        "genre": "本格",
+        "soup_color": "清汤",
+        "main_player_count": "",
+        "secondary_player_count": "",
+    }
+    not_owned = client.post(
+        "/api/turtle-soups",
+        json={**base, "puzzle_image_ids": [asset.id]},
+    )
+    duplicated = client.post(
+        "/api/turtle-soups",
+        json={
+            **base,
+            "puzzle_image_ids": [asset.id],
+            "solution_image_ids": [asset.id],
+        },
+    )
+
+    assert not_owned.status_code == 422
+    assert not_owned.json()["detail"]["code"] == "INVALID_SOUP_IMAGE"
+    assert duplicated.status_code == 422
+    assert duplicated.json()["detail"]["code"] == "DUPLICATE_SOUP_IMAGE"

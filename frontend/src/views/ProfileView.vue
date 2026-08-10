@@ -4,9 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { profileApi } from '@/api/profile'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
+import { parseUtcDateTime } from '@/utils/datetime'
 import type { ProfileSoupSummary, PublicProfile } from '@/types'
-import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownIcon, ArrowUpIcon, FlagIcon } from '@heroicons/vue/24/outline'
 import SigninControl from '@/components/SigninControl.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
+import ReportDialog from '@/components/ReportDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +21,7 @@ const error = ref('')
 const page = ref(1)
 const editingFeatured = ref(false)
 const featuredIds = ref<number[]>([])
+const reportOpen = ref(false)
 
 const uid = computed(() => Number(route.params.uid))
 const isSelf = computed(() => profile.value?.relation.is_self === true)
@@ -35,6 +39,12 @@ const featuredChoices = computed<ProfileSoupSummary[]>(() => {
   for (const soup of profile.value.featured_soups) byId.set(soup.id, soup)
   for (const soup of profile.value.soups.items) byId.set(soup.id, soup)
   return [...byId.values()]
+})
+const profileBackgroundStyle = computed(() => {
+  const url = profile.value?.user.profile_background_url
+  return url
+    ? { backgroundImage: `url("${url}")`, backgroundPosition: 'center', backgroundSize: 'cover' }
+    : {}
 })
 
 async function loadProfile(targetPage = page.value) {
@@ -116,7 +126,10 @@ async function saveFeatured() {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value))
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Shanghai',
+  }).format(parseUtcDateTime(value))
 }
 
 watch(
@@ -135,7 +148,9 @@ watch(
     <div v-if="loading" class="page-container py-20 text-center text-slate-500">正在加载个人资料…</div>
     <div v-else-if="error && !profile" class="page-container py-20 text-center text-red-700">{{ error }}</div>
     <div v-else-if="profile" class="page-container max-w-5xl">
-      <header class="flex flex-col gap-6 border-b border-slate-200 pb-7 dark:border-neutral-800 sm:flex-row sm:items-start sm:justify-between">
+      <div class="profile-hero relative overflow-hidden rounded-md border border-slate-200 dark:border-neutral-800" :style="profileBackgroundStyle">
+        <div class="profile-hero-overlay absolute inset-0" aria-hidden="true"></div>
+        <header class="relative z-10 flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-7">
         <div class="flex min-w-0 items-center gap-5">
           <img
             v-if="profile.user.avatar_url"
@@ -149,8 +164,9 @@ watch(
           <div class="min-w-0">
             <h1 class="break-words text-2xl font-bold">{{ profile.user.nickname }}</h1>
             <p class="break-words text-sm text-slate-500">@{{ profile.user.username }} · UID {{ profile.user.uid }}</p>
+            <p class="mt-1 text-xs text-slate-500">注册于 {{ profile.user.registration_date }}</p>
             <div class="mt-2 flex items-center gap-3 text-sm">
-              <strong>Lv.{{ profile.user.level }}</strong>
+              <LevelBadge :level="profile.user.level" :band="profile.user.level_band" />
               <span class="text-slate-500">{{ profile.user.experience_points }} 经验</span>
             </div>
             <div class="mt-2 h-2 w-48 max-w-full overflow-hidden bg-slate-200 dark:bg-neutral-800">
@@ -169,9 +185,11 @@ watch(
               {{ profile.relation.is_following ? '取消关注' : '关注' }}
             </button>
             <button class="btn-secondary" type="button" :disabled="profile.relation.is_blocked" @click="router.push({ path: '/messages', query: { uid: profile.user.uid } })">发消息</button>
+            <button v-if="auth.isAuthenticated" class="inline-flex h-10 w-10 items-center justify-center text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" type="button" title="举报用户" aria-label="举报用户" @click="reportOpen = true"><FlagIcon class="h-5 w-5" aria-hidden="true" /></button>
           </template>
         </div>
-      </header>
+        </header>
+      </div>
 
       <p v-if="profile.user.bio" class="max-w-3xl break-words whitespace-pre-wrap py-6 text-slate-700 dark:text-slate-300">{{ profile.user.bio }}</p>
       <p v-else class="py-6 text-sm text-slate-500">暂无个人简介</p>
@@ -247,6 +265,23 @@ watch(
       </section>
 
       <p v-if="error" class="pb-6 text-sm text-red-700">{{ error }}</p>
+      <ReportDialog :open="reportOpen" target-type="user" :target-id="profile.user.uid" @close="reportOpen = false" />
     </div>
   </main>
 </template>
+
+<style scoped>
+.profile-hero {
+  background-color: var(--surface);
+  background-repeat: no-repeat;
+  transition: background-image 300ms ease, border-color 180ms ease;
+}
+
+.profile-hero-overlay {
+  background: linear-gradient(90deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .78) 58%, rgba(255, 255, 255, .35));
+}
+
+:global(.dark) .profile-hero-overlay {
+  background: linear-gradient(90deg, rgba(3, 7, 18, .96), rgba(3, 7, 18, .82) 58%, rgba(3, 7, 18, .44));
+}
+</style>

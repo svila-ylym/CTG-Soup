@@ -38,7 +38,24 @@ class _Limiter:
         return self._redis_status
 
 
+class _MessageGateway:
+    def probe(self):
+        return "available"
+
+    @property
+    def health_status(self):
+        return {
+            "message_gateway": "memory",
+            "message_gateway_adapter": "available",
+        }
+
+
+def _use_message_gateway(monkeypatch):
+    monkeypatch.setattr(dependency_health, "message_gateway", _MessageGateway())
+
+
 def test_optional_dependency_status_probes_redis_and_elasticsearch(monkeypatch):
+    _use_message_gateway(monkeypatch)
     monkeypatch.setattr(
         dependency_health,
         "rate_limiter",
@@ -55,10 +72,13 @@ def test_optional_dependency_status_probes_redis_and_elasticsearch(monkeypatch):
         "redis": "available",
         "fallback": "standby",
         "elasticsearch": "available",
+        "message_gateway": "memory",
+        "message_gateway_adapter": "available",
     }
 
 
 def test_optional_dependency_status_marks_unreachable_services_degraded(monkeypatch):
+    _use_message_gateway(monkeypatch)
     monkeypatch.setattr(
         dependency_health,
         "rate_limiter",
@@ -79,6 +99,7 @@ def test_optional_dependency_status_marks_unreachable_services_degraded(monkeypa
 
 
 def test_optional_dependency_status_reports_disabled_services(monkeypatch):
+    _use_message_gateway(monkeypatch)
     limiter = _Limiter(None)
     limiter._redis_client = None
     limiter._redis_status = "disabled"
@@ -93,4 +114,6 @@ def test_optional_dependency_status_reports_disabled_services(monkeypatch):
         "redis": "disabled",
         "fallback": "active",
         "elasticsearch": "disabled",
+        "message_gateway": "memory",
+        "message_gateway_adapter": "available",
     }

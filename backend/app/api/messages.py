@@ -25,6 +25,7 @@ from app.schemas.chat import (
 )
 from app.schemas.community import PrivateMessageCreate, PrivateMessageResponse
 from app.services.message_gateway import message_gateway
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
@@ -36,11 +37,14 @@ def canonical_pair(first_uid: int, second_uid: int) -> tuple[int, int]:
 
 
 def _user_payload(user: User) -> dict:
+    progress = level_progress(user.points)
     return {
         "uid": user.uid,
         "username": user.username,
         "nickname": user.nickname,
         "avatar_url": user.avatar_url,
+        "level": progress.level,
+        "level_band": level_band(progress.level),
     }
 
 
