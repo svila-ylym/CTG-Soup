@@ -26,6 +26,7 @@ from app.services.competition_entries import (
 )
 from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
 from app.services.tag_resolution import TagSelectionError, resolve_active_tags
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
@@ -95,10 +96,13 @@ def _refresh_soup_interaction_count(db: Session, soup: Soup, kind: str) -> None:
 
 def _author(db: Session, uid: int) -> AuthorSummary:
     user = db.get(User, uid)
+    progress = level_progress(user.points if user else 0)
     return AuthorSummary(
         uid=uid,
         username=user.username if user else "unknown",
         nickname=user.nickname if user else "未知用户",
+        level=progress.level,
+        level_band=level_band(progress.level),
     )
 
 

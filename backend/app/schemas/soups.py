@@ -143,6 +143,8 @@ class AuthorSummary(BaseModel):
     uid: int
     username: str
     nickname: str
+    level: int = 0
+    level_band: str = "black"
 
 
 class SoupResponse(BaseModel):

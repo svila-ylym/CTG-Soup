@@ -177,6 +177,25 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    @property
+    def profile_background_asset_id(self) -> Optional[int]:
+        value = self.notification_prefs.get("profile_background_asset_id") if isinstance(self.notification_prefs, dict) else None
+        return value if isinstance(value, int) and value > 0 else None
+
+    @property
+    def profile_background_url(self) -> Optional[str]:
+        value = self.notification_prefs.get("profile_background_url") if isinstance(self.notification_prefs, dict) else None
+        return value if isinstance(value, str) and value else None
+
+    @property
+    def level(self) -> int:
+        return max(self.points, 0) // 100
+
+    @property
+    def level_band(self) -> str:
+        bands = ("black", "yellow", "purple", "green", "bronze", "silver", "cyan", "blue", "gold", "red")
+        return bands[min(self.level // 10, len(bands) - 1)]
+
 
 class EmailVerification(SQLModel, table=True):
     __tablename__ = "email_verifications"

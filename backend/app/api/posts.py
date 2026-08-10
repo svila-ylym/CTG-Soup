@@ -16,17 +16,21 @@ from app.schemas.community import (
     PostUpdate,
 )
 from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
+from app.services.levels import level_band, level_progress
 
 router = APIRouter()
 
 
 def _author(db: Session, uid: int) -> dict:
     user = db.get(User, uid)
+    progress = level_progress(user.points if user else 0)
     return {
         "uid": uid,
         "username": user.username if user else "unknown",
         "nickname": user.nickname if user else "未知用户",
         "avatar_url": user.avatar_url if user else None,
+        "level": progress.level,
+        "level_band": level_band(progress.level),
     }
 
 

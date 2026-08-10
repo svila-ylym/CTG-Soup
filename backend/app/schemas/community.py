@@ -12,6 +12,8 @@ class UserSummary(BaseModel):
     username: str
     nickname: str
     avatar_url: str | None = None
+    level: int = 0
+    level_band: str = "black"
 
 
 class MentionRef(BaseModel):

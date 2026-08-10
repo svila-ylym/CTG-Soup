@@ -107,14 +107,14 @@
           <div v-else class="mt-6 divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
             <article v-for="item in comments" :id="`comment-${item.id}`" :key="item.id" class="py-4">
               <div class="flex items-center justify-between gap-3 text-sm">
-                <router-link :to="`/profile/${item.author_uid}`" class="font-semibold hover:text-blue-600 hover:underline">{{ item.author?.nickname || item.author?.username || `用户 ${item.author_uid}` }}</router-link>
+                <div class="flex min-w-0 items-center gap-2"><router-link :to="`/profile/${item.author_uid}`" class="font-semibold hover:text-blue-600 hover:underline">{{ item.author?.nickname || item.author?.username || `用户 ${item.author_uid}` }}</router-link><LevelBadge :level="item.author?.level" :band="item.author?.level_band" compact /></div>
                 <time class="text-xs text-slate-500">{{ formatChinaDateTime(item.created_at) }}</time>
               </div>
               <p class="mt-2 break-words whitespace-pre-wrap text-slate-700 dark:text-slate-200"><MentionText :text="item.content" :mentions="item.mentions" /></p>
               <div class="mt-2 flex items-center gap-4"><button class="text-xs font-medium text-blue-600 hover:underline" type="button" @click="startReply(item, item)">回复</button><button v-if="canDeleteComment(item)" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" :disabled="deletingCommentId === item.id" @click="deleteComment(item)"><TrashIcon class="h-3.5 w-3.5" aria-hidden="true" />删除</button><button v-if="auth.isAuthenticated && item.author_uid !== auth.user?.uid" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" @click="commentReportId = item.id"><FlagIcon class="h-3.5 w-3.5" aria-hidden="true" />举报</button></div>
               <div v-for="reply in item.replies || []" :id="`comment-${reply.id}`" :key="reply.id" class="mt-3 break-words border-l-2 border-blue-200 pl-3 text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <router-link :to="`/profile/${reply.author_uid}`" class="font-semibold hover:text-blue-600 hover:underline">{{ reply.author?.nickname || reply.author?.username || `用户 ${reply.author_uid}` }}</router-link>
+                  <div class="flex min-w-0 items-center gap-2"><router-link :to="`/profile/${reply.author_uid}`" class="font-semibold hover:text-blue-600 hover:underline">{{ reply.author?.nickname || reply.author?.username || `用户 ${reply.author_uid}` }}</router-link><LevelBadge :level="reply.author?.level" :band="reply.author?.level_band" compact /></div>
                   <time class="text-xs text-slate-500">{{ formatChinaDateTime(reply.created_at) }}</time>
                 </div>
                 <p class="mt-1 whitespace-pre-wrap"><MentionText :text="reply.content" :mentions="reply.mentions" /></p>
@@ -187,6 +187,7 @@ import { formatChinaDateTime } from '@/utils/datetime'
 import type { Comment, TurtleSoup } from '@/types'
 import ReportDialog from '@/components/ReportDialog.vue'
 import MentionText from '@/components/MentionText.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { extractApiError } from '@/utils/auth'
 import { useAuthStore } from '@/stores/auth'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'

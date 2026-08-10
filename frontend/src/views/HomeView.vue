@@ -2,7 +2,8 @@
   <main class="home-page overflow-hidden bg-[#f7fbff] text-slate-900 dark:bg-[#07111f] dark:text-white">
     <section
       ref="heroRef"
-      class="hero-scene relative isolate min-h-[36rem] overflow-hidden border-b border-sky-100 bg-[#dff4ff] sm:min-h-[40rem] lg:min-h-[43rem]"
+      class="hero-scene relative isolate min-h-[36rem] overflow-hidden border-b border-sky-100 bg-[#dff4ff] sm:min-h-[40rem] lg:min-h-[43rem] dark:border-slate-800 dark:bg-[#071d2e]"
+      :class="`scene-${scenePeriod}`"
       :style="sceneStyle"
       @pointermove="handlePointerMove"
       @pointerleave="resetPointer"
@@ -11,13 +12,14 @@
       <div class="hero-sun absolute" aria-hidden="true"></div>
       <div class="hero-glint hero-glint-one absolute" aria-hidden="true"></div>
       <div class="hero-glint hero-glint-two absolute" aria-hidden="true"></div>
+      <div class="hero-mist absolute inset-0" aria-hidden="true"></div>
 
       <svg class="landscape absolute inset-0 h-full w-full" viewBox="0 0 1600 760" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
           <linearGradient id="home-sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#a7e2ff" />
-            <stop offset="0.58" stop-color="#d9f4ff" />
-            <stop offset="1" stop-color="#fff4d6" />
+            <stop class="sky-stop-top" offset="0" />
+            <stop class="sky-stop-middle" offset="0.58" />
+            <stop class="sky-stop-bottom" offset="1" />
           </linearGradient>
           <linearGradient id="home-far-mountain" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#9acbd2" />
@@ -75,14 +77,14 @@
 
       <div class="hero-container relative z-10 mx-auto grid min-h-[36rem] max-w-7xl items-center gap-8 px-5 pb-16 pt-14 sm:min-h-[40rem] sm:px-8 sm:pt-16 lg:min-h-[43rem] lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,.95fr)] lg:gap-12 lg:px-10 lg:pb-20">
         <div class="hero-copy max-w-2xl">
-          <p class="hero-kicker mb-5 inline-flex items-center gap-2 text-sm font-bold text-sky-800 sm:text-base">
+          <p class="hero-kicker mb-5 inline-flex max-w-full items-center gap-2 text-sm font-bold text-sky-800 sm:text-base dark:text-cyan-200">
             <SparklesIcon class="h-5 w-5" aria-hidden="true" />
-            情境推理 · 每一条线索都算数
+            <span class="min-w-0 break-words">情境推理 · {{ hitokotoText }}</span>
           </p>
-          <h1 class="hero-title text-[3.25rem] font-black leading-[.94] text-sky-950 sm:text-[4.8rem] lg:text-[6.2rem]" aria-label="汤吧社区">
+          <h1 class="hero-title text-[3.25rem] font-black leading-[.94] text-sky-950 sm:text-[4.8rem] lg:text-[6.2rem] dark:text-white" aria-label="汤吧社区">
             <span v-for="(character, index) in titleCharacters" :key="`${character}-${index}`" class="hero-title-character" aria-hidden="true" :style="{ animationDelay: `${180 + index * 90}ms` }">{{ character }}</span>
           </h1>
-          <p class="hero-lede mt-7 max-w-xl text-base font-medium leading-7 text-sky-950/75 sm:text-xl sm:leading-8">
+          <p class="hero-lede mt-7 max-w-xl text-base font-medium leading-7 text-sky-950/75 sm:text-xl sm:leading-8 dark:text-slate-200">
             一碗汤，一群人，一场从“为什么”开始的推理冒险。读故事、问线索、把藏起来的真相一点点拼完整。
           </p>
           <div class="hero-actions mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
@@ -90,15 +92,15 @@
               去解一碗汤
               <ArrowRightIcon class="h-5 w-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </router-link>
-            <router-link to="/soups/create" class="hero-secondary-button inline-flex min-h-12 items-center gap-2 rounded-md border-2 border-sky-800/20 bg-white/70 px-5 py-3 font-bold text-sky-900 shadow-[0_5px_0_rgba(14,116,144,.16)] backdrop-blur-sm transition hover:-translate-y-1 hover:border-sky-800/35 hover:bg-white active:translate-y-1 active:shadow-none">
+            <router-link to="/soups/create" class="hero-secondary-button inline-flex min-h-12 items-center gap-2 rounded-md border-2 border-sky-800/20 bg-white/70 px-5 py-3 font-bold text-sky-900 shadow-[0_5px_0_rgba(14,116,144,.16)] backdrop-blur-sm transition hover:-translate-y-1 hover:border-sky-800/35 hover:bg-white active:translate-y-1 active:shadow-none dark:border-cyan-400/30 dark:bg-slate-950/70 dark:text-cyan-100 dark:hover:border-cyan-300/50 dark:hover:bg-slate-900">
               发布我的谜面
               <PencilSquareIcon class="h-5 w-5" aria-hidden="true" />
             </router-link>
           </div>
-          <div class="hero-quick-links mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-sky-900/70">
-            <router-link to="/leaderboard" class="inline-flex items-center gap-1 transition hover:text-sky-950"><TrophyIcon class="h-4 w-4" aria-hidden="true" />看排行榜</router-link>
-            <router-link to="/posts" class="inline-flex items-center gap-1 transition hover:text-sky-950"><ChatBubbleLeftRightIcon class="h-4 w-4" aria-hidden="true" />和大家讨论</router-link>
-            <router-link to="/competitions" class="inline-flex items-center gap-1 transition hover:text-sky-950"><FlagIcon class="h-4 w-4" aria-hidden="true" />参加比赛</router-link>
+          <div class="hero-quick-links mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-sky-900/70 dark:text-slate-300">
+            <router-link to="/leaderboard" class="inline-flex items-center gap-1 transition hover:text-sky-950 dark:hover:text-white"><TrophyIcon class="h-4 w-4" aria-hidden="true" />看排行榜</router-link>
+            <router-link to="/posts" class="inline-flex items-center gap-1 transition hover:text-sky-950 dark:hover:text-white"><ChatBubbleLeftRightIcon class="h-4 w-4" aria-hidden="true" />和大家讨论</router-link>
+            <router-link to="/competitions" class="inline-flex items-center gap-1 transition hover:text-sky-950 dark:hover:text-white"><FlagIcon class="h-4 w-4" aria-hidden="true" />参加比赛</router-link>
           </div>
         </div>
 
@@ -126,7 +128,7 @@
         </div>
       </div>
 
-      <a href="#community-intro" class="hero-scroll-cue absolute bottom-5 left-1/2 z-20 inline-flex -translate-x-1/2 flex-col items-center gap-1 text-xs font-bold text-sky-900/65 transition hover:text-sky-950" aria-label="查看社区入口">
+      <a href="#community-intro" class="hero-scroll-cue absolute bottom-5 left-1/2 z-20 inline-flex -translate-x-1/2 flex-col items-center gap-1 text-xs font-bold text-sky-900/65 transition hover:text-sky-950 dark:text-cyan-100/70 dark:hover:text-white" aria-label="查看社区入口">
         <span>继续探索</span>
         <ChevronDownIcon class="h-4 w-4 animate-bounce" aria-hidden="true" />
       </a>
@@ -212,6 +214,9 @@ import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 const soupStore = useSoupStore()
 const heroRef = ref<HTMLElement | null>(null)
 const scenePosition = ref({ x: 0, y: 0 })
+const hitokotoText = ref('每一条线索都算数')
+type ScenePeriod = 'sunrise' | 'morning' | 'noon' | 'evening' | 'sunset' | 'night'
+const scenePeriod = ref<ScenePeriod>('noon')
 const titleCharacters = Array.from('汤吧社区')
 const featureCards = [
   { to: '/soups', eyebrow: 'Find a clue', title: '发现海龟汤', description: '从热门、标签和排行榜找到下一道值得追的谜题。', icon: PuzzlePieceIcon },
@@ -219,6 +224,9 @@ const featureCards = [
   { to: '/competitions', eyebrow: 'Make a mark', title: '参加比赛', description: '用作品、评分和排行榜，记录每一次灵感发光。', icon: TrophyIcon },
 ]
 let pointerFrame = 0
+let hitokotoController: AbortController | null = null
+let hitokotoTimeout = 0
+let sceneClock = 0
 
 const sceneStyle = computed<CSSProperties>(() => ({
   '--far-x': `${scenePosition.value.x * 0.18}px`,
@@ -255,18 +263,75 @@ function rankClass(index: number) {
   return 'rank-blue'
 }
 
+function chinaMinutes(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Shanghai',
+  }).formatToParts(date)
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0)
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0)
+  return hour * 60 + minute
+}
+
+function updateScenePeriod() {
+  const minutes = chinaMinutes()
+  if (minutes >= 390 && minutes < 420) scenePeriod.value = 'sunrise'
+  else if (minutes >= 420 && minutes < 540) scenePeriod.value = 'morning'
+  else if (minutes >= 540 && minutes < 1020) scenePeriod.value = 'noon'
+  else if (minutes >= 1020 && minutes < 1140) scenePeriod.value = 'evening'
+  else if (minutes >= 1140 && minutes < 1200) scenePeriod.value = 'sunset'
+  else scenePeriod.value = 'night'
+}
+
+async function loadHitokoto() {
+  hitokotoController?.abort()
+  const controller = new AbortController()
+  hitokotoController = controller
+  hitokotoTimeout = window.setTimeout(() => controller.abort(), 6000)
+
+  try {
+    const response = await fetch('https://v1.hitokoto.cn/?encode=json', {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) return
+
+    const payload: unknown = await response.json()
+    if (!payload || typeof payload !== 'object') return
+    const value = (payload as { hitokoto?: unknown }).hitokoto
+    if (typeof value === 'string' && value.trim()) hitokotoText.value = value.trim()
+  } catch {
+    // Keep the local fallback when the third-party service is unavailable.
+  } finally {
+    window.clearTimeout(hitokotoTimeout)
+    if (hitokotoController === controller) hitokotoController = null
+  }
+}
+
 onMounted(() => {
+  updateScenePeriod()
+  sceneClock = window.setInterval(updateScenePeriod, 60_000)
   void soupStore.fetchLeaderboard(10).catch(() => undefined)
+  void loadHitokoto()
 })
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(pointerFrame)
+  window.clearInterval(sceneClock)
+  window.clearTimeout(hitokotoTimeout)
+  hitokotoController?.abort()
+  hitokotoController = null
   heroRef.value = null
 })
 </script>
 
 <style scoped>
 .hero-scene {
+  --sky-top: #a7e2ff;
+  --sky-middle: #d9f4ff;
+  --sky-bottom: #fff4d6;
   --far-x: 0px;
   --far-y: 0px;
   --mid-x: 0px;
@@ -277,11 +342,16 @@ onBeforeUnmount(() => {
   --front-y: 0px;
 }
 
+.sky-stop-top { stop-color: var(--sky-top); }
+.sky-stop-middle { stop-color: var(--sky-middle); }
+.sky-stop-bottom { stop-color: var(--sky-bottom); }
+
 .hero-sky {
   background: linear-gradient(130deg, rgba(255, 255, 255, 0.42), transparent 42%), linear-gradient(180deg, rgba(91, 192, 235, 0.25), rgba(255, 226, 146, 0.22));
 }
 
 .hero-sun {
+  z-index: 4;
   right: 14%;
   top: 12%;
   width: 9rem;
@@ -293,7 +363,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-glint {
-  z-index: 1;
+  z-index: 4;
   width: 15rem;
   height: 4rem;
   border-radius: 50%;
@@ -305,6 +375,46 @@ onBeforeUnmount(() => {
 
 .hero-glint-one { left: 8%; top: 18%; }
 .hero-glint-two { right: 8%; top: 36%; animation-delay: -4s; opacity: 0.55; }
+.hero-mist { z-index: 3; pointer-events: none; opacity: 0; transition: opacity 1.5s ease, background 1.5s ease; }
+
+.hero-scene,
+.hero-sky,
+.hero-sun,
+.landscape {
+  transition: background-color 1.5s ease, background 1.5s ease, filter 1.5s ease, opacity 1.5s ease, box-shadow 1.5s ease;
+}
+
+.scene-sunrise { --sky-top: #7485ba; --sky-middle: #ffad82; --sky-bottom: #ffe5ac; background: #ffd8ad; }
+.scene-sunrise .hero-sky { background: linear-gradient(180deg, rgba(93, 117, 177, .32), rgba(255, 153, 94, .42) 58%, rgba(255, 233, 180, .55)); }
+.scene-sunrise .hero-sun { right: 17%; top: 53%; background: #ffb24f; box-shadow: 0 0 0 1.3rem rgba(255, 178, 79, .14), 0 0 5rem 2rem rgba(255, 123, 66, .3); }
+.scene-sunrise .landscape { filter: sepia(.12) saturate(1.1) brightness(.88); }
+
+.scene-morning { --sky-top: #c1e2e9; --sky-middle: #e8f2ed; --sky-bottom: #f6f6df; background: #dff4f3; }
+.scene-morning .hero-sky { background: linear-gradient(180deg, rgba(182, 225, 236, .4), rgba(238, 248, 242, .45)); }
+.scene-morning .hero-sun { right: 16%; top: 25%; background: #ffe6a2; box-shadow: 0 0 4rem 1.5rem rgba(255, 230, 162, .25); }
+.scene-morning .hero-mist { opacity: .7; background: linear-gradient(180deg, transparent 35%, rgba(241, 250, 248, .76) 62%, rgba(231, 244, 242, .36) 82%, transparent); filter: blur(.4rem); animation: mist-drift 18s ease-in-out infinite; }
+.scene-morning .landscape { filter: saturate(.78) brightness(1.04); }
+
+.scene-evening { --sky-top: #7199af; --sky-middle: #dcb886; --sky-bottom: #f6dca7; background: #b9d8df; }
+.scene-evening .hero-sky { background: linear-gradient(180deg, rgba(91, 139, 167, .36), rgba(231, 186, 128, .42) 68%, rgba(252, 221, 166, .35)); }
+.scene-evening .hero-sun { right: 12%; top: 34%; background: #f6c76b; box-shadow: 0 0 4rem 1.4rem rgba(246, 199, 107, .25); }
+.scene-evening .landscape { filter: saturate(.88) brightness(.82); }
+
+.scene-sunset { --sky-top: #343b6d; --sky-middle: #bd6269; --sky-bottom: #ff9f60; background: #8e7584; }
+.scene-sunset .hero-sky { background: linear-gradient(180deg, rgba(51, 58, 106, .5), rgba(192, 85, 89, .42) 56%, rgba(255, 161, 85, .52)); }
+.scene-sunset .hero-sun { right: 15%; top: 57%; background: #ff875d; box-shadow: 0 0 0 1.2rem rgba(255, 135, 93, .12), 0 0 5rem 2rem rgba(236, 79, 84, .32); }
+.scene-sunset .landscape { filter: sepia(.18) hue-rotate(-8deg) saturate(1.05) brightness(.57); }
+
+.scene-night { --sky-top: #050d1b; --sky-middle: #102a40; --sky-bottom: #17374b; background: #061321; }
+.scene-night .hero-sky { background: radial-gradient(circle at 20% 18%, rgba(149, 199, 223, .12) 0 1px, transparent 2px), radial-gradient(circle at 67% 13%, rgba(255, 255, 255, .2) 0 1px, transparent 2px), linear-gradient(180deg, #06101f, #102a40 70%, #17374b); background-size: 9rem 8rem, 13rem 11rem, auto; }
+.scene-night .hero-sun { right: 14%; top: 13%; background: #e8eff1; box-shadow: inset -1.8rem -.6rem 0 #becdd4, 0 0 3rem 1rem rgba(211, 235, 242, .18); }
+.scene-night .hero-glint { opacity: .12; }
+.scene-night .landscape { filter: hue-rotate(8deg) saturate(.58) brightness(.32); }
+.scene-night .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #2b7588, 0 4px 0 #20596d, 0 6px 0 #153d50, 0 9px 0 rgba(1, 11, 18, .48), 0 17px 24px rgba(0, 0, 0, .42); }
+.scene-night .hero-title-character:nth-child(2) { color: #67d8f0; }
+.scene-night .hero-title-character:nth-child(3) { color: #7ce0b2; }
+.scene-night .hero-title-character:nth-child(4) { color: #ffc16f; }
+.scene-night .hero-kicker, .scene-night .hero-lede, .scene-night .hero-quick-links, .scene-night .hero-scroll-cue { color: #d9f6ff; }
 
 .landscape {
   z-index: 2;
@@ -376,6 +486,7 @@ onBeforeUnmount(() => {
 @keyframes card-rise { from { opacity: 0; transform: translateY(1.5rem) rotate(1deg); } to { opacity: 1; transform: translateY(0) rotate(0); } }
 @keyframes bowl-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-.3rem) rotate(2deg); } }
 @keyframes steam-rise { 0%, 100% { opacity: .35; transform: translateY(.3rem) scale(.85); } 50% { opacity: 1; transform: translateY(-.35rem) scale(1); } }
+@keyframes mist-drift { 0%, 100% { transform: translateX(-2%); } 50% { transform: translateX(2%); } }
 
 @media (max-width: 639px) {
   .hero-sun { right: -2rem; top: 8%; width: 7rem; height: 7rem; }
@@ -389,6 +500,14 @@ onBeforeUnmount(() => {
 }
 
 :global(.dark) .hero-scene { border-color: #193247; }
+:global(.dark) .hero-sky { background: linear-gradient(135deg, rgba(24, 103, 132, .18), transparent 45%), linear-gradient(180deg, rgba(4, 14, 24, .08), rgba(3, 11, 20, .62)); }
+:global(.dark) .hero-sun { background: #f5c75c; box-shadow: 0 0 0 1.5rem rgba(245, 199, 92, .08), 0 0 5rem 2rem rgba(245, 199, 92, .16); }
+:global(.dark) .scene-noon .landscape { filter: brightness(.78) saturate(.9) contrast(1.04); opacity: .94; }
+:global(.dark) .hero-scene:not(.scene-night) .landscape { filter: brightness(.64) saturate(.86) contrast(1.06); opacity: .92; }
+:global(.dark) .hero-title-character { color: #e7fbff; text-shadow: 0 2px 0 #2b7588, 0 4px 0 #20596d, 0 6px 0 #153d50, 0 9px 0 rgba(1, 11, 18, .48), 0 17px 24px rgba(0, 0, 0, .42); }
+:global(.dark) .hero-title-character:nth-child(2) { color: #67d8f0; }
+:global(.dark) .hero-title-character:nth-child(3) { color: #7ce0b2; }
+:global(.dark) .hero-title-character:nth-child(4) { color: #ffc16f; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-sun, .hero-glint, .cloud-drift-slow, .cloud-drift-fast, .lake-shimmer, .hero-container, .hero-copy, .hero-kicker, .hero-lede, .hero-actions, .hero-quick-links, .hero-title-character, .hero-puzzle-stage, .puzzle-note, .puzzle-sticker, .hero-scroll-cue, .feature-card, .soup-card, .soup-loader, .soup-loader span, .soup-loader span::after { animation: none !important; transition: opacity 120ms ease !important; }

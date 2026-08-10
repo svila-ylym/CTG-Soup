@@ -12,7 +12,11 @@
       </div>
 
       <div class="mt-6 border-t border-gray-200 pt-6 text-sm text-gray-600 dark:border-neutral-800 dark:text-gray-400">
-        <p>&copy; 2026 汤吧社区</p>
+        <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>&copy; 2026 汤吧社区</span>
+          <span class="text-slate-400 dark:text-neutral-600" aria-hidden="true">·</span>
+          <span>版本 1.1.0</span>
+        </p>
       </div>
     </div>
   </footer>

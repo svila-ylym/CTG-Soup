@@ -13,10 +13,14 @@ export interface User {
   email: string
   avatar_url?: string
   avatar_asset_id?: number | null
+  profile_background_url?: string | null
+  profile_background_asset_id?: number | null
   bio?: string
   role: 'user' | 'admin' | 'root'
   status: 'pending_email' | 'active' | 'banned' | 'silenced'
   points: number
+  level?: number
+  level_band?: string
   consecutive_signin_days: number
   allow_bulk_email: boolean
   theme_preference: ThemePreference
@@ -88,6 +92,9 @@ export interface SoupAuthor {
   uid: number
   username: string
   nickname: string
+  avatar_url?: string | null
+  level?: number
+  level_band?: string
 }
 
 export interface SoupImageRef {
@@ -503,9 +510,11 @@ export interface PublicProfileUser {
   username: string
   nickname: string
   avatar_url?: string | null
+  profile_background_url?: string | null
   bio?: string | null
   role: 'user' | 'admin' | 'root'
   level: number
+  level_band: string
   experience_points: number
   level_start: number
   next_level_start: number | null

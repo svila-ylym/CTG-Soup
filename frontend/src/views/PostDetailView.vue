@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, ChatBubbleOvalLeftIcon, EyeIcon, FlagIcon, HeartIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { postsApi } from '@/api/posts'
 import MentionText from '@/components/MentionText.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
@@ -154,6 +155,7 @@ onMounted(load)
             <router-link :to="`/profile/${post.author_uid}`" class="hover:underline">
               {{ post.author?.nickname || post.author?.username || `用户 ${post.author_uid}` }}
             </router-link>
+            <LevelBadge :level="post.author?.level" :band="post.author?.level_band" compact />
             <time>· {{ formatChinaDateTime(post.created_at) }}</time>
           </div>
           <h1 class="mt-4 break-words text-2xl font-bold sm:text-3xl">{{ post.title }}</h1>
@@ -188,6 +190,7 @@ onMounted(load)
                 <router-link :to="`/profile/${comment.author_uid}`" class="font-semibold hover:underline">
                   {{ comment.author?.nickname || comment.author?.username || `用户 ${comment.author_uid}` }}
                 </router-link>
+                <LevelBadge :level="comment.author?.level" :band="comment.author?.level_band" compact />
                 <time class="text-xs text-slate-500">{{ formatChinaDateTime(comment.created_at) }}</time>
               </div>
               <p class="mt-2 break-words whitespace-pre-wrap text-slate-700 dark:text-slate-200">
@@ -196,7 +199,7 @@ onMounted(load)
               <div class="mt-2 flex items-center gap-4"><button class="text-xs font-medium text-blue-600 hover:underline" type="button" @click="startReply(comment, comment)">回复</button><button v-if="canDeleteComment(comment)" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" :disabled="deletingKey === `comment:${comment.id}`" @click="deleteComment(comment)"><TrashIcon class="h-3.5 w-3.5" aria-hidden="true" />删除</button><button v-if="auth.isAuthenticated && comment.author_uid !== auth.user?.uid" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" @click="openReport('comment', comment.id)"><FlagIcon class="h-3.5 w-3.5" aria-hidden="true" />举报</button></div>
               <div v-for="reply in comment.replies || []" :id="`comment-${reply.id}`" :key="reply.id" class="mt-3 border-l-2 border-blue-200 pl-4">
                 <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <router-link :to="`/profile/${reply.author_uid}`" class="font-semibold hover:underline">{{ reply.author?.nickname || reply.author?.username || `用户 ${reply.author_uid}` }}</router-link>
+                  <div class="flex min-w-0 items-center gap-2"><router-link :to="`/profile/${reply.author_uid}`" class="font-semibold hover:underline">{{ reply.author?.nickname || reply.author?.username || `用户 ${reply.author_uid}` }}</router-link><LevelBadge :level="reply.author?.level" :band="reply.author?.level_band" compact /></div>
                   <time class="text-xs text-slate-500">{{ formatChinaDateTime(reply.created_at) }}</time>
                 </div>
                 <p class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200"><MentionText :text="reply.content" :mentions="reply.mentions" /></p>

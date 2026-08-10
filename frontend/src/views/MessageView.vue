@@ -12,6 +12,7 @@ import {
   SignalSlashIcon,
 } from '@heroicons/vue/24/outline'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatItem } from '@/stores/chat'
 import ReportDialog from '@/components/ReportDialog.vue'
@@ -43,6 +44,12 @@ function avatarInitial(conversation: { other_user: { nickname: string } }) {
 
 function isMine(message: ChatItem) {
   return message.sender_uid === currentUid.value
+}
+
+function messageLevel(message: ChatItem) {
+  return isMine(message)
+    ? auth.user?.level || Math.max(0, Math.floor((auth.user?.points || 0) / 100))
+    : chat.activeConversation?.other_user.level || 0
 }
 
 function scrollToBottom() {
@@ -214,6 +221,7 @@ onUnmounted(() => {
               <button class="min-w-0 flex-1 text-left" type="button" @click="selectConversation(conversation.id)">
                 <span class="flex items-center justify-between gap-2">
                   <strong class="truncate text-sm">{{ conversation.other_user.nickname }}</strong>
+                  <LevelBadge :level="conversation.other_user.level" :band="conversation.other_user.level_band" compact />
                   <time v-if="conversation.last_message_at" class="shrink-0 text-[11px] text-slate-400">{{ formatChinaMessageTime(conversation.last_message_at) }}</time>
                 </span>
                 <span class="mt-1 flex items-center justify-between gap-2">
@@ -237,6 +245,7 @@ onUnmounted(() => {
               </router-link>
               <div class="min-w-0">
                 <h2 class="truncate font-semibold">{{ chat.activeConversation.other_user.nickname }}</h2>
+                <LevelBadge :level="chat.activeConversation.other_user.level" :band="chat.activeConversation.other_user.level_band" compact />
                 <p class="truncate text-xs text-slate-500">@{{ chat.activeConversation.other_user.username }}</p>
               </div>
             </header>
@@ -250,6 +259,7 @@ onUnmounted(() => {
               <div v-else class="space-y-4">
                 <div v-for="message in chat.activeMessages" :key="message.clientId || message.id" class="flex" :class="isMine(message) ? 'justify-end' : 'justify-start'">
                   <div class="max-w-[min(85%,38rem)]">
+                    <div class="mb-1 flex items-center gap-2 text-xs" :class="isMine(message) ? 'justify-end' : 'justify-start'"><LevelBadge :level="messageLevel(message)" compact /></div>
                     <div class="break-words whitespace-pre-wrap px-4 py-2.5 text-sm" :class="isMine(message) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-neutral-900 dark:text-slate-100'" :data-testid="isMine(message) ? 'outgoing-message' : 'incoming-message'">{{ message.content }}</div>
                     <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" :class="isMine(message) ? 'justify-end' : 'justify-start'">
                       <time>{{ formatChinaMessageTime(message.created_at) }}</time>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ChatBubbleOvalLeftIcon, EyeIcon, HeartIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import MentionText from '@/components/MentionText.vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
 import { formatChinaDateTime } from '@/utils/datetime'
@@ -130,6 +131,7 @@ onMounted(load)
           <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-500">
             <span class="max-w-full break-words rounded-full bg-blue-50 px-2 py-1 text-blue-700">{{ post.section }}</span>
             <router-link :to="`/profile/${post.author_uid}`" class="min-w-0 break-words hover:text-blue-600 hover:underline" @click.stop>{{ post.author?.nickname || post.author?.username || `用户 ${post.author_uid}` }}</router-link>
+            <LevelBadge :level="post.author?.level" :band="post.author?.level_band" compact />
             <time>{{ formatChinaDateTime(post.created_at) }}</time>
           </div>
           <h2 class="mt-3 break-words text-lg font-semibold text-slate-900 dark:text-white">{{ post.title }}</h2>

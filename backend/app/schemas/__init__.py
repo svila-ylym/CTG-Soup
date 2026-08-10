@@ -43,6 +43,7 @@ class UserUpdate(BaseModel):
     nickname: Optional[str] = Field(None, min_length=1, max_length=50)
     email: Optional[EmailStr] = None
     avatar_asset_id: Optional[int] = Field(default=None, gt=0)
+    profile_background_asset_id: Optional[int] = Field(default=None, gt=0)
     bio: Optional[str] = None
     notice_preferences: Optional[Dict[str, bool]] = None
 
@@ -58,8 +59,12 @@ class UserResponse(UserBase):
     status: UserStatus
     avatar_url: Optional[str] = None
     avatar_asset_id: Optional[int] = None
+    profile_background_asset_id: Optional[int] = None
+    profile_background_url: Optional[str] = None
     bio: Optional[str] = None
     points: int
+    level: int = 0
+    level_band: str = "black"
     consecutive_signin_days: int
     allow_bulk_email: bool = True
     theme_preference: ThemePreference = ThemePreference.SYSTEM
