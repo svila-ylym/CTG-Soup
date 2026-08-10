@@ -16,7 +16,7 @@ from app.models.database import (
 from app.services.notification_dispatch import notify_user
 
 
-MENTION_RE = re.compile(r"(?<!\S)@([^\s@]+)(?=\s|$)")
+MENTION_RE = re.compile(r"@([^\s@]+)(?=\s)")
 
 
 @dataclass(frozen=True)

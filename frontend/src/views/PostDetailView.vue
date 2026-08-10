@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, ChatBubbleOvalLeftIcon, EyeIcon, FlagIcon, HeartIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { postsApi } from '@/api/posts'
 import MentionText from '@/components/MentionText.vue'
+import MentionTextarea from '@/components/MentionTextarea.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -171,12 +172,13 @@ onMounted(load)
         <section class="py-7">
           <h2 class="section-title">评论</h2>
           <form class="mt-4 flex flex-col gap-3 sm:flex-row" @submit.prevent="submitComment">
-            <textarea
+            <MentionTextarea
               v-model="commentText"
-              class="form-control min-h-24 flex-1"
-              maxlength="5000"
+              class="flex-1"
+              :maxlength="5000"
+              placeholder="写下你的评论…"
               aria-label="评论内容"
-            ></textarea>
+            />
             <button class="btn-primary self-end" :disabled="submitting || !commentText.trim()">
               {{ submitting ? '发送中…' : '发表评论' }}
             </button>
@@ -208,7 +210,7 @@ onMounted(load)
                 <div class="mt-1 flex items-center gap-4"><button class="text-xs font-medium text-blue-600 hover:underline" type="button" @click="startReply(comment, reply)">回复</button><button v-if="canDeleteComment(reply)" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" :disabled="deletingKey === `comment:${reply.id}`" @click="deleteComment(reply)"><TrashIcon class="h-3.5 w-3.5" aria-hidden="true" />删除</button><button v-if="auth.isAuthenticated && reply.author_uid !== auth.user?.uid" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" @click="openReport('comment', reply.id)"><FlagIcon class="h-3.5 w-3.5" aria-hidden="true" />举报</button></div>
               </div>
               <form v-if="replyParentId === comment.id" class="mt-4 flex flex-col gap-2 sm:flex-row" @submit.prevent="submitReply">
-                <textarea v-model="replyText" class="form-control min-h-20 flex-1" maxlength="5000" aria-label="回复内容" placeholder="回复这条评论"></textarea>
+                <MentionTextarea v-model="replyText" class="flex-1" compact :maxlength="5000" aria-label="回复内容" placeholder="回复这条评论" />
                 <div class="flex items-end gap-2"><button class="btn-primary" :disabled="replySubmitting || !replyText.trim()">{{ replySubmitting ? '发送中…' : '发送回复' }}</button><button class="btn-secondary" type="button" :disabled="replySubmitting" @click="cancelReply">取消</button></div>
               </form>
             </article>

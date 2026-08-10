@@ -96,7 +96,7 @@
         <section class="mt-6 border-t border-slate-200 py-6 dark:border-neutral-800">
           <h2 class="text-xl font-semibold">讨论</h2>
           <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-            <textarea v-model="commentText" class="form-control min-h-24 flex-1" maxlength="2000" placeholder="分享你的推理…" aria-label="评论内容"></textarea>
+            <MentionTextarea v-model="commentText" class="flex-1" :maxlength="2000" placeholder="分享你的推理…" aria-label="评论内容" />
             <button class="btn-primary self-end" :disabled="commentSubmitting || !commentText.trim()" @click="submitComment">
               {{ commentSubmitting ? '发送中…' : '发表评论' }}
             </button>
@@ -121,7 +121,7 @@
                 <div class="mt-1 flex items-center gap-4"><button class="text-xs font-medium text-blue-600 hover:underline" type="button" @click="startReply(item, reply)">回复</button><button v-if="canDeleteComment(reply)" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" :disabled="deletingCommentId === reply.id" @click="deleteComment(reply)"><TrashIcon class="h-3.5 w-3.5" aria-hidden="true" />删除</button><button v-if="auth.isAuthenticated && reply.author_uid !== auth.user?.uid" class="inline-flex items-center gap-1 text-xs text-red-600" type="button" @click="commentReportId = reply.id"><FlagIcon class="h-3.5 w-3.5" aria-hidden="true" />举报</button></div>
               </div>
               <div v-if="replyParentId === item.id" class="mt-4 flex flex-col gap-2 sm:flex-row">
-                <textarea v-model="replyText" class="form-control min-h-20 flex-1" maxlength="2000" placeholder="回复这条评论" aria-label="回复内容"></textarea>
+                <MentionTextarea v-model="replyText" class="flex-1" compact :maxlength="2000" placeholder="回复这条评论" aria-label="回复内容" />
                 <div class="flex items-end gap-2"><button class="btn-primary" type="button" :disabled="replySubmitting || !replyText.trim()" @click="submitReply">{{ replySubmitting ? '发送中…' : '发送回复' }}</button><button class="btn-secondary" type="button" :disabled="replySubmitting" @click="cancelReply">取消</button></div>
               </div>
             </article>
@@ -187,6 +187,7 @@ import { formatChinaDateTime } from '@/utils/datetime'
 import type { Comment, TurtleSoup } from '@/types'
 import ReportDialog from '@/components/ReportDialog.vue'
 import MentionText from '@/components/MentionText.vue'
+import MentionTextarea from '@/components/MentionTextarea.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { extractApiError } from '@/utils/auth'
 import { useAuthStore } from '@/stores/auth'
