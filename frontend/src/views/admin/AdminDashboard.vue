@@ -86,7 +86,7 @@ interface UpdateStatus {
   release_name?: string | null
   published_at?: string | null
   html_url?: string | null
-  status: 'up_to_date' | 'update_available' | 'ahead' | 'invalid_latest_version' | 'unknown_current_version' | 'error'
+  status: 'up_to_date' | 'update_available' | 'ahead' | 'invalid_latest_version' | 'unknown_current_version' | 'no_release' | 'error'
   update_available: boolean
   checked_at: string
   error?: string | null
@@ -179,7 +179,7 @@ function formatDetails(value?: Record<string, unknown> | null) {
 }
 
 function updateStatusLabel(value?: UpdateStatus['status']) {
-  return ({ up_to_date: '已是最新版', update_available: '发现新版本', ahead: '当前版本高于 Latest', invalid_latest_version: '发行版标签无效', unknown_current_version: '当前版本无效', error: '检查失败' } as Record<string, string>)[value || ''] || '尚未检查'
+  return ({ up_to_date: '已是最新版', update_available: '发现新版本', ahead: '当前版本高于 Latest', invalid_latest_version: '发行版标签无效', unknown_current_version: '当前版本无效', no_release: '暂无正式发行版', error: '检查失败' } as Record<string, string>)[value || ''] || '尚未检查'
 }
 
 async function checkUpdate(force = false) {
@@ -791,7 +791,7 @@ onUnmounted(stopUpdatePolling)
           </div>
           <div v-if="updateInfo" class="mt-6 grid gap-5 border-y border-slate-200 py-5 dark:border-neutral-800 sm:grid-cols-2 lg:grid-cols-4">
             <div><p class="text-xs text-slate-500">当前版本</p><p class="mt-1 text-lg font-semibold">v{{ updateInfo.current_version }}</p></div>
-            <div><p class="text-xs text-slate-500">Latest</p><p class="mt-1 text-lg font-semibold">{{ updateInfo.latest_version ? `v${updateInfo.latest_version}` : '不可用' }}</p></div>
+            <div><p class="text-xs text-slate-500">Latest</p><p class="mt-1 text-lg font-semibold">{{ updateInfo.latest_version ? `v${updateInfo.latest_version}` : updateInfo.status === 'no_release' ? '暂无正式发行版' : '不可用' }}</p></div>
             <div><p class="text-xs text-slate-500">状态</p><p class="mt-1 font-medium" :class="updateInfo.update_available ? 'text-amber-600' : updateInfo.status === 'error' ? 'text-red-600' : 'text-emerald-600'">{{ updateStatusLabel(updateInfo.status) }}</p></div>
             <div><p class="text-xs text-slate-500">检查时间</p><p class="mt-1 text-sm">{{ formatDate(updateInfo.checked_at) }}</p></div>
           </div>
