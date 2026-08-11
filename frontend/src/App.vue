@@ -32,7 +32,6 @@
 import NavBar from '@/components/NavBar.vue'
 import Footer from '@/components/Footer.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
-import { useAuthStore } from '@/stores/auth'
 import { announcementsApi } from '@/api/announcements'
 import { ref, computed, onMounted } from 'vue'
 import type { Announcement } from '@/types'
@@ -49,7 +48,4 @@ onMounted(async () => {
   try { announcements.value = (await announcementsApi.list({ page: 1, page_size: 5 })).data.items || [] } catch { announcements.value = [] }
 })
 
-// 初始化用户状态
-const authStore = useAuthStore()
-authStore.init()
 </script>

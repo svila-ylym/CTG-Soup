@@ -13,6 +13,10 @@ from app.services.governance_rules import can_manage_role
 from app.services.governance_rules import decide_report
 from app.schemas.announcements import TagAdminCreate, TagAdminUpdate, TagMergeRequest, AnnouncementCreate, AnnouncementUpdate
 from app.services.tag_rules import normalize_tag_name
+from app.services.competition_entries import (
+    lock_competition_collection,
+    rebuild_unsettled_competitions_for_tags,
+)
 from app.services.reporting import ReportTargetError, inspect_report_target, validate_report_target
 from app.services.moderation_locks import lock_report_submission, lock_role_management, lock_user_punishments
 from app.services.punishments import (
@@ -142,9 +146,18 @@ def admin_update_tag(
             values["status"] = TagStatus(values["status"])
         except ValueError as exc:
             raise HTTPException(422, "标签状态无效") from exc
+    status_changed = (
+        "status" in values
+        and values["status"] != tag.status
+    )
+    if status_changed:
+        lock_competition_collection(db)
     for key, value in values.items():
         setattr(tag, key, value)
     tag.updated_at = datetime.utcnow()
+    if status_changed:
+        db.flush()
+        rebuild_unsettled_competitions_for_tags(db, {tag.id})
     db.add(OperationLog(operator_uid=current_user.uid, operator_roles=[current_user.role.value], action_type="update", target_type="tag", target_id=tag.id, details=values))
     db.commit()
     db.refresh(tag)
@@ -164,29 +177,42 @@ def admin_merge_tag(
     target = db.get(Tag, data.target_tag_id)
     if not source or not target:
         raise HTTPException(404, "标签不存在")
+    lock_competition_collection(db)
     for relation in db.exec(select(SoupTag).where(SoupTag.tag_id == source.id)).all():
         if not db.get(SoupTag, (relation.soup_id, target.id)):
             db.add(SoupTag(soup_id=relation.soup_id, tag_id=target.id))
         db.delete(relation)
     # Keep competition references valid when a taxonomy entry is merged.
     for competition in db.exec(select(Competition)).all():
-        values = []
         changed = False
-        for value in competition.required_tag_ids or []:
-            tag_value = int(value)
-            if tag_value == source.id:
-                tag_value = target.id
-                changed = True
-            if tag_value not in values:
-                values.append(tag_value)
+        updated_tag_sets = {}
+        for field_name in ("required_tag_ids", "optional_tag_ids"):
+            values = []
+            for value in getattr(competition, field_name) or []:
+                tag_value = int(value)
+                if tag_value == source.id:
+                    tag_value = target.id
+                    changed = True
+                if tag_value not in values:
+                    values.append(tag_value)
+            updated_tag_sets[field_name] = values
         if changed:
-            competition.required_tag_ids = values
+            overlap = set(updated_tag_sets["required_tag_ids"]).intersection(
+                updated_tag_sets["optional_tag_ids"]
+            )
+            competition.required_tag_ids = updated_tag_sets["required_tag_ids"]
+            competition.optional_tag_ids = [
+                value for value in updated_tag_sets["optional_tag_ids"]
+                if value not in overlap
+            ]
             competition.updated_at = datetime.utcnow()
     alias = db.exec(select(TagAlias).where(TagAlias.alias_slug == source.slug)).first()
     if alias is None:
         db.add(TagAlias(alias_slug=source.slug, tag_id=target.id))
     source.status = TagStatus.DISABLED
     source.updated_at = datetime.utcnow()
+    db.flush()
+    rebuild_unsettled_competitions_for_tags(db, {source.id, target.id})
     db.add(OperationLog(operator_uid=current_user.uid, operator_roles=[current_user.role.value], action_type="merge", target_type="tag", target_id=source.id, details={"target_tag_id": target.id}))
     db.commit()
     return {"source_tag_id": source.id, "target_tag_id": target.id}

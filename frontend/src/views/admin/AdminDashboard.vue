@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ArrowPathIcon, ShieldExclamationIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ArrowDownTrayIcon, ArrowPathIcon, ShieldExclamationIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
 import { formatChinaDateTime } from '@/utils/datetime'
 import type { Announcement, Competition, PageResult, Tag } from '@/types'
 
-type AdminTab = 'reports' | 'users' | 'punishments' | 'competitions' | 'tags' | 'groups' | 'announcements' | 'logs'
+type AdminTab = 'reports' | 'users' | 'punishments' | 'competitions' | 'tags' | 'groups' | 'announcements' | 'updates' | 'logs'
 type UserRole = 'user' | 'admin' | 'root'
 type UserStatus = 'pending_email' | 'active' | 'banned' | 'silenced'
 
@@ -79,6 +79,30 @@ interface OperationLog {
   created_at: string
 }
 
+interface UpdateStatus {
+  current_version: string
+  latest_version?: string | null
+  tag_name?: string | null
+  release_name?: string | null
+  published_at?: string | null
+  html_url?: string | null
+  status: 'up_to_date' | 'update_available' | 'ahead' | 'invalid_latest_version' | 'unknown_current_version' | 'error'
+  update_available: boolean
+  checked_at: string
+  error?: string | null
+}
+
+interface UpdateTask {
+  task_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  tag_name: string
+  started_at?: string | null
+  finished_at?: string | null
+  exit_code?: number | null
+  log_path?: string | null
+  error?: string | null
+}
+
 const auth = useAuthStore()
 const activeTab = ref<AdminTab>('reports')
 const users = ref<AdminUser[]>([])
@@ -102,6 +126,10 @@ const savingKey = ref('')
 const groupForm = ref({ name: '', description: '', permissions: '' })
 const tagForm = ref({ name: '', description: '', kind: 'custom' as 'custom' | 'system' })
 const announcementForm = ref({ title: '', content: '', priority: 0 })
+const updateInfo = ref<UpdateStatus | null>(null)
+const updateTask = ref<UpdateTask | null>(null)
+const updateChecking = ref(false)
+let updatePollTimer: number | undefined
 
 const pendingReportCount = computed(() => reports.value.filter((report) => report.status === 'pending').length)
 const activePunishmentCount = computed(() => punishments.value.filter((item) => item.is_active ?? !item.is_revoked).length)
@@ -114,6 +142,7 @@ const tabs = computed<Array<{ key: AdminTab; label: string; count: number }>>(()
     { key: 'tags', label: '标签', count: tags.value.length },
     { key: 'groups', label: '用户组', count: groups.value.length },
     { key: 'announcements', label: '公告', count: announcements.value.length },
+    { key: 'updates', label: '系统更新', count: updateInfo.value?.update_available ? 1 : 0 },
   ]
   if (auth.isRoot) items.push({ key: 'logs', label: '日志', count: logs.value.length })
   return items
@@ -147,6 +176,55 @@ function punishmentLabel(value: string) {
 
 function formatDetails(value?: Record<string, unknown> | null) {
   return value ? JSON.stringify(value, null, 2) : '—'
+}
+
+function updateStatusLabel(value?: UpdateStatus['status']) {
+  return ({ up_to_date: '已是最新版', update_available: '发现新版本', ahead: '当前版本高于 Latest', invalid_latest_version: '发行版标签无效', unknown_current_version: '当前版本无效', error: '检查失败' } as Record<string, string>)[value || ''] || '尚未检查'
+}
+
+async function checkUpdate(force = false) {
+  updateChecking.value = true
+  try {
+    updateInfo.value = (await http.get<UpdateStatus>('/admin/update/status', { params: { force } })).data
+  } catch (cause) {
+    showError(cause, '版本检查失败')
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+function stopUpdatePolling() {
+  if (updatePollTimer) window.clearInterval(updatePollTimer)
+  updatePollTimer = undefined
+}
+
+async function pollUpdateTask() {
+  if (!updateTask.value) return
+  try {
+    updateTask.value = (await http.get<UpdateTask>(`/admin/update/tasks/${updateTask.value.task_id}`)).data
+    if (['succeeded', 'failed'].includes(updateTask.value.status)) {
+      stopUpdatePolling()
+      void checkUpdate(true)
+    }
+  } catch (cause) {
+    stopUpdatePolling()
+    showError(cause, '升级状态读取失败')
+  }
+}
+
+async function runUpdate() {
+  if (!auth.isRoot || !updateInfo.value?.update_available || !window.confirm(`确定升级到 ${updateInfo.value.tag_name} 吗？升级期间服务可能短暂中断。`)) return
+  savingKey.value = 'update:run'
+  try {
+    updateTask.value = (await http.post<UpdateTask>('/admin/update/run')).data
+    message.value = '升级任务已启动'
+    stopUpdatePolling()
+    updatePollTimer = window.setInterval(pollUpdateTask, 2000)
+  } catch (cause) {
+    showError(cause, '升级启动失败')
+  } finally {
+    savingKey.value = ''
+  }
 }
 
 function canPunish(user: AdminUser) {
@@ -543,7 +621,8 @@ async function deleteAnnouncement(item: Announcement) {
   }
 }
 
-onMounted(load)
+onMounted(() => { void load(); void checkUpdate() })
+onUnmounted(stopUpdatePolling)
 </script>
 
 <template>
@@ -702,6 +781,30 @@ onMounted(load)
             <h2 class="section-title">公告列表</h2>
             <div v-if="!announcements.length" class="py-8 text-center text-sm text-slate-500">暂无公告。</div>
             <div v-else class="mt-4 divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800"><div v-for="item in announcements" :key="item.id" class="py-4"><div class="grid gap-3 sm:grid-cols-[1fr_7rem]"><input v-model="item.title" class="form-control font-semibold" maxlength="200"><input v-model.number="item.priority" class="form-control" type="number" min="0" max="100" aria-label="优先级"></div><textarea v-model="item.content" class="form-control mt-3 min-h-24" maxlength="10000"></textarea><div class="mt-3 flex flex-wrap items-center gap-3"><span class="mr-auto text-xs text-slate-500">{{ item.status }} · {{ formatDate(item.updated_at) }}</span><button class="btn-secondary text-xs" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="saveAnnouncement(item)">保存</button><button v-if="item.status === 'draft'" class="text-sm font-medium text-blue-600" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="publish(item)">发布</button><button v-else class="text-sm font-medium text-amber-700" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="withdraw(item)">撤回</button><button class="inline-flex items-center gap-1 text-sm font-medium text-red-600" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="deleteAnnouncement(item)"><TrashIcon class="h-4 w-4" aria-hidden="true" />删除</button></div></div></div>
+          </div>
+        </section>
+
+        <section v-else-if="activeTab === 'updates'" class="surface-card p-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 class="section-title">系统更新</h2><p class="mt-1 text-sm text-slate-500">数据源：GitHub Latest Release</p></div>
+            <button class="btn-secondary inline-flex items-center gap-1.5" type="button" :disabled="updateChecking" @click="checkUpdate(true)"><ArrowPathIcon class="h-4 w-4" :class="updateChecking ? 'animate-spin' : ''" aria-hidden="true" />{{ updateChecking ? '检查中…' : '重新检查' }}</button>
+          </div>
+          <div v-if="updateInfo" class="mt-6 grid gap-5 border-y border-slate-200 py-5 dark:border-neutral-800 sm:grid-cols-2 lg:grid-cols-4">
+            <div><p class="text-xs text-slate-500">当前版本</p><p class="mt-1 text-lg font-semibold">v{{ updateInfo.current_version }}</p></div>
+            <div><p class="text-xs text-slate-500">Latest</p><p class="mt-1 text-lg font-semibold">{{ updateInfo.latest_version ? `v${updateInfo.latest_version}` : '不可用' }}</p></div>
+            <div><p class="text-xs text-slate-500">状态</p><p class="mt-1 font-medium" :class="updateInfo.update_available ? 'text-amber-600' : updateInfo.status === 'error' ? 'text-red-600' : 'text-emerald-600'">{{ updateStatusLabel(updateInfo.status) }}</p></div>
+            <div><p class="text-xs text-slate-500">检查时间</p><p class="mt-1 text-sm">{{ formatDate(updateInfo.checked_at) }}</p></div>
+          </div>
+          <p v-if="updateInfo?.error" class="mt-4 text-sm text-red-600">{{ updateInfo.error }}</p>
+          <div v-if="updateInfo?.html_url" class="mt-4"><a class="text-sm font-medium text-blue-600 hover:underline" :href="updateInfo.html_url" target="_blank" rel="noopener noreferrer">查看 {{ updateInfo.release_name || updateInfo.tag_name }}</a></div>
+          <div class="mt-6 flex flex-wrap items-center gap-3">
+            <button v-if="auth.isRoot" class="btn-primary inline-flex items-center gap-1.5" type="button" :disabled="!updateInfo?.update_available || savingKey === 'update:run' || ['queued', 'running'].includes(updateTask?.status || '')" @click="runUpdate"><ArrowDownTrayIcon class="h-4 w-4" aria-hidden="true" />{{ savingKey === 'update:run' ? '启动中…' : '升级到 Latest' }}</button>
+            <span v-else class="text-sm text-slate-500">只有 ROOT 可以执行在线升级。</span>
+          </div>
+          <div v-if="updateTask" class="mt-6 border-t border-slate-200 pt-5 text-sm dark:border-neutral-800">
+            <p><strong>任务 {{ updateTask.task_id.slice(0, 8) }}</strong> · {{ updateTask.status }}</p>
+            <p class="mt-2 text-slate-500">目标 {{ updateTask.tag_name }}<span v-if="updateTask.log_path"> · 日志 {{ updateTask.log_path }}</span></p>
+            <p v-if="updateTask.error" class="mt-2 text-red-600">{{ updateTask.error }}</p>
           </div>
         </section>
 

@@ -5,6 +5,7 @@ import { profileApi } from '@/api/profile'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
 import { parseUtcDateTime } from '@/utils/datetime'
+import { competitionBorderStyle } from '@/utils/competitionBorder'
 import type { ProfileSoupSummary, PublicProfile } from '@/types'
 import { ArrowDownIcon, ArrowUpIcon, FlagIcon } from '@heroicons/vue/24/outline'
 import SigninControl from '@/components/SigninControl.vue'
@@ -234,7 +235,8 @@ watch(
             v-for="soup in profile.featured_soups"
             :key="soup.id"
             :to="`/soups/${soup.id}`"
-            class="border border-slate-200 p-4 dark:border-neutral-800"
+            class="competition-border-surface border border-slate-200 p-4 dark:border-neutral-800"
+            :style="competitionBorderStyle(soup.competition_colors)"
           >
             <strong class="line-clamp-2 block text-sm">{{ soup.title }}</strong>
             <span class="mt-2 block text-xs text-slate-500">{{ soup.genre }} · {{ soup.soup_color }}</span>
@@ -245,8 +247,8 @@ watch(
 
       <section class="border-t border-slate-200 py-7 dark:border-neutral-800">
         <h2 class="section-title">已发布海龟汤</h2>
-        <div class="mt-5 divide-y divide-slate-200 dark:divide-neutral-800">
-          <router-link v-for="soup in profile.soups.items" :key="soup.id" :to="`/soups/${soup.id}`" class="block py-5">
+        <div class="mt-5 space-y-3">
+          <router-link v-for="soup in profile.soups.items" :key="soup.id" :to="`/soups/${soup.id}`" class="competition-border-surface block rounded-md border border-slate-200 p-4 dark:border-neutral-800" :style="competitionBorderStyle(soup.competition_colors)">
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0">
                 <strong class="block truncate">{{ soup.title }}</strong>

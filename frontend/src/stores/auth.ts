@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
   const restrictionStatus = ref<'banned' | 'silenced' | null>(
     localStorage.getItem('account_restriction') as 'banned' | 'silenced' | null,
   )
+  let initPromise: Promise<void> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value && !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin' || user.value?.role === 'root')
@@ -78,6 +79,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!accessToken.value) return
     try {
       const res = await authApi.getCurrentUser()
+      accessToken.value = localStorage.getItem('access_token') || accessToken.value
+      refreshToken.value = localStorage.getItem('refresh_token') || refreshToken.value
       user.value = res.data
       localStorage.setItem('user_uid', String(res.data.uid))
       localStorage.setItem('user_role', res.data.role)
@@ -95,10 +98,21 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // 初始化（从本地存储恢复状态）
-  function init() {
-    if (accessToken.value) {
-      fetchCurrentUser()
+  async function restoreSession() {
+    if (!accessToken.value && refreshToken.value) {
+      try {
+        setTokens((await authApi.refreshToken(refreshToken.value)).data)
+      } catch {
+        logout()
+        return
+      }
     }
+    if (accessToken.value) await fetchCurrentUser()
+  }
+
+  function init(): Promise<void> {
+    if (!initPromise) initPromise = restoreSession()
+    return initPromise
   }
 
   return {

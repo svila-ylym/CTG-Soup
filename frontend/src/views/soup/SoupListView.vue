@@ -85,7 +85,8 @@
         <div
           v-for="soup in soupStore.soups"
           :key="soup.id"
-          class="cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-blue-400 dark:border-neutral-800 dark:bg-neutral-950"
+          class="competition-border-surface cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-blue-400 dark:border-neutral-800 dark:bg-neutral-950"
+          :style="competitionBorderStyle(soup.competition_colors)"
           @click="$router.push(`/soups/${soup.id}`)"
         >
           <!-- 卡片头部 -->
@@ -106,7 +107,7 @@
             </p>
 
             <!-- 标签 -->
-            <div class="flex flex-wrap gap-2 mb-4">
+            <div v-if="soup.tags.length" class="mb-4 flex flex-wrap gap-2">
               <span
                 v-for="tag in soup.tags.slice(0, 3)"
                 :key="tag.id"
@@ -114,6 +115,12 @@
               >
                 #{{ tag.name }}
               </span>
+              <span
+                v-if="soup.tags.length > 3"
+                class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs text-slate-500 dark:bg-neutral-800 dark:text-slate-400"
+                :title="`还有 ${soup.tags.length - 3} 个标签`"
+                :aria-label="`还有 ${soup.tags.length - 3} 个标签`"
+              >…</span>
             </div>
 
             <!-- 统计信息 -->
@@ -199,6 +206,7 @@ import { ChatBubbleLeftRightIcon, FaceFrownIcon, HeartIcon, PlusIcon } from '@he
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
 import { parseUtcDateTime } from '@/utils/datetime'
+import { competitionBorderStyle } from '@/utils/competitionBorder'
 import { tagApi } from '@/api/tags'
 import type { CreateSoupColor, CreateSoupGenre, Tag } from '@/types'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'

@@ -17,6 +17,7 @@ export interface User {
   profile_background_asset_id?: number | null
   bio?: string
   role: 'user' | 'admin' | 'root'
+  permission_groups: string[]
   status: 'pending_email' | 'active' | 'banned' | 'silenced'
   points: number
   level?: number
@@ -95,6 +96,8 @@ export interface SoupAuthor {
   avatar_url?: string | null
   level?: number
   level_band?: string
+  permission_groups?: string[]
+  role?: 'user' | 'admin' | 'root'
 }
 
 export interface SoupImageRef {
@@ -115,6 +118,7 @@ export interface TurtleSoup {
   is_solution_public: boolean
   genre: SoupGenre
   soup_color: SoupColor
+  competition_colors: string[]
   main_player_count: string
   secondary_player_count: string
   author: SoupAuthor
@@ -164,6 +168,14 @@ export interface SoupScore {
   score: number // 1-10, 支持 0.5 步进
 }
 
+export interface SoupRating {
+  user_uid: number
+  username: string
+  nickname: string
+  score: number
+  created_at: string
+}
+
 export interface SoupInteractionState {
   liked?: boolean
   favorited?: boolean
@@ -184,6 +196,7 @@ export interface Post {
   tags: string[]
   post_type: 'normal' | 'poll' | 'turtle_soup'
   like_count: number
+  is_liked: boolean
   comment_count: number
   favorite_count: number
   view_count: number
@@ -221,6 +234,9 @@ export interface Competition {
   end_time: string
   creator_uid: number
   required_tag_ids: number[]
+  required_tags: Array<{ id: number; name: string }>
+  optional_tag_ids: number[]
+  competition_color: string
   score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
@@ -230,6 +246,7 @@ export interface Competition {
   created_at: string
   updated_at: string
   entries?: CompetitionEntry[]
+  rankings: CompetitionRankings
 }
 
 export interface CompetitionCreate {
@@ -239,6 +256,9 @@ export interface CompetitionCreate {
   end_time: string
   required_tag_ids: number[]
   custom_tags: string[]
+  optional_tag_ids: number[]
+  optional_custom_tags: string[]
+  competition_color: string
   score_type: 'average'
   top_n: number
   custom_page_config: Record<string, unknown>
@@ -247,11 +267,35 @@ export interface CompetitionCreate {
 export type CompetitionUpdate = CompetitionCreate
 
 export interface CompetitionEntry {
+  id: number
   competition_id: number
   soup_id: number
+  soup_title: string
   final_score: number
   author_uid: number
   rank: number | null
+  created_at: string
+}
+
+export interface CompetitionRankingEntry {
+  entry_id: number
+  soup_id: number
+  soup_title: string
+  author_uid: number
+  final_score: number
+  rank: number
+  soup_created_at: string
+}
+
+export interface CompetitionRankingGroup {
+  tag_id: number
+  tag_name: string
+  entries: CompetitionRankingEntry[]
+}
+
+export interface CompetitionRankings {
+  total: CompetitionRankingEntry[]
+  groups: CompetitionRankingGroup[]
 }
 
 // 社交相关
@@ -479,6 +523,8 @@ export interface SearchUser {
   username: string
   nickname: string
   avatar_url?: string | null
+  permission_groups?: string[]
+  role?: User['role']
 }
 
 export interface SearchPost {
@@ -498,6 +544,7 @@ export interface SearchSoup {
   average_score: number
   rating_count: number
   favorite_count: number
+  competition_colors: string[]
   created_at: string
 }
 
@@ -515,6 +562,7 @@ export interface PublicProfileUser {
   profile_background_url?: string | null
   bio?: string | null
   role: 'user' | 'admin' | 'root'
+  permission_groups: string[]
   level: number
   level_band: string
   experience_points: number
@@ -549,6 +597,7 @@ export interface ProfileSoupSummary {
   rating_count: number
   like_count: number
   favorite_count: number
+  competition_colors: string[]
   created_at: string
 }
 

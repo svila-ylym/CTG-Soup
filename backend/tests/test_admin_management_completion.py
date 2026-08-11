@@ -248,6 +248,7 @@ def test_reports_validate_targets_reject_duplicates_and_notify_reporter():
             select(Notification).where(
                 Notification.recipient_uid == ids["reporter"],
                 Notification.notification_type == NotificationType.REPORT_RESULT,
+                Notification.title == "举报处理结果",
             )
         ).all()
         assert report.handle_result == "已核实并处理"

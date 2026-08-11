@@ -503,6 +503,11 @@ class Competition(SQLModel, table=True):
         default_factory=list,
         sa_column=Column(JSON())
     )
+    optional_tag_ids: List[int] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
+    competition_color: str = Field(default="#2563EB", max_length=7)
     score_type: CompetitionScoreType = Field(default=CompetitionScoreType.AVERAGE)
     top_n: int = Field(default=10)
     custom_page_config: Dict[str, Any] = Field(
