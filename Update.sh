@@ -168,10 +168,16 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 
 [[ -n "${CTG_RESTART_COMMAND:-}" ]] || die "必须配置 CTG_RESTART_COMMAND，升级后才能安全重启并检查新服务"
+case "$CTG_RESTART_COMMAND" in
+  *"systemctl restart"*|*"supervisorctl restart"*|*"docker compose restart"*)
+    die "CTG_RESTART_COMMAND 不能在当前服务控制组内直接重启 updater，请使用脱离控制组的 helper"
+    ;;
+esac
 
 mkdir -p "$(dirname "$LOCK_DIR")"
 mkdir "$LOCK_DIR" 2>/dev/null || die "已有升级任务正在执行"
 LOCK_ACQUIRED=true
+[[ ! -e "$MAINTENANCE_FILE" ]] || die "检测到未清理的 OTA 维护标记，请先完成数据库恢复并明确删除该标记"
 
 [[ -z "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]] || die "存在未提交的已跟踪文件，拒绝升级"
 [[ -f "$BACKEND_DIR/.env" ]] || die "缺少 backend/.env"
@@ -216,8 +222,8 @@ log "安装依赖并构建前端"
 log "执行数据库迁移"
 MIGRATION_STARTED=true
 "$ROOT_DIR/dev.sh" migrate
-MIGRATION_STARTED=false
 MIGRATION_COMPLETED=true
+MIGRATION_STARTED=false
 
 log "执行已配置的服务重启命令"
 bash -lc "$CTG_RESTART_COMMAND"
