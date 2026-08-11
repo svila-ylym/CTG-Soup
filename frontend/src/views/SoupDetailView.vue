@@ -135,36 +135,12 @@
             </article>
           </div>
         </section>
-        <TransitionRoot appear :show="ratingsOpen" as="template">
-          <Dialog as="div" class="relative z-[70]" @close="ratingsOpen = false">
-            <TransitionChild as="template" enter="duration-150 ease-out" enter-from="opacity-0" enter-to="opacity-100" leave="duration-100 ease-in" leave-from="opacity-100" leave-to="opacity-0"><div class="fixed inset-0 bg-black/45" /></TransitionChild>
-            <div class="fixed inset-0 overflow-y-auto p-4">
-              <div class="flex min-h-full items-center justify-center">
-                <TransitionChild as="template" enter="duration-150 ease-out" enter-from="opacity-0 translate-y-2" enter-to="opacity-100 translate-y-0" leave="duration-100 ease-in" leave-from="opacity-100 translate-y-0" leave-to="opacity-0 translate-y-2">
-                  <DialogPanel class="w-full max-w-lg rounded-md bg-white p-5 shadow-xl dark:bg-neutral-900 sm:p-6">
-                    <div class="flex items-center justify-between gap-3"><DialogTitle class="text-lg font-semibold">评分人</DialogTitle><button class="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white" type="button" @click="ratingsOpen = false">关闭</button></div>
-                    <div v-if="ratingsLoading && !ratings.length" class="py-8 text-center text-sm text-slate-500">加载中…</div>
-                    <p v-else-if="ratingsError" class="mt-4 text-sm text-red-600">{{ ratingsError }}</p>
-                    <p v-else-if="!ratings.length" class="py-8 text-center text-sm text-slate-500">暂无公开评分。</p>
-                    <div v-else class="mt-4 divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
-                      <div v-for="rating in ratings" :key="`${rating.user_uid}-${rating.created_at}`" class="flex items-center justify-between gap-4 py-3">
-                        <router-link :to="`/profile/${rating.user_uid}`" class="min-w-0 truncate font-medium text-blue-600 hover:underline">{{ rating.nickname || rating.username }}</router-link>
-                        <span class="shrink-0 font-semibold text-amber-600">{{ rating.score.toFixed(1) }} 分</span>
-                      </div>
-                    </div>
-                    <div v-if="ratingsTotal" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-500">
-                      <span>共 {{ ratingsTotal }} 人评分 · 第 {{ ratingsPage }}/{{ ratingsTotalPages }} 页</span>
-                      <div class="flex items-center gap-2">
-                        <button class="btn-secondary px-2.5 py-1.5" type="button" :disabled="ratingsLoading || ratingsPage <= 1" @click="loadRatings(ratingsPage - 1)">上一页</button>
-                        <button class="btn-secondary px-2.5 py-1.5" type="button" :disabled="ratingsLoading || ratingsPage >= ratingsTotalPages" @click="loadRatings(ratingsPage + 1)">下一页</button>
-                      </div>
-                    </div>
-                  </DialogPanel>
-                </TransitionChild>
-              </div>
-            </div>
-          </Dialog>
-        </TransitionRoot>
+        <SoupRatingsDialog
+          :open="ratingsOpen"
+          :soup-id="soup.id"
+          :soup-title="soup.title"
+          @close="ratingsOpen = false"
+        />
         <TransitionRoot appear :show="ratingDialogOpen" as="template">
           <Dialog as="div" class="relative z-[70]" @close="closeRatingDialog">
             <TransitionChild
@@ -222,8 +198,9 @@ import { BookmarkIcon, FlagIcon, HeartIcon, PencilSquareIcon, TrashIcon, UserGro
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
 import { soupApi } from '@/api/soup'
 import { formatChinaDateTime } from '@/utils/datetime'
-import type { Comment, SoupRating, TurtleSoup } from '@/types'
+import type { Comment, TurtleSoup } from '@/types'
 import ReportDialog from '@/components/ReportDialog.vue'
+import SoupRatingsDialog from '@/components/SoupRatingsDialog.vue'
 import MentionText from '@/components/MentionText.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { extractApiError } from '@/utils/auth'
@@ -255,13 +232,7 @@ const commentError = ref('')
 const deleting = ref(false)
 const deletingCommentId = ref<number | null>(null)
 const commentReportId = ref<number | null>(null)
-const ratings = ref<SoupRating[]>([])
-const ratingsLoading = ref(false)
 const ratingsOpen = ref(false)
-const ratingsError = ref('')
-const ratingsPage = ref(1)
-const ratingsTotal = ref(0)
-const ratingsTotalPages = ref(1)
 const displayScore = computed(() => soup.value?.average_score ?? 0)
 const ratingLocked = computed(() => soup.value?.my_rating != null)
 
@@ -357,27 +328,9 @@ async function loadComments() {
     commentsLoading.value = false
   }
 }
-async function loadRatings(page = ratingsPage.value) {
-  if (!soup.value || ratingsLoading.value) return
-  ratingsLoading.value = true
-  ratingsError.value = ''
-  try {
-    const response = (await soupApi.listRatings(soup.value.id, { page, page_size: 50 })).data
-    ratings.value = response.items || []
-    ratingsPage.value = response.page
-    ratingsTotal.value = response.total
-    ratingsTotalPages.value = response.total_pages ?? 1
-  } catch (cause) {
-    ratingsError.value = extractApiError(cause, '评分列表加载失败')
-    ratings.value = []
-  } finally {
-    ratingsLoading.value = false
-  }
-}
-async function openRatings() {
-  if (!soup.value || ratingsLoading.value) return
+function openRatings() {
+  if (!soup.value) return
   ratingsOpen.value = true
-  await loadRatings(1)
 }
 function canDeleteComment(comment: Comment) {
   return Boolean(auth.user && (comment.author_uid === auth.user.uid || auth.isAdmin))
