@@ -201,6 +201,12 @@ fi
 
 if [[ -x "$BACKEND_DIR/venv/bin/python" ]]; then
   log "创建数据库备份"
+  # BaoTa keeps the PostgreSQL client matching its server outside PATH.
+  # Allow PG_DUMP_BIN from the environment/.env, then use that client when
+  # this standard installation path is available.
+  if [[ -z "${PG_DUMP_BIN:-}" && -x "/www/server/pgsql/bin/pg_dump" ]]; then
+    export PG_DUMP_BIN="/www/server/pgsql/bin/pg_dump"
+  fi
   (cd "$BACKEND_DIR" && PYTHONPATH=. "$BACKEND_DIR/venv/bin/python" -m app.services.database_backup --output-dir "$BACKUP_DIR")
 else
   die "缺少后端虚拟环境，无法在升级前备份数据库"
