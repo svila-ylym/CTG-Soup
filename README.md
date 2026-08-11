@@ -26,7 +26,7 @@ chmod +x dev.sh
 ./Update.sh --tag v1.2.3
 ```
 
-`Update.sh` 会在切换代码前保留数据库、环境文件、前端构建和运行时文件备份，升级失败时恢复原代码、依赖和前端资源。升级必须配置 `CTG_RESTART_COMMAND`，脚本会重启服务并轮询 `CTG_HEALTH_URL`，直到 `/health` 返回与发行版 tag 匹配的版本号后才解除 `private-storage/.ota-maintenance`；重启或健康检查失败时会保留维护标记，避免旧进程继续使用已迁移的数据库。若数据库迁移已经开始后失败，管理员从备份恢复数据库后再删除该标记。当前由 Screen 运行时，应将重启命令配置为可靠地停止旧进程并启动新进程。`GithubPAT.txt` 仅用于本地 Git 操作，不会被应用读取或提交；GitHub API 读取公开仓库时不需要 token。
+`Update.sh` 会在切换代码前保留数据库、环境文件、前端构建和运行时文件备份，升级失败时恢复原代码、依赖和前端资源。升级必须配置 `CTG_RESTART_COMMAND`，且该命令必须调用脱离 updater 所在控制组的 helper；脚本会重启服务并轮询 `CTG_HEALTH_URL`，直到 `/health` 返回与发行版 tag 匹配的版本号后才解除 `private-storage/.ota-maintenance`。已知的同控制组 `systemctl restart`、`supervisorctl restart` 和 `docker compose restart` 形式会被拒绝；systemd 应使用 `systemd-run --no-block` 启动独立 helper，Screen 应使用独立会话/控制命令。重启或健康检查失败时会保留维护标记，避免旧进程继续使用已迁移的数据库。若数据库迁移已经开始后失败，管理员从备份恢复数据库后再删除该标记。`GithubPAT.txt` 仅用于本地 Git 操作，不会被应用读取或提交；GitHub API 读取公开仓库时不需要 token。
 
 ### Windows 用户 (推荐 PowerShell)
 

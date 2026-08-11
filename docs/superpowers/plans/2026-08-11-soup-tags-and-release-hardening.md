@@ -140,7 +140,7 @@ In `ota.py`, create update-log directories with mode `0700` and apply mode `0600
 
 - [ ] **Step 5: Make rollback restore executable assets**
 
-In `Update.sh`, run dependency installation and frontend build before migration. Require a restart command and a matching health check before clearing maintenance. On failure before migration completes, restore the previous branch/commit, reinstall the previous pinned dependencies, and rebuild the previous frontend. Keep the timestamped database backup and print its location; do not automatically overwrite a production database. Signals retain maintenance and route through the same rollback path.
+In `Update.sh`, run dependency installation and frontend build before migration. Require a detached restart helper that cannot terminate the updater itself and a matching health check before clearing maintenance. On failure before migration completes, restore the previous branch/commit, reinstall the previous pinned dependencies, and rebuild the previous frontend. Keep the timestamped database backup and print its location; do not automatically overwrite a production database. Signals retain maintenance and route through the same rollback path.
 
 - [ ] **Step 6: Verify scripts and OTA tests**
 
