@@ -223,7 +223,7 @@ PATH=/www/server/pgsql/bin:$PATH PYTHONPATH=. venv/bin/python -m app.services.da
 PYTHONPATH=. venv/bin/python -m app.migrations.social_platform --phase all
 ```
 
-备份默认写入 `backend/backups/`，该目录已被 Git 忽略。备份命令只输出路径、创建时间和 SHA-256，不输出数据库 URL 或密码；密码仅通过 `PGPASSWORD` 子进程环境传递。`pg_dump` 主版本不得低于数据库服务端，本机应使用上例 PATH。任何真实数据库结构或数据写入前都必须重新生成备份，不得复用旧文件。
+备份默认写入 `backend/backups/`，该目录已被 Git 忽略。备份命令只输出路径、创建时间和 SHA-256，不输出数据库 URL 或密码；密码仅通过 `PGPASSWORD` 子进程环境传递。`pg_dump` 主版本不得低于数据库服务端。可在 `backend/.env` 设置 `PG_DUMP_BIN` 指向匹配的客户端；宝塔 PostgreSQL 默认会自动使用 `/www/server/pgsql/bin/pg_dump`，否则使用 PATH 中的 `pg_dump`。失败时会输出脱敏后的客户端错误，便于定位版本或权限问题。任何真实数据库结构或数据写入前都必须重新生成备份，不得复用旧文件。
 
 前端类型检查和生产构建：
 
