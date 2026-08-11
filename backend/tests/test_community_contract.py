@@ -1,13 +1,18 @@
+from datetime import timedelta
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.api import achievements, messages, posts, search, social
+from app.api import achievements, messages, posts, search, social, users
 from app.api.auth import get_current_active_user, get_current_root_user
 from app.models.database import (
     Achievement,
     AchievementConditionType,
+    Competition,
+    CompetitionEntry,
+    CompetitionStatus,
     Post,
     Soup,
     User,
@@ -64,7 +69,25 @@ def _setup():
         )
         session.add_all([post, soup, achievement])
         session.commit()
+        session.refresh(soup)
         session.refresh(achievement)
+        competition = Competition(
+            creator_uid=root.uid,
+            name="社区接口竞赛",
+            description="比赛",
+            start_time=soup.created_at - timedelta(hours=1),
+            end_time=soup.created_at + timedelta(hours=1),
+            required_tag_ids=[1],
+            competition_color="#369C47",
+            status=CompetitionStatus.ONGOING,
+        )
+        session.add(competition)
+        session.flush()
+        session.add(CompetitionEntry(
+            competition_id=competition.id,
+            soup_id=soup.id,
+            author_uid=soup.author_uid,
+        ))
         user_achievement = UserAchievement(
             user_uid=root.uid,
             achievement_id=achievement.id,
@@ -81,6 +104,7 @@ def _setup():
     app.include_router(messages.router, prefix="/api/messages")
     app.include_router(achievements.router, prefix="/api/achievements")
     app.include_router(search.router, prefix="/api/search")
+    app.include_router(users.router, prefix="/api/users")
 
     def override_db():
         with Session(engine) as session:
@@ -166,3 +190,15 @@ def test_search_returns_canonical_paged_results():
     assert posts_result.json()["items"][0]["author_uid"] == ids[1]
     assert soups_result.json()["items"][0]["author_uid"] == ids[1]
     assert soups_result.json()["items"][0]["average_score"] == 0
+    assert soups_result.json()["items"][0]["competition_colors"] == ["#369C47"]
+
+
+def test_profile_soups_include_competition_colors():
+    client, ids = _setup()
+
+    profile = client.get(f"/api/users/{ids[1]}/profile")
+
+    assert profile.status_code == 200
+    assert profile.json()["soups"]["items"][0]["competition_colors"] == [
+        "#369C47",
+    ]

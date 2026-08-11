@@ -193,6 +193,26 @@ def test_confirmed_rating_cannot_be_changed():
         assert (soup.rating_count, soup.avg_rating) == (1, 8)
 
 
+def test_rating_people_are_public_without_exposing_private_user_fields():
+    client, _engine, soup_id, _users, _current = _test_app()
+    assert client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8.5}).status_code == 200
+
+    response = client.get(f"/api/turtle-soups/{soup_id}/ratings")
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["nickname"] == "评论者"
+    assert response.json()["items"][0]["username"] == "commenter"
+    assert response.json()["items"][0]["score"] == 8.5
+    assert set(response.json()["items"][0]) == {
+        "user_uid",
+        "username",
+        "nickname",
+        "score",
+        "created_at",
+    }
+
+
 def test_comment_count_is_independent_from_ratings_and_excludes_replies():
     client, _engine, soup_id, _users, _current = _test_app()
 

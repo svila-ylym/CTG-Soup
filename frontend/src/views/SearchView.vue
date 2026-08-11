@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { searchApi } from '@/api/search'
 import { extractApiError } from '@/utils/auth'
+import { competitionBorderStyle } from '@/utils/competitionBorder'
 import type {
   SearchPost,
   SearchSectionState,
@@ -43,14 +44,14 @@ const hasErrors = computed(() =>
   visibleKinds.value.some((kind) => Boolean(sections[kind].error)),
 )
 
-function requestKind(kind: SearchKind, value: string): Promise<SearchItem[]> {
+function requestKind(kind: SearchKind, value: string, trackEgg = false): Promise<SearchItem[]> {
   if (kind === 'users') {
-    return searchApi.users(value).then((response) => response.data.items)
+    return searchApi.users(value, 1, 20, trackEgg).then((response) => response.data.items)
   }
   if (kind === 'posts') {
-    return searchApi.posts(value).then((response) => response.data.items)
+    return searchApi.posts(value, 1, 20, trackEgg).then((response) => response.data.items)
   }
-  return searchApi.soups(value).then((response) => response.data.items)
+  return searchApi.soups(value, 1, 20, trackEgg).then((response) => response.data.items)
 }
 
 function setItems(kind: SearchKind, items: SearchItem[]) {
@@ -77,7 +78,7 @@ async function loadKinds(kinds: SearchKind[], value: string) {
   }
 
   const results = await Promise.allSettled(
-    kinds.map((kind) => requestKind(kind, value)),
+    kinds.map((kind, index) => requestKind(kind, value, index === 0)),
   )
   if (version !== requestVersion.value) return
 
@@ -238,7 +239,8 @@ watch(
                 v-for="soup in sections['turtle-soups'].items"
                 :key="soup.id"
                 :to="`/soups/${soup.id}`"
-                class="block border-b border-slate-100 pb-4 last:border-0 dark:border-neutral-800"
+                class="competition-border-surface block rounded-md border border-slate-200 p-4 dark:border-neutral-800"
+                :style="competitionBorderStyle(soup.competition_colors)"
               >
                 <strong class="block break-words">{{ soup.title }}</strong>
                 <span class="mt-1 line-clamp-2 block break-words text-sm text-slate-500">{{ soup.puzzle_excerpt }}</span>

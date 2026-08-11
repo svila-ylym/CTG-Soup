@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -9,6 +9,9 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.api import tags, turtle_soups
 from app.api.auth import get_current_active_user, get_optional_current_user
 from app.models.database import (
+    Competition,
+    CompetitionEntry,
+    CompetitionStatus,
     Soup,
     SoupImage,
     SoupTag,
@@ -175,6 +178,37 @@ def test_list_filters_by_taxonomy_and_increments_tag_page_view():
     assert response.json()["items"][0]["id"] == soup_id
     with Session(engine) as session:
         assert session.get(Tag, active_id).view_count == 1
+
+
+def test_list_and_detail_include_competition_colors():
+    client, engine, _active_id, _, soup_id, _, _ = _client()
+    with Session(engine) as session:
+        soup = session.get(Soup, soup_id)
+        competition = Competition(
+            creator_uid=soup.author_uid,
+            name="竞赛色接口",
+            description="比赛",
+            start_time=soup.created_at - timedelta(hours=1),
+            end_time=soup.created_at + timedelta(hours=1),
+            required_tag_ids=[1],
+            competition_color="#2468AC",
+            status=CompetitionStatus.ONGOING,
+        )
+        session.add(competition)
+        session.flush()
+        session.add(CompetitionEntry(
+            competition_id=competition.id,
+            soup_id=soup.id,
+            author_uid=soup.author_uid,
+        ))
+        session.commit()
+
+    listed = client.get("/api/turtle-soups")
+    detail = client.get(f"/api/turtle-soups/{soup_id}")
+
+    assert listed.status_code == detail.status_code == 200
+    assert listed.json()["items"][0]["competition_colors"] == ["#2468AC"]
+    assert detail.json()["competition_colors"] == ["#2468AC"]
 
 
 def test_non_author_cannot_update_soup():
