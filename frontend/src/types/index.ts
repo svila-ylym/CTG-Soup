@@ -107,9 +107,46 @@ export interface SoupImageRef {
   size: number
 }
 
+export interface SoupCollectionInput {
+  name: string
+  description: string
+}
+
+export interface SoupCollectionRef {
+  id: number
+  owner_uid: number
+  name: string
+}
+
+export interface SoupCollectionSummary extends SoupCollectionRef {
+  description: string
+  soup_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SoupCollectionSoupSummary {
+  id: number
+  title: string
+  puzzle_excerpt: string
+  genre: string
+  soup_color: string
+  average_score: number
+  rating_count: number
+  like_count: number
+  competition_colors: string[]
+  created_at: string
+}
+
+export interface SoupCollectionDetail extends SoupCollectionSummary {
+  author: SoupAuthor
+  soups: PageResult<SoupCollectionSoupSummary>
+}
+
 export interface TurtleSoup {
   id: number
   title: string
+  collection: SoupCollectionRef | null
   puzzle: string
   solution?: string | null
   puzzle_images: SoupImageRef[]
@@ -142,6 +179,7 @@ export interface TurtleSoup {
 
 export interface SoupCreate {
   title: string
+  collection_id: number | null
   puzzle: string
   solution: string
   genre: CreateSoupGenre

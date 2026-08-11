@@ -17,6 +17,7 @@ function normalizeSoup(payload: LegacySoupPayload): TurtleSoup {
   return {
     ...payload,
     author_uid: authorUid,
+    collection: payload.collection ?? null,
     author: payload.author ?? { uid: authorUid, username: '', nickname: '' },
     tags: payload.tags ?? [],
     puzzle_images: payload.puzzle_images ?? [],

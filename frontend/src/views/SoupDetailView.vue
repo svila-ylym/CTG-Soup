@@ -9,6 +9,10 @@
             <div class="min-w-0 flex-1">
               <p class="mb-2 break-words text-sm text-blue-500">海龟汤 · <router-link :to="`/profile/${soup.author_uid}`" class="font-medium hover:underline">{{ soup.author.nickname || soup.author.username || '未知作者' }}</router-link></p>
               <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">{{ soup.title }}</h1>
+              <p v-if="soup.collection" class="mt-2 break-words text-sm text-slate-500">
+                来源于
+                <router-link class="font-medium text-blue-600 hover:underline" :to="`/collections/${soup.collection.id}`">「{{ soup.collection.name }}」合集</router-link>
+              </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 <span :class="genreBadgeClass(soup.genre)">流派 · {{ soup.genre }}</span>
                 <span :class="soupColorBadgeClass(soup.soup_color)">汤色 · {{ soup.soup_color }}</span>

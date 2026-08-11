@@ -11,7 +11,7 @@ import logging
 from sqlmodel import Session
 
 from app.core.config import get_settings
-from app.api import auth, users, posts, turtle_soups, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home, update
+from app.api import auth, users, posts, turtle_soups, collections, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home, update
 from pathlib import Path
 from app.db import engine, init_db
 from app.services.dependency_health import optional_dependency_status
@@ -153,6 +153,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(users.router, prefix="/api/users", tags=["用户"])
 app.include_router(posts.router, prefix="/api/posts", tags=["帖子"])
 app.include_router(turtle_soups.router, prefix="/api/turtle-soups", tags=["海龟汤"])
+app.include_router(collections.router, prefix="/api/collections", tags=["合集"])
 app.include_router(tags.router, prefix="/api/tags", tags=["标签"])
 app.include_router(announcements.router, prefix="/api/announcements", tags=["公告"])
 app.include_router(competitions.router, prefix="/api/competitions", tags=["比赛"])
