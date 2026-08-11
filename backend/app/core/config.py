@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     
     # 数据库配置
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/turtle_soup"
+    # PostgreSQL client used for OTA backups. Leave empty to auto-detect pg_dump.
+    PG_DUMP_BIN: Optional[str] = None
     AUTO_CREATE_DATABASE: bool = False
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
