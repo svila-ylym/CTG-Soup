@@ -48,6 +48,7 @@ class ProfileSoupSummary(BaseModel):
     rating_count: int
     like_count: int
     favorite_count: int
+    competition_colors: list[str] = Field(default_factory=list)
     created_at: datetime
 
 

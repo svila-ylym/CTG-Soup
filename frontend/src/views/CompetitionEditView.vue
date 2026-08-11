@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ArrowLeftIcon, ArrowPathIcon, PaperAirplaneIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import CompetitionRichTextEditor from '@/components/CompetitionRichTextEditor.vue'
 import http from '@/api/http'
 import { tagApi } from '@/api/tags'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
-import { chinaLocalDateTimeToUtcIso } from '@/utils/datetime'
-import type { Competition, CompetitionCreate, Tag } from '@/types'
+import { chinaLocalDateTimeToUtcIso, utcIsoToChinaLocalDateTime } from '@/utils/datetime'
+import type { Competition, CompetitionUpdate, Tag } from '@/types'
 
 type TagRole = 'required' | 'optional'
 
+const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const tags = ref<Tag[]>([])
+const loading = ref(true)
 const loadingTags = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const keywordInput = reactive({ required: '', optional: '' })
+const pageConfig = ref<Record<string, unknown>>({})
 
 const form = reactive({
   name: '',
@@ -108,6 +113,38 @@ async function loadTags() {
   }
 }
 
+async function loadCompetition() {
+  try {
+    if (!auth.user && auth.accessToken) await auth.fetchCurrentUser()
+    const competition = (await http.get<Competition>(`/competitions/${route.params.id}`)).data
+    if (competition.creator_uid !== auth.user?.uid) {
+      error.value = '只能修改自己发布的比赛'
+      return
+    }
+    if (competition.settled_at) {
+      error.value = '已结算的比赛不能修改'
+      return
+    }
+    form.name = competition.name
+    form.description = competition.description
+    form.start_time = utcIsoToChinaLocalDateTime(competition.start_time)
+    form.end_time = utcIsoToChinaLocalDateTime(competition.end_time)
+    form.required_tag_ids = [...competition.required_tag_ids]
+    form.optional_tag_ids = [...competition.optional_tag_ids]
+    form.top_n = competition.top_n
+    form.competition_color = competition.competition_color
+    pageConfig.value = { ...competition.custom_page_config }
+    const imageIds = competition.custom_page_config?.image_asset_ids
+    form.image_asset_ids = Array.isArray(imageIds)
+      ? imageIds.map(Number).filter(Number.isFinite)
+      : []
+  } catch (cause) {
+    error.value = extractApiError(cause, '比赛加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 async function submit() {
   error.value = ''
   if (!requiredCount.value) {
@@ -135,7 +172,7 @@ async function submit() {
 
   submitting.value = true
   try {
-    const payload: CompetitionCreate = {
+    const payload: CompetitionUpdate = {
       name: form.name.trim(),
       description: form.description,
       start_time: startTime,
@@ -147,31 +184,40 @@ async function submit() {
       competition_color: form.competition_color,
       score_type: 'average',
       top_n: form.top_n,
-      custom_page_config: { format: 'rich_html', image_asset_ids: form.image_asset_ids },
+      custom_page_config: {
+        ...pageConfig.value,
+        format: 'rich_html',
+        image_asset_ids: form.image_asset_ids,
+      },
     }
-    const response = await http.post<Competition>('/competitions', payload)
+    const response = await http.put<Competition>(`/competitions/${route.params.id}`, payload)
     await router.push(`/competitions/${response.data.id}`)
   } catch (cause) {
-    error.value = extractApiError(cause, '比赛发布失败')
+    error.value = extractApiError(cause, '比赛修改失败')
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(loadTags)
+onMounted(() => { void Promise.all([loadTags(), loadCompetition()]) })
 </script>
 
 <template>
   <main class="page-shell">
     <div class="page-container max-w-4xl">
-      <router-link class="mb-6 inline-flex items-center gap-1 text-sm text-blue-600" to="/competitions">
+      <router-link class="mb-6 inline-flex items-center gap-1 text-sm text-blue-600" :to="`/competitions/${route.params.id}`">
         <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
-        返回比赛列表
+        返回比赛详情
       </router-link>
 
-      <h1 class="section-title text-3xl">发布比赛</h1>
+      <h1 class="section-title text-3xl">修改比赛</h1>
+      <p v-if="loading" class="py-16 text-center text-slate-500">正在加载比赛…</p>
+      <div v-else-if="error && !form.name" class="py-16 text-center">
+        <p class="break-words text-red-600">{{ error }}</p>
+        <router-link class="btn-secondary mt-4" :to="`/competitions/${route.params.id}`">返回详情</router-link>
+      </div>
 
-      <form class="mt-7 space-y-6 border-y border-slate-200 py-7 dark:border-neutral-800" @submit.prevent="submit">
+      <form v-else class="mt-7 space-y-6 border-y border-slate-200 py-7 dark:border-neutral-800" @submit.prevent="submit">
         <label class="block">
           <span class="mb-2 block text-sm font-medium">比赛名称</span>
           <input v-model="form.name" class="form-control" maxlength="200" required>
@@ -259,10 +305,10 @@ onMounted(loadTags)
         <div class="flex flex-wrap gap-3 pt-2">
           <button class="btn-primary gap-2" type="submit" :disabled="submitting">
             <ArrowPathIcon v-if="submitting" class="h-5 w-5 animate-spin" aria-hidden="true" />
-            <PaperAirplaneIcon v-else class="h-5 w-5" aria-hidden="true" />
-            {{ submitting ? '发布中…' : '发布比赛' }}
+            <CheckIcon v-else class="h-5 w-5" aria-hidden="true" />
+            {{ submitting ? '保存中…' : '保存修改' }}
           </button>
-          <router-link class="btn-secondary" to="/competitions">取消</router-link>
+          <router-link class="btn-secondary" :to="`/competitions/${route.params.id}`">取消</router-link>
         </div>
       </form>
     </div>

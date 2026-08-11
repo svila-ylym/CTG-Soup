@@ -11,6 +11,8 @@ from app.models.database import (
     CompetitionEntry,
     CompetitionStatus,
     OperationLog,
+    Soup,
+    Tag,
     User,
     UploadedAsset,
     get_db,
@@ -22,7 +24,10 @@ from app.schemas.competitions import (
     CompetitionUpdate,
 )
 from app.services.competition_entries import (
+    CompetitionNotEndedError,
     collect_competition_entries,
+    competition_optional_tag_ids,
+    competition_rankings,
     competition_tag_ids,
     delete_competition_entries,
     lock_competition_collection,
@@ -65,14 +70,43 @@ def _sync_statuses(db: Session, competitions: list[Competition]) -> None:
         db.commit()
 
 
-def _payload(db: Session, competition: Competition, include_entries: bool = False) -> dict:
+def _payload(
+    db: Session,
+    competition: Competition,
+    include_entries: bool = False,
+    tag_names_by_id: dict[int, str] | None = None,
+) -> dict:
     entries = []
     if include_entries:
-        entries = db.exec(
+        entry_rows = db.exec(
             select(CompetitionEntry)
             .where(CompetitionEntry.competition_id == competition.id)
             .order_by(CompetitionEntry.rank.is_(None), CompetitionEntry.rank, CompetitionEntry.created_at)
         ).all()
+        soup_ids = {entry.soup_id for entry in entry_rows}
+        soup_titles = {
+            soup.id: soup.title
+            for soup in db.exec(select(Soup).where(Soup.id.in_(soup_ids))).all()
+        } if soup_ids else {}
+        entries = [
+            {
+                "id": entry.id,
+                "competition_id": entry.competition_id,
+                "soup_id": entry.soup_id,
+                "soup_title": soup_titles.get(entry.soup_id, "已删除作品"),
+                "author_uid": entry.author_uid,
+                "final_score": entry.final_score,
+                "rank": entry.rank,
+                "created_at": _utc(entry.created_at),
+            }
+            for entry in entry_rows
+        ]
+    required_tag_ids = competition_tag_ids(competition)
+    if tag_names_by_id is None:
+        tag_names_by_id = {
+            tag.id: tag.name
+            for tag in db.exec(select(Tag).where(Tag.id.in_(required_tag_ids))).all()
+        } if required_tag_ids else {}
     return {
         "id": competition.id,
         "creator_uid": competition.creator_uid,
@@ -80,7 +114,16 @@ def _payload(db: Session, competition: Competition, include_entries: bool = Fals
         "description": competition.description,
         "start_time": _utc(competition.start_time),
         "end_time": _utc(competition.end_time),
-        "required_tag_ids": competition_tag_ids(competition),
+        "required_tag_ids": required_tag_ids,
+        "required_tags": [
+            {
+                "id": tag_id,
+                "name": tag_names_by_id.get(tag_id, f"标签 #{tag_id}"),
+            }
+            for tag_id in required_tag_ids
+        ],
+        "optional_tag_ids": competition_optional_tag_ids(competition),
+        "competition_color": competition.competition_color,
         "score_type": competition.score_type,
         "top_n": competition.top_n,
         "custom_page_config": competition.custom_page_config,
@@ -90,16 +133,28 @@ def _payload(db: Session, competition: Competition, include_entries: bool = Fals
         "updated_at": _utc(competition.updated_at),
         "settled_at": _utc(competition.settled_at),
         "entries": entries,
+        "rankings": (
+            competition_rankings(db, competition)
+            if include_entries
+            else {"total": [], "groups": []}
+        ),
     }
 
 
 def _resolve_competition_tags(db: Session, data: CompetitionCreate | CompetitionUpdate):
     try:
-        return resolve_active_tags(
+        required_tags = resolve_active_tags(
             db,
             data.required_tag_ids,
             data.custom_tags,
             min_count=1,
+            max_count=10,
+        )
+        optional_tags = resolve_active_tags(
+            db,
+            data.optional_tag_ids,
+            data.optional_custom_tags,
+            min_count=0,
             max_count=10,
         )
     except TagSelectionError as exc:
@@ -108,6 +163,15 @@ def _resolve_competition_tags(db: Session, data: CompetitionCreate | Competition
             status_code=422,
             detail={"code": code, "message": exc.message},
         ) from exc
+    if {tag.id for tag in required_tags}.intersection(tag.id for tag in optional_tags):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "COMPETITION_TAG_ROLE_CONFLICT",
+                "message": "同一标签不能同时设为必选和可选",
+            },
+        )
+    return required_tags, optional_tags
 
 
 def _competition_content(
@@ -163,7 +227,7 @@ def create_competition(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    tags = _resolve_competition_tags(db, data)
+    required_tags, optional_tags = _resolve_competition_tags(db, data)
     description, custom_page_config = _competition_content(db, data, current_user.uid)
     now = datetime.utcnow()
     current_status = (
@@ -179,7 +243,9 @@ def create_competition(
         description=description,
         start_time=data.start_time,
         end_time=data.end_time,
-        required_tag_ids=[tag.id for tag in tags],
+        required_tag_ids=[tag.id for tag in required_tags],
+        optional_tag_ids=[tag.id for tag in optional_tags],
+        competition_color=data.competition_color,
         score_type=data.score_type,
         top_n=data.top_n,
         custom_page_config=custom_page_config,
@@ -210,13 +276,24 @@ def update_competition(
     if competition.settled_at is not None:
         raise HTTPException(status_code=409, detail="已结算的比赛不能修改")
 
-    tags = _resolve_competition_tags(db, data)
+    resolved_data = data
+    if not {"optional_tag_ids", "optional_custom_tags"}.intersection(
+        data.model_fields_set
+    ):
+        resolved_data = data.model_copy(update={
+            "optional_tag_ids": competition_optional_tag_ids(competition),
+            "optional_custom_tags": [],
+        })
+    required_tags, optional_tags = _resolve_competition_tags(db, resolved_data)
     description, custom_page_config = _competition_content(db, data, current_user.uid)
     competition.name = data.name
     competition.description = description
     competition.start_time = data.start_time
     competition.end_time = data.end_time
-    competition.required_tag_ids = [tag.id for tag in tags]
+    competition.required_tag_ids = [tag.id for tag in required_tags]
+    competition.optional_tag_ids = [tag.id for tag in optional_tags]
+    if "competition_color" in data.model_fields_set:
+        competition.competition_color = data.competition_color
     competition.score_type = data.score_type
     competition.top_n = data.top_n
     competition.custom_page_config = custom_page_config
@@ -247,8 +324,20 @@ def list_competitions(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
+    required_tag_ids = list(dict.fromkeys(
+        tag_id
+        for competition in rows
+        for tag_id in competition_tag_ids(competition)
+    ))
+    tag_names_by_id = {
+        tag.id: tag.name
+        for tag in db.exec(select(Tag).where(Tag.id.in_(required_tag_ids))).all()
+    } if required_tag_ids else {}
     return {
-        "items": [_payload(db, competition) for competition in rows],
+        "items": [
+            _payload(db, competition, tag_names_by_id=tag_names_by_id)
+            for competition in rows
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -274,9 +363,10 @@ def settle_competition_endpoint(
     competition = db.get(Competition, competition_id)
     if competition is None:
         raise HTTPException(status_code=404, detail="比赛不存在")
-    if competition.settled_at is None and datetime.utcnow() < competition.end_time:
-        raise HTTPException(status_code=409, detail="比赛尚未结束，不能结算")
-    settle_competition(db, competition)
+    try:
+        settle_competition(db, competition)
+    except CompetitionNotEndedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _payload(db, competition, include_entries=True)
 
 

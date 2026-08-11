@@ -11,6 +11,7 @@ from app.models.database import (
     Announcement,
     AnnouncementStatus,
     Competition,
+    CompetitionEntry,
     CompetitionStatus,
     OperationLog,
     Soup,
@@ -129,6 +130,11 @@ def test_admin_tag_create_sanitizes_text_and_public_tags_hide_disabled():
 
 def test_tag_merge_moves_soups_and_preserves_alias():
     client, engine, ids = _client()
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        competition.required_tag_ids = [ids[2], ids[3]]
+        session.commit()
+
     response = client.post(f"/api/admin/tags/{ids[2]}/merge", json={"target_tag_id": ids[3]})
     assert response.status_code == 200
     with Session(engine) as session:
@@ -136,6 +142,63 @@ def test_tag_merge_moves_soups_and_preserves_alias():
         alias = session.exec(select(TagAlias).where(TagAlias.tag_id == ids[3])).first()
         assert alias is not None and alias.alias_slug == "source"
         assert session.get(Competition, ids[5]).required_tag_ids == [ids[3]]
+        assert session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == ids[5],
+                CompetitionEntry.soup_id == ids[4],
+            )
+        ).one() is not None
+
+
+def test_disabling_tag_rebuilds_unsettled_membership_but_keeps_settled_entries():
+    client, engine, ids = _client()
+    with Session(engine) as session:
+        soup = session.get(Soup, ids[4])
+        settled = Competition(
+            creator_uid=ids[0],
+            name="已冻结标签赛",
+            description="比赛",
+            start_time=datetime.utcnow() - timedelta(days=2),
+            end_time=datetime.utcnow() - timedelta(days=1),
+            required_tag_ids=[ids[2]],
+            status=CompetitionStatus.COMPLETED,
+            settled_at=datetime.utcnow(),
+            result_snapshot={"total": [], "groups": []},
+        )
+        session.add(settled)
+        session.flush()
+        session.add_all([
+            CompetitionEntry(
+                competition_id=ids[5],
+                soup_id=soup.id,
+                author_uid=soup.author_uid,
+            ),
+            CompetitionEntry(
+                competition_id=settled.id,
+                soup_id=soup.id,
+                author_uid=soup.author_uid,
+            ),
+        ])
+        session.commit()
+        settled_id = settled.id
+
+    response = client.put(
+        f"/api/admin/tags/{ids[2]}",
+        json={"status": "disabled"},
+    )
+
+    assert response.status_code == 200
+    with Session(engine) as session:
+        assert session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == ids[5]
+            )
+        ).all() == []
+        assert session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == settled_id
+            )
+        ).one() is not None
 
 
 def test_announcements_only_return_published_and_strip_html():

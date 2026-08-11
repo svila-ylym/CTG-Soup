@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -101,7 +102,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/competitions/:id/edit',
     name: 'EditCompetition',
-    component: () => import('@/views/CompetitionCreateView.vue'),
+    component: () => import('@/views/CompetitionEditView.vue'),
     meta: { title: '修改比赛', requiresAuth: true, requiresAdmin: true },
   },
   {
@@ -178,11 +179,13 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - 汤吧社区` : '汤吧社区'
-  
-  const token = localStorage.getItem('access_token')
+
+  const auth = useAuthStore()
+  await auth.init()
+  const token = auth.accessToken
   const requiresAuth = to.meta.requiresAuth === true
   const guestOnly = to.meta.guestOnly === true
   const requiresAdmin = to.meta.requiresAdmin === true
@@ -200,14 +203,14 @@ router.beforeEach((to, _from, next) => {
   
   if (requiresAdmin) {
     // 这里可以检查用户角色
-    const userRole = localStorage.getItem('user_role')
+    const userRole = auth.user?.role
     if (userRole !== 'admin' && userRole !== 'root') {
       next({ name: 'Home' })
       return
     }
   }
 
-  if (requiresRoot && localStorage.getItem('user_role') !== 'root') {
+  if (requiresRoot && auth.user?.role !== 'root') {
     next({ name: 'Home' })
     return
   }

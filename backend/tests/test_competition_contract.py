@@ -22,6 +22,7 @@ from app.models.database import (
     get_db,
 )
 from app.services.competition_entries import (
+    competition_colors_for_soups,
     evaluate_soup_competitions,
     refresh_soup_competition_scores,
 )
@@ -422,3 +423,366 @@ def test_unranked_entries_are_frozen_after_settlement():
         ).one()
         assert entry.rank is None
         assert entry.final_score == 5.0
+
+
+def test_competition_requires_every_required_tag_and_reconciles_removal():
+    _, engine, ids = _setup()
+    with Session(engine) as session:
+        second_required = Tag(
+            slug="第二必选",
+            name="第二必选",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(second_required)
+        session.flush()
+        competition = session.get(Competition, ids[5])
+        competition.required_tag_ids = [ids[2], second_required.id]
+        soup = session.get(Soup, ids[4])
+
+        assert evaluate_soup_competitions(session, soup) == []
+
+        relation = SoupTag(soup_id=soup.id, tag_id=second_required.id)
+        session.add(relation)
+        session.flush()
+        assert len(evaluate_soup_competitions(session, soup)) == 1
+
+        session.delete(session.get(SoupTag, (soup.id, second_required.id)))
+        session.flush()
+        assert evaluate_soup_competitions(session, soup) == []
+        assert session.exec(select(CompetitionEntry)).all() == []
+
+
+def test_optional_tags_build_independent_rankings_with_oldest_tie_first():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        optional_one = Tag(
+            slug="可选一",
+            name="可选一",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        optional_two = Tag(
+            slug="可选二",
+            name="可选二",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add_all([optional_one, optional_two])
+        session.flush()
+        newer = session.get(Soup, ids[4])
+        newer.avg_rating = 8.0
+        older = Soup(
+            author_uid=ids[1],
+            title="更早发布",
+            puzzle="谜面",
+            solution="汤底",
+            avg_rating=8.0,
+            created_at=newer.created_at - timedelta(minutes=5),
+        )
+        session.add(older)
+        session.flush()
+        session.add_all([
+            SoupTag(soup_id=newer.id, tag_id=optional_one.id),
+            SoupTag(soup_id=newer.id, tag_id=optional_two.id),
+            SoupTag(soup_id=older.id, tag_id=ids[2]),
+            SoupTag(soup_id=older.id, tag_id=optional_one.id),
+        ])
+        competition = session.get(Competition, ids[5])
+        competition.optional_tag_ids = [optional_one.id, optional_two.id]
+        competition.competition_color = "#12AB34"
+        session.flush()
+        evaluate_soup_competitions(session, newer)
+        evaluate_soup_competitions(session, older)
+        optional_one_id = optional_one.id
+        optional_two_id = optional_two.id
+        older_id = older.id
+
+    response = client.get(f"/api/competitions/{ids[5]}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["optional_tag_ids"] == [optional_one_id, optional_two_id]
+    assert payload["competition_color"] == "#12AB34"
+    assert [entry["soup_id"] for entry in payload["rankings"]["total"]] == [
+        older_id,
+        ids[4],
+    ]
+    assert [entry["soup_title"] for entry in payload["rankings"]["total"]] == [
+        "更早发布",
+        "参赛作品",
+    ]
+    assert {entry["soup_title"] for entry in payload["entries"]} == {
+        "更早发布",
+        "参赛作品",
+    }
+    groups = {group["tag_id"]: group for group in payload["rankings"]["groups"]}
+    assert [entry["soup_id"] for entry in groups[optional_one_id]["entries"]] == [
+        older_id,
+        ids[4],
+    ]
+    assert [entry["soup_id"] for entry in groups[optional_two_id]["entries"]] == [
+        ids[4],
+    ]
+
+    with Session(engine) as session:
+        assert competition_colors_for_soups(session, [ids[4], older_id]) == {
+            ids[4]: ["#12AB34"],
+            older_id: ["#12AB34"],
+        }
+
+
+def test_create_competition_resolves_optional_custom_tag_and_normalizes_color():
+    client, engine, ids = _setup()
+    response = client.post(
+        "/api/competitions",
+        json={
+            "name": "分组赛",
+            "description": "说明",
+            "start_time": "2026-08-08T00:00:00",
+            "end_time": "2026-08-09T00:00:00",
+            "required_tag_ids": [ids[2]],
+            "optional_custom_tags": ["支线谜题"],
+            "competition_color": "#abcdef",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["competition_color"] == "#ABCDEF"
+    with Session(engine) as session:
+        optional = session.exec(select(Tag).where(Tag.slug == "支线谜题")).one()
+        assert response.json()["optional_tag_ids"] == [optional.id]
+
+
+def test_competition_detail_returns_required_tag_names():
+    client, _engine, ids = _setup()
+
+    response = client.get(f"/api/competitions/{ids[5]}")
+
+    assert response.status_code == 200
+    assert response.json()["required_tags"] == [
+        {"id": ids[2], "name": "原创"},
+    ]
+
+
+def test_competition_rejects_custom_role_conflict_invalid_color_and_tag_limit():
+    client, _engine, ids = _setup()
+    base_payload = {
+        "name": "输入校验赛",
+        "description": "说明",
+        "start_time": "2026-08-08T00:00:00",
+        "end_time": "2026-08-09T00:00:00",
+        "required_tag_ids": [ids[2]],
+    }
+
+    conflict = client.post(
+        "/api/competitions",
+        json={
+            **base_payload,
+            "required_tag_ids": [],
+            "custom_tags": ["同名标签"],
+            "optional_custom_tags": [" 同名标签 "],
+        },
+    )
+    invalid_color = client.post(
+        "/api/competitions",
+        json={**base_payload, "competition_color": "blue"},
+    )
+    too_many_optional = client.post(
+        "/api/competitions",
+        json={
+            **base_payload,
+            "optional_custom_tags": [f"可选标签 {index}" for index in range(11)],
+        },
+    )
+
+    assert conflict.status_code == 422
+    assert conflict.json()["detail"]["code"] == "COMPETITION_TAG_ROLE_CONFLICT"
+    assert invalid_color.status_code == 422
+    assert too_many_optional.status_code == 422
+    assert too_many_optional.json()["detail"]["code"] == "TOO_MANY_TAGS"
+
+
+def test_edit_competition_rebuilds_membership():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        soup = session.get(Soup, ids[4])
+        evaluate_soup_competitions(session, soup)
+        replacement = Tag(
+            slug="替代必选",
+            name="替代必选",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(replacement)
+        session.commit()
+        session.refresh(replacement)
+        replacement_id = replacement.id
+
+    now = datetime.now(timezone.utc)
+    response = client.put(
+        f"/api/competitions/{ids[5]}",
+        json={
+            "name": "修改后的比赛",
+            "description": "修改后的说明",
+            "start_time": (now - timedelta(hours=1)).isoformat(),
+            "end_time": (now + timedelta(hours=1)).isoformat(),
+            "required_tag_ids": [replacement_id],
+            "competition_color": "#13579B",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["entries"] == []
+    with Session(engine) as session:
+        assert session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == ids[5]
+            )
+        ).all() == []
+
+
+def test_legacy_edit_preserves_optional_groups_and_competition_color():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        optional = Tag(
+            slug="兼容分组",
+            name="兼容分组",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(optional)
+        session.flush()
+        competition = session.get(Competition, ids[5])
+        competition.optional_tag_ids = [optional.id]
+        competition.competition_color = "#654321"
+        session.commit()
+        optional_id = optional.id
+
+    now = datetime.now(timezone.utc)
+    response = client.put(
+        f"/api/competitions/{ids[5]}",
+        json={
+            "name": "旧客户端修改",
+            "description": "仍然兼容",
+            "start_time": (now - timedelta(hours=1)).isoformat(),
+            "end_time": (now + timedelta(hours=1)).isoformat(),
+            "required_tag_ids": [ids[2]],
+            "score_type": "average",
+            "top_n": 10,
+            "custom_page_config": {},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["optional_tag_ids"] == [optional_id]
+    assert response.json()["competition_color"] == "#654321"
+
+
+def test_settlement_freezes_optional_groups_and_live_scores():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        optional = Tag(
+            slug="冻结分组",
+            name="冻结分组",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(optional)
+        session.flush()
+        soup = session.get(Soup, ids[4])
+        soup.avg_rating = 6.5
+        session.add(SoupTag(soup_id=soup.id, tag_id=optional.id))
+        competition = session.get(Competition, ids[5])
+        competition.optional_tag_ids = [optional.id]
+        session.flush()
+        evaluate_soup_competitions(session, soup)
+        optional_id = optional.id
+
+    live = client.get(f"/api/competitions/{ids[5]}").json()["rankings"]
+    assert live["total"][0]["final_score"] == 6.5
+    assert live["groups"][0]["entries"][0]["soup_id"] == ids[4]
+
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        competition.end_time = datetime.utcnow() - timedelta(minutes=1)
+        session.commit()
+    settled = client.post(f"/api/competitions/{ids[5]}/settle")
+    assert settled.status_code == 200
+
+    with Session(engine) as session:
+        soup = session.get(Soup, ids[4])
+        soup.avg_rating = 9.5
+        session.delete(session.get(SoupTag, (ids[4], optional_id)))
+        session.commit()
+
+    frozen = client.get(f"/api/competitions/{ids[5]}").json()["rankings"]
+    assert frozen == settled.json()["rankings"]
+    assert frozen["total"][0]["final_score"] == 6.5
+    assert frozen["groups"][0]["entries"][0]["soup_id"] == ids[4]
+
+
+def test_competition_colors_are_ordered_deduplicated_and_removed_on_delete():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        soup = session.get(Soup, ids[4])
+        first = session.get(Competition, ids[5])
+        first.competition_color = "#abcdef"
+        first.start_time = soup.created_at - timedelta(hours=2)
+        second = Competition(
+            creator_uid=ids[0],
+            name="同色比赛",
+            description="比赛",
+            start_time=soup.created_at - timedelta(hours=1),
+            end_time=soup.created_at + timedelta(hours=1),
+            required_tag_ids=[ids[2]],
+            competition_color="#ABCDEF",
+            status=CompetitionStatus.ONGOING,
+        )
+        third = Competition(
+            creator_uid=ids[0],
+            name="第二颜色比赛",
+            description="比赛",
+            start_time=soup.created_at - timedelta(minutes=30),
+            end_time=soup.created_at + timedelta(hours=1),
+            required_tag_ids=[ids[2]],
+            competition_color="#123456",
+            status=CompetitionStatus.ONGOING,
+        )
+        session.add_all([second, third])
+        session.flush()
+        session.add_all([
+            CompetitionEntry(
+                competition_id=first.id,
+                soup_id=soup.id,
+                author_uid=soup.author_uid,
+            ),
+            CompetitionEntry(
+                competition_id=second.id,
+                soup_id=soup.id,
+                author_uid=soup.author_uid,
+            ),
+            CompetitionEntry(
+                competition_id=third.id,
+                soup_id=soup.id,
+                author_uid=soup.author_uid,
+            ),
+        ])
+        session.commit()
+        second_id = second.id
+        third_id = third.id
+
+        assert competition_colors_for_soups(session, [soup.id]) == {
+            soup.id: ["#ABCDEF", "#123456"],
+        }
+
+    assert client.delete(f"/api/competitions/{third_id}").status_code == 204
+    with Session(engine) as session:
+        assert competition_colors_for_soups(session, [ids[4]]) == {
+            ids[4]: ["#ABCDEF"],
+        }
+
+    assert client.delete(f"/api/competitions/{second_id}").status_code == 204
+    assert client.delete(f"/api/competitions/{ids[5]}").status_code == 204
+    with Session(engine) as session:
+        assert competition_colors_for_soups(session, [ids[4]]) == {ids[4]: []}

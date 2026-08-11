@@ -11,10 +11,11 @@ import logging
 from sqlmodel import Session
 
 from app.core.config import get_settings
-from app.api import auth, users, posts, turtle_soups, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home
+from app.api import auth, users, posts, turtle_soups, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home, update
 from pathlib import Path
 from app.db import engine, init_db
 from app.services.dependency_health import optional_dependency_status
+from app.services.ota import maintenance_state_path
 from app.services.pending_accounts import cleanup_expired_pending_users
 
 settings = get_settings()
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 def _cleanup_pending_accounts_once() -> None:
+    if maintenance_state_path().is_file():
+        logger.info("Skipping pending-account cleanup during OTA maintenance")
+        return
     try:
         with Session(engine) as db:
             deleted_uids = cleanup_expired_pending_users(db)
@@ -64,6 +68,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def ota_maintenance_mode(request: Request, call_next):
+    path = request.url.path
+    allowed = (
+        path in {"/health", "/api/version", "/api/admin/update/status"}
+        or path.startswith("/api/admin/update/tasks/")
+    )
+    if maintenance_state_path().is_file() and not allowed:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": {
+                    "code": "OTA_MAINTENANCE",
+                    "message": "系统正在升级或等待数据库恢复",
+                }
+            },
+            headers={"Retry-After": "60"},
+        )
+    return await call_next(request)
 
 
 # 异常处理
@@ -138,6 +163,7 @@ app.include_router(system_messages.router, prefix="/api/system-messages", tags=[
 app.include_router(notifications.router, prefix="/api/notifications", tags=["通知"])
 app.include_router(achievements.router, prefix="/api/achievements", tags=["成就"])
 app.include_router(admin.router, prefix="/api/admin", tags=["管理后台"])
+app.include_router(update.router, prefix="/api/admin/update", tags=["OTA 更新"])
 app.include_router(search.router, prefix="/api/search", tags=["搜索"])
 app.include_router(uploads.router, prefix="/api/uploads", tags=["上传"])
 app.include_router(home.router, prefix="/api/home", tags=["首页"])
@@ -168,6 +194,11 @@ async def health_check():
         for value in dependencies.values()
     ) else "degraded"
     return {"status": status_value, "version": settings.APP_VERSION, "dependencies": dependencies}
+
+
+@app.get("/api/version")
+async def version_info():
+    return {"version": settings.APP_VERSION}
 
 
 # 启动事件

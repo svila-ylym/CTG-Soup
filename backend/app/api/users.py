@@ -37,6 +37,7 @@ from app.schemas.profiles import (
 )
 from app.services.levels import level_band, level_progress
 from app.services import levels
+from app.services.competition_entries import competition_colors_for_soups
 from app.schemas.levels import SigninStatusResponse
 from app.core.config import get_settings
 
@@ -175,7 +176,14 @@ async def update_featured_soups(
             )
         )
     db.commit()
-    return [_profile_soup_payload(soups_by_id[soup_id]) for soup_id in data.soup_ids]
+    colors_by_soup = competition_colors_for_soups(db, data.soup_ids)
+    return [
+        _profile_soup_payload(
+            soups_by_id[soup_id],
+            colors_by_soup.get(soup_id, []),
+        )
+        for soup_id in data.soup_ids
+    ]
 
 
 @router.put("/me/preferences", response_model=UserResponse)
@@ -424,7 +432,10 @@ async def daily_signin(
     return _signin_payload(locked_user, business_day, signed_in=True, gained=gained)
 
 
-def _profile_soup_payload(soup: TurtleSoup) -> dict:
+def _profile_soup_payload(
+    soup: TurtleSoup,
+    competition_colors: list[str] | None = None,
+) -> dict:
     return {
         "id": soup.id,
         "title": soup.title,
@@ -435,6 +446,7 @@ def _profile_soup_payload(soup: TurtleSoup) -> dict:
         "rating_count": soup.rating_count,
         "like_count": soup.like_count,
         "favorite_count": soup.favorite_count,
+        "competition_colors": competition_colors or [],
         "created_at": soup.created_at,
     }
 
@@ -469,6 +481,11 @@ async def get_user_profile(
         TurtleSoup.author_uid == uid,
         TurtleSoup.status.in_(PUBLIC_SOUP_STATUSES),
     ).order_by(FeaturedSoup.position.asc()).all()
+    profile_soup_ids = list(dict.fromkeys([
+        *[soup.id for soup in featured],
+        *[soup.id for soup in soups],
+    ]))
+    colors_by_soup = competition_colors_for_soups(db, profile_soup_ids)
 
     post_count = db.query(Post).filter(
         Post.author_uid == uid,
@@ -540,9 +557,15 @@ async def get_user_profile(
             "is_friend": is_friend,
             "is_blocked": is_blocked,
         },
-        "featured_soups": [_profile_soup_payload(soup) for soup in featured],
+        "featured_soups": [
+            _profile_soup_payload(soup, colors_by_soup.get(soup.id, []))
+            for soup in featured
+        ],
         "soups": {
-            "items": [_profile_soup_payload(soup) for soup in soups],
+            "items": [
+                _profile_soup_payload(soup, colors_by_soup.get(soup.id, []))
+                for soup in soups
+            ],
             "total": soup_total,
             "page": page,
             "page_size": page_size,

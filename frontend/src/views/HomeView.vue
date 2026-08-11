@@ -174,7 +174,7 @@
         </div>
         <div v-else-if="leaderboardPreviewError" class="rounded-md border border-rose-200 bg-rose-50 p-8 text-center text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">热门汤暂时没端上来，去列表看看吧。</div>
         <div v-else-if="leaderboardPreview.length" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          <article v-for="(soup, index) in leaderboardPreview.slice(0, 6)" :key="soup.id" class="soup-card group relative cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white p-6 shadow-[5px_7px_0_rgba(86,139,165,.12)] transition hover:-translate-y-2 hover:shadow-[9px_13px_0_rgba(86,139,165,.2)] dark:border-slate-800 dark:bg-slate-950" :style="{ animationDelay: `${index * 80 + 120}ms` }" @click="$router.push(`/soups/${soup.id}`)">
+          <article v-for="(soup, index) in leaderboardPreview.slice(0, 6)" :key="soup.id" class="competition-border-surface soup-card group relative cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white p-6 shadow-[5px_7px_0_rgba(86,139,165,.12)] transition hover:-translate-y-2 hover:shadow-[9px_13px_0_rgba(86,139,165,.2)] dark:border-slate-800 dark:bg-slate-950" :style="{ ...competitionBorderStyle(soup.competition_colors), animationDelay: `${index * 80 + 120}ms` }" @click="$router.push(`/soups/${soup.id}`)">
             <div class="flex items-start justify-between gap-4">
               <span class="rank-badge flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-black text-white" :class="rankClass(index)">{{ index + 1 }}</span>
               <span class="inline-flex items-center gap-1 text-sm font-black text-amber-500"><StarIcon class="h-4 w-4" aria-hidden="true" />{{ soup.average_score.toFixed(1) }}</span>
@@ -213,6 +213,7 @@ import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
 import { useAuthStore } from '@/stores/auth'
 import type { TurtleSoup } from '@/types'
+import { competitionBorderStyle } from '@/utils/competitionBorder'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 
 const soupStore = useSoupStore()

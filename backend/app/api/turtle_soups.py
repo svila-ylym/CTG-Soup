@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field, field_validator
@@ -20,13 +20,24 @@ from app.schemas.soups import (
 )
 from app.services.soup_rules import validate_score
 from app.services.competition_entries import (
+    competition_colors_for_soups,
     evaluate_soup_competitions,
+    lock_competition_collection,
     remove_soup_from_unsettled_competitions,
     refresh_soup_competition_scores,
 )
 from app.services.mentions import mention_refs, notify_comment_reply, sync_mentions
 from app.services.tag_resolution import TagSelectionError, resolve_active_tags
 from app.services.levels import level_band, level_progress
+from app.services.user_display import user_display_fields
+from app.services.easter_eggs import (
+    SOUP_PHRASE,
+    comment_egg_candidates,
+    contains_phrase,
+    has_five_turtle_soups,
+    has_rated_all_public_soups,
+    safely_claim_and_attach,
+)
 
 router = APIRouter()
 
@@ -103,6 +114,7 @@ def _author(db: Session, uid: int) -> AuthorSummary:
         nickname=user.nickname if user else "未知用户",
         level=progress.level,
         level_band=level_band(progress.level),
+        **user_display_fields(db, user),
     )
 
 
@@ -153,6 +165,7 @@ def _payload(
     current_user: Optional[User],
     reveal: bool = False,
     comment_count: Optional[int] = None,
+    competition_colors: Optional[list[str]] = None,
 ) -> dict:
     is_author = bool(current_user and current_user.uid == soup.author_uid)
     can_manage = bool(
@@ -199,6 +212,11 @@ def _payload(
         "is_solution_public": soup.status in {"published", "revealed"},
         "genre": soup.genre,
         "soup_color": soup.soup_color,
+        "competition_colors": (
+            competition_colors
+            if competition_colors is not None
+            else competition_colors_for_soups(db, [soup.id]).get(soup.id, [])
+        ),
         "main_player_count": soup.main_player_count,
         "secondary_player_count": soup.secondary_player_count,
         "tags": _tags(db, soup.id),
@@ -394,9 +412,16 @@ def list_soups(
         selected_tag.view_count += 1
         db.commit()
     comment_counts = _soup_comment_counts(db, [row.id for row in rows])
+    colors_by_soup = competition_colors_for_soups(db, [row.id for row in rows])
     return {
         "items": [
-            _payload(row, db, None, comment_count=comment_counts.get(row.id, 0))
+            _payload(
+                row,
+                db,
+                None,
+                comment_count=comment_counts.get(row.id, 0),
+                competition_colors=colors_by_soup.get(row.id, []),
+            )
             for row in rows
         ],
         "total": total,
@@ -409,6 +434,7 @@ def list_soups(
 @router.post("", response_model=SoupResponse, status_code=status.HTTP_201_CREATED)
 def create_soup(
     data: SoupCreate,
+    response: Response,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -434,11 +460,18 @@ def create_soup(
     db.add(soup)
     db.flush()
     _sync_soup_images(db, soup.id, puzzle_assets, solution_assets)
+    lock_competition_collection(db)
     _sync_tags(db, soup, tags)
     db.flush()
     evaluate_soup_competitions(db, soup)
     db.commit()
     db.refresh(soup)
+    egg_candidates: list[tuple[int, str]] = []
+    if has_five_turtle_soups(db, current_user.uid):
+        egg_candidates.append((2, "five_turtle_soups"))
+    if contains_phrase("\n".join((soup.title, soup.puzzle, soup.solution)), SOUP_PHRASE):
+        egg_candidates.append((5, "new_soup_phrase"))
+    safely_claim_and_attach(db, current_user, response, egg_candidates)
     return _payload(soup, db, current_user, True, comment_count=0)
 
 
@@ -494,6 +527,7 @@ def update_soup(
     tag_values_present = "tag_ids" in values or "custom_tags" in values
     if tag_values_present:
         tags = _resolve_tags(db, values.pop("tag_ids", []), values.pop("custom_tags", []))
+        lock_competition_collection(db)
         _sync_tags(db, soup, tags)
     values.pop("is_revealed", None)
     if data.is_revealed is not None:
@@ -591,6 +625,7 @@ def list_comments(
 def create_comment(
     soup_id: int,
     data: CommentInput,
+    response: Response,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -626,6 +661,12 @@ def create_comment(
         notify_comment_reply(db, current_user.uid, parent, {item.uid for item in mentions})
     db.commit()
     db.refresh(comment)
+    safely_claim_and_attach(
+        db,
+        current_user,
+        response,
+        comment_egg_candidates(comment.content),
+    )
     return _comment_payload(db, comment)
 
 
@@ -670,7 +711,13 @@ def _rating_already_submitted() -> HTTPException:
 
 
 @router.put("/{soup_id}/rating")
-def rate_soup(soup_id: int, data: RatingInput, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+def rate_soup(
+    soup_id: int,
+    data: RatingInput,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    response: Response = None,
+):
     soup = _get_soup_for_rating(db, soup_id)
     if soup.author_uid == current_user.uid:
         raise HTTPException(400, detail={"code": "SELF_RATING_FORBIDDEN", "message": "不能给自己的作品评分"})
@@ -687,7 +734,54 @@ def rate_soup(soup_id: int, data: RatingInput, current_user: User = Depends(get_
     refresh_soup_competition_scores(db, soup)
     db.commit()
     db.refresh(soup)
+    if response is not None and has_rated_all_public_soups(db, current_user.uid):
+        safely_claim_and_attach(
+            db,
+            current_user,
+            response,
+            [(6, "rated_all_public_soups")],
+        )
     return {"average_score": soup.avg_rating, "rating_count": soup.rating_count, "my_rating": data.score}
+
+
+@router.get("/{soup_id}/ratings")
+def list_soup_ratings(
+    soup_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """公开展示评分人和分数，不暴露邮箱等私密字段。"""
+    _get_soup(db, soup_id)
+    query = (
+        select(Rating, User)
+        .join(User, User.uid == Rating.user_uid)
+        .where(Rating.soup_id == soup_id)
+    )
+    total = db.exec(
+        select(func.count(Rating.id)).where(Rating.soup_id == soup_id)
+    ).one()
+    rows = db.exec(
+        query.order_by(Rating.created_at.desc(), Rating.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [
+            {
+                "user_uid": rating.user_uid,
+                "username": user.username,
+                "nickname": user.nickname,
+                "score": rating.score,
+                "created_at": rating.created_at,
+            }
+            for rating, user in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.put("/{soup_id}/{kind}")
