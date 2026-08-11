@@ -63,19 +63,23 @@ async def message_socket(websocket: WebSocket) -> None:
         ):
             await _auth_failure(websocket, "WS_AUTH_REQUIRED", "首帧必须是认证事件")
             return
+        inactive = False
         try:
             with Session(engine) as db:
                 user = _resolve_user_from_token(frame["token"], db)
-                if user.status != UserStatus.ACTIVE:
-                    await _auth_failure(websocket, "WS_AUTH_INACTIVE", "账户未激活")
-                    return
-                user_uid = user.uid
+                inactive = user.status != UserStatus.ACTIVE
+                if not inactive:
+                    user_uid = user.uid
         except Exception:
             await _auth_failure(websocket, "WS_AUTH_INVALID", "无法验证凭据")
+            return
+        if inactive:
+            await _auth_failure(websocket, "WS_AUTH_INACTIVE", "账户未激活")
             return
         if maintenance_state_path().is_file():
             await websocket.close(code=1013, reason="系统维护中")
             return
+        assert user_uid is not None
         await message_gateway.register(user_uid, websocket)
         while True:
             if maintenance_state_path().is_file():
@@ -101,47 +105,69 @@ async def message_socket(websocket: WebSocket) -> None:
             if not isinstance(conversation_id, int):
                 await _error(websocket, "CONVERSATION_FORBIDDEN", "无权访问此会话")
                 continue
+            event_error: tuple[str, str] | None = None
+            typing_event: str | None = None
+            read_payload: dict[str, int] | None = None
+            recipient_uids: set[int] | None = None
+            close_for_maintenance = False
             with Session(engine) as db:
                 conversation = _conversation(db, conversation_id, user_uid)
                 if conversation is None:
-                    await _error(websocket, "CONVERSATION_FORBIDDEN", "无权访问此会话")
-                    continue
-                pair = {conversation.low_uid, conversation.high_uid}
-                if event_type in {"typing.start", "typing.stop"}:
-                    if event_type == "typing.start":
-                        await message_gateway.typing_start(conversation_id, user_uid, pair)
-                    else:
-                        await message_gateway.typing_stop(conversation_id, user_uid, pair)
-                    continue
-                if event_type == "message.read":
+                    event_error = ("CONVERSATION_FORBIDDEN", "无权访问此会话")
+                else:
+                    pair = {conversation.low_uid, conversation.high_uid}
+                if conversation is not None and event_type in {"typing.start", "typing.stop"}:
+                    typing_event = event_type
+                    recipient_uids = pair
+                elif conversation is not None and event_type == "message.read":
                     message_id = event.get("message_id")
                     if not isinstance(message_id, int):
-                        await _error(websocket, "MESSAGE_ID_INVALID", "消息 ID 无效")
-                        continue
-                    message = db.get(PrivateMessage, message_id)
-                    if message is None or message.conversation_id != conversation_id:
-                        await _error(websocket, "MESSAGE_NOT_FOUND", "消息不存在")
-                        continue
-                    if message.receiver_uid != user_uid:
-                        await _error(websocket, "MESSAGE_READ_FORBIDDEN", "只能标记收到的消息")
-                        continue
-                    unread_messages = db.exec(
-                        select(PrivateMessage).where(
-                            PrivateMessage.conversation_id == conversation_id,
-                            PrivateMessage.receiver_uid == user_uid,
-                            PrivateMessage.id <= message_id,
-                            PrivateMessage.is_read == False,
-                        )
-                    ).all()
-                    for unread_message in unread_messages:
-                        unread_message.is_read = True
-                    if maintenance_state_path().is_file():
-                        await websocket.close(code=1013, reason="系统维护中")
-                        break
-                    db.commit()
-                    await message_gateway.broadcast(conversation_id, {"type": "message.read", "conversation_id": conversation_id, "message_id": message_id, "reader_uid": user_uid}, recipient_uids=pair)
-                    continue
-                await _error(websocket, "INVALID_EVENT", "不支持的事件类型")
+                        event_error = ("MESSAGE_ID_INVALID", "消息 ID 无效")
+                    else:
+                        message = db.get(PrivateMessage, message_id)
+                        if message is None or message.conversation_id != conversation_id:
+                            event_error = ("MESSAGE_NOT_FOUND", "消息不存在")
+                        elif message.receiver_uid != user_uid:
+                            event_error = ("MESSAGE_READ_FORBIDDEN", "只能标记收到的消息")
+                        else:
+                            unread_messages = db.exec(
+                                select(PrivateMessage).where(
+                                    PrivateMessage.conversation_id == conversation_id,
+                                    PrivateMessage.receiver_uid == user_uid,
+                                    PrivateMessage.id <= message_id,
+                                    PrivateMessage.is_read == False,
+                                )
+                            ).all()
+                            for unread_message in unread_messages:
+                                unread_message.is_read = True
+                            if maintenance_state_path().is_file():
+                                close_for_maintenance = True
+                            else:
+                                db.commit()
+                                read_payload = {
+                                    "conversation_id": conversation_id,
+                                    "message_id": message_id,
+                                    "reader_uid": user_uid,
+                                }
+                                recipient_uids = pair
+                elif conversation is not None:
+                    event_error = ("INVALID_EVENT", "不支持的事件类型")
+            if close_for_maintenance:
+                await websocket.close(code=1013, reason="系统维护中")
+                break
+            if event_error is not None:
+                await _error(websocket, *event_error)
+                continue
+            if typing_event == "typing.start":
+                await message_gateway.typing_start(conversation_id, user_uid, recipient_uids or set())
+            elif typing_event == "typing.stop":
+                await message_gateway.typing_stop(conversation_id, user_uid, recipient_uids or set())
+            elif read_payload is not None:
+                await message_gateway.broadcast(
+                    conversation_id,
+                    {"type": "message.read", **read_payload},
+                    recipient_uids=recipient_uids or set(),
+                )
     finally:
         if user_uid is not None:
             await message_gateway.unregister(user_uid, websocket)
