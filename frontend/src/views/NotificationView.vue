@@ -6,6 +6,7 @@ import { useUnreadStore } from '@/stores/unread'
 import { extractApiError } from '@/utils/auth'
 import { formatChinaDateTime } from '@/utils/datetime'
 import type { Notification, PageResult } from '@/types'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 
 const router = useRouter()
 const unreadStore = useUnreadStore()
@@ -61,20 +62,23 @@ onMounted(load)
       <div v-else-if="error" class="py-12 text-center"><p class="text-red-600">{{ error }}</p><button class="btn-secondary mt-4" type="button" @click="load">重新加载</button></div>
       <p v-else-if="!notifications.length" class="py-16 text-center text-slate-500">暂无通知</p>
       <div v-else class="divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
-        <button
+        <article
           v-for="item in notifications"
           :key="item.id"
-          class="block w-full p-5 text-left transition hover:bg-slate-50 dark:hover:bg-neutral-800"
+          class="block w-full cursor-pointer p-5 text-left transition hover:bg-slate-50 dark:hover:bg-neutral-800"
           :class="{ 'border-l-4 border-blue-500 bg-blue-50/40 dark:bg-blue-950/20': !item.is_read }"
-          type="button"
+          role="button"
+          tabindex="0"
           @click="open(item)"
+          @keydown.enter.self.prevent="open(item)"
+          @keydown.space.self.prevent="open(item)"
         >
           <div class="flex min-w-0 items-start justify-between gap-4">
-            <div class="min-w-0 flex-1"><h2 class="break-words font-semibold">{{ item.title }}</h2><p class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{{ item.content }}</p></div>
+            <div class="min-w-0 flex-1"><h2 class="break-words font-semibold"><LinkifiedText :text="item.title" /></h2><p class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300"><LinkifiedText :text="item.content" /></p></div>
             <span v-if="!item.is_read" class="shrink-0 text-xs text-blue-700">未读</span>
           </div>
           <time class="mt-3 block text-xs text-slate-500">{{ formatChinaDateTime(item.created_at) }}</time>
-        </button>
+        </article>
       </div>
     </div>
   </main>

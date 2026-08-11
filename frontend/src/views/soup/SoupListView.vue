@@ -93,7 +93,7 @@
           <div class="p-6">
             <!-- 标题 -->
             <h3 class="mb-2 line-clamp-2 break-words text-xl font-semibold text-gray-900 dark:text-white">
-              {{ soup.title }}
+              <LinkifiedText :text="soup.title" />
             </h3>
 
             <div class="mb-3 flex flex-wrap gap-2">
@@ -103,7 +103,7 @@
 
             <!-- 谜面预览 -->
             <p class="mb-4 line-clamp-3 break-words text-sm text-gray-600 dark:text-gray-400">
-              {{ soup.puzzle }}
+              <LinkifiedText :text="soup.puzzle" />
             </p>
 
             <!-- 标签 -->
@@ -226,6 +226,7 @@ import { tagApi } from '@/api/tags'
 import type { CreateSoupColor, CreateSoupGenre, Tag, TurtleSoup } from '@/types'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 import SoupRatingsDialog from '@/components/SoupRatingsDialog.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 
 const soupStore = useSoupStore()
 

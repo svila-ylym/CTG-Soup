@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, ChatBubbleOvalLeftIcon, EyeIcon, FlagIcon, HeartIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { postsApi } from '@/api/posts'
 import MentionText from '@/components/MentionText.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -158,7 +159,7 @@ onMounted(load)
             <LevelBadge :level="post.author?.level" :band="post.author?.level_band" compact />
             <time>· {{ formatChinaDateTime(post.created_at) }}</time>
           </div>
-          <h1 class="mt-4 break-words text-2xl font-bold sm:text-3xl">{{ post.title }}</h1>
+          <h1 class="mt-4 break-words text-2xl font-bold sm:text-3xl"><LinkifiedText :text="post.title" /></h1>
           <p class="mt-6 break-words whitespace-pre-wrap leading-8 text-slate-700 dark:text-slate-200">
             <MentionText :text="post.content" :mentions="post.mentions" />
           </p>

@@ -7,6 +7,7 @@ import { extractApiError } from '@/utils/auth'
 import { competitionBorderStyle } from '@/utils/competitionBorder'
 import { parseUtcDateTime } from '@/utils/datetime'
 import type { SoupCollectionDetail } from '@/types'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -77,13 +78,13 @@ watch(
       </div>
       <template v-else-if="collection">
         <header class="border-b border-slate-200 pb-7 dark:border-neutral-800">
-          <h1 class="break-words text-3xl font-bold sm:text-4xl">{{ collection.name }}</h1>
+          <h1 class="break-words text-3xl font-bold sm:text-4xl"><LinkifiedText :text="collection.name" /></h1>
           <p class="mt-3 text-sm text-slate-500">
             由
             <router-link class="font-medium text-blue-600 hover:underline" :to="`/profile/${collection.owner_uid}`">{{ collection.author.nickname || collection.author.username }}</router-link>
             创建 · {{ collection.soup_count }} 篇公开作品
           </p>
-          <p v-if="collection.description" class="mt-5 max-w-3xl break-words whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-300">{{ collection.description }}</p>
+          <p v-if="collection.description" class="mt-5 max-w-3xl break-words whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-300"><LinkifiedText :text="collection.description" /></p>
         </header>
 
         <section class="py-7">
