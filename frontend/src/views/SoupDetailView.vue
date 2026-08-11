@@ -8,7 +8,11 @@
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <p class="mb-2 break-words text-sm text-blue-500">海龟汤 · <router-link :to="`/profile/${soup.author_uid}`" class="font-medium hover:underline">{{ soup.author.nickname || soup.author.username || '未知作者' }}</router-link></p>
-              <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">{{ soup.title }}</h1>
+              <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl"><LinkifiedText :text="soup.title" /></h1>
+              <p v-if="soup.collection" class="mt-2 break-words text-sm text-slate-500">
+                来源于
+                <router-link class="font-medium text-blue-600 hover:underline" :to="`/collections/${soup.collection.id}`">「{{ soup.collection.name }}」合集</router-link>
+              </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 <span :class="genreBadgeClass(soup.genre)">流派 · {{ soup.genre }}</span>
                 <span :class="soupColorBadgeClass(soup.soup_color)">汤色 · {{ soup.soup_color }}</span>
@@ -30,7 +34,7 @@
 
           <section class="mt-8">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">谜面</h2>
-            <p v-if="soup.puzzle" class="break-words whitespace-pre-wrap leading-7 text-gray-700 dark:text-gray-300">{{ soup.puzzle }}</p>
+            <p v-if="soup.puzzle" class="break-words whitespace-pre-wrap leading-7 text-gray-700 dark:text-gray-300"><LinkifiedText :text="soup.puzzle" /></p>
             <div v-if="soup.puzzle_images.length" class="mt-4 grid gap-4 sm:grid-cols-2">
               <a v-for="(image, index) in soup.puzzle_images" :key="image.id" :href="image.public_url" target="_blank" rel="noopener noreferrer" class="block bg-slate-50 dark:bg-neutral-900">
                 <img :src="image.public_url" :alt="`${soup.title} 谜面图片 ${index + 1}`" class="max-h-[32rem] w-full object-contain">
@@ -41,11 +45,11 @@
           <dl class="mt-6 grid gap-4 border-y border-slate-200 py-5 dark:border-neutral-800 sm:grid-cols-2">
             <div class="min-w-0">
               <dt class="text-sm font-medium text-slate-500">主要人物</dt>
-              <dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ soup.main_player_count || '未填写' }}</dd>
+              <dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200"><LinkifiedText :text="soup.main_player_count || '未填写'" /></dd>
             </div>
             <div class="min-w-0">
               <dt class="text-sm font-medium text-slate-500">次要人物</dt>
-              <dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ soup.secondary_player_count || '未填写' }}</dd>
+              <dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200"><LinkifiedText :text="soup.secondary_player_count || '未填写'" /></dd>
             </div>
           </dl>
 
@@ -56,7 +60,7 @@
                 {{ revealing ? '加载中…' : '揭示汤底' }}
               </button>
             </div>
-            <p v-if="revealed && soup.solution" class="mt-3 break-words whitespace-pre-wrap leading-7 text-gray-700 dark:text-gray-300">{{ soup.solution }}</p>
+            <p v-if="revealed && soup.solution" class="mt-3 break-words whitespace-pre-wrap leading-7 text-gray-700 dark:text-gray-300"><LinkifiedText :text="soup.solution" /></p>
             <div v-if="revealed && soup.solution_images.length" class="mt-4 grid gap-4 sm:grid-cols-2">
               <a v-for="(image, index) in soup.solution_images" :key="image.id" :href="image.public_url" target="_blank" rel="noopener noreferrer" class="block bg-white/70 dark:bg-neutral-900">
                 <img :src="image.public_url" :alt="`${soup.title} 汤底图片 ${index + 1}`" class="max-h-[32rem] w-full object-contain">
@@ -203,6 +207,7 @@ import ReportDialog from '@/components/ReportDialog.vue'
 import SoupRatingsDialog from '@/components/SoupRatingsDialog.vue'
 import MentionText from '@/components/MentionText.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import { extractApiError } from '@/utils/auth'
 import { useAuthStore } from '@/stores/auth'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'

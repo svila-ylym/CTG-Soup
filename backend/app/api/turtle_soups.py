@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_active_user, get_current_user, get_optional_current_user
-from app.models.database import Comment, CommentTargetType, Favorite, Like, MentionTargetType, OperationLog, Rating, Soup, SoupImage, SoupTag, Tag, UploadedAsset, User, get_db
+from app.models.database import Comment, CommentTargetType, Favorite, Like, MentionTargetType, OperationLog, Rating, Soup, SoupCollection, SoupImage, SoupTag, Tag, UploadedAsset, User, get_db
 from app.schemas.soups import (
     AuthorSummary,
     SoupCreate,
@@ -201,9 +201,23 @@ def _payload(
             )
         ).first()
         my_rating = rating.score if rating else None
+    collection = (
+        db.get(SoupCollection, soup.collection_id)
+        if soup.collection_id is not None
+        else None
+    )
     return {
         "id": soup.id,
         "title": soup.title,
+        "collection": (
+            {
+                "id": collection.id,
+                "owner_uid": collection.owner_uid,
+                "name": collection.name,
+            }
+            if collection is not None
+            else None
+        ),
         "puzzle": soup.puzzle,
         "solution": soup.solution if shown else None,
         "puzzle_images": puzzle_images,
@@ -311,6 +325,30 @@ def _resolve_owned_images(
         [by_id[asset_id] for asset_id in puzzle_ids],
         [by_id[asset_id] for asset_id in solution_ids],
     )
+
+
+def _resolve_owned_collection(
+    db: Session,
+    owner_uid: int,
+    collection_id: Optional[int],
+) -> Optional[SoupCollection]:
+    if collection_id is None:
+        return None
+    collection = db.get(SoupCollection, collection_id)
+    if collection is None:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "COLLECTION_NOT_FOUND", "message": "合集不存在"},
+        )
+    if collection.owner_uid != owner_uid:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "COLLECTION_OWNER_MISMATCH",
+                "message": "只能选择自己创建的合集",
+            },
+        )
+    return collection
 
 
 def _validate_content_presence(
@@ -439,6 +477,7 @@ def create_soup(
     db: Session = Depends(get_db),
 ):
     tags = _resolve_tags(db, data.tag_ids, data.custom_tags)
+    collection = _resolve_owned_collection(db, current_user.uid, data.collection_id)
     puzzle_assets, solution_assets = _resolve_owned_images(
         db,
         current_user.uid,
@@ -448,6 +487,7 @@ def create_soup(
     _validate_content_presence(data.puzzle, data.solution, puzzle_assets, solution_assets)
     soup = Soup(
         author_uid=current_user.uid,
+        collection_id=collection.id if collection is not None else None,
         title=data.title,
         puzzle=data.puzzle,
         solution=data.solution,
@@ -500,6 +540,13 @@ def update_soup(
     if soup.author_uid != current_user.uid:
         raise HTTPException(status_code=403, detail={"code": "SOUP_UPDATE_FORBIDDEN", "message": "无权更新此作品"})
     values = data.model_dump(exclude_unset=True)
+    if "collection_id" in values:
+        collection = _resolve_owned_collection(
+            db,
+            current_user.uid,
+            values.pop("collection_id"),
+        )
+        soup.collection_id = collection.id if collection is not None else None
     current_puzzle_assets = _soup_images(db, soup.id, "puzzle")
     current_solution_assets = _soup_images(db, soup.id, "solution")
     puzzle_ids = values.pop(

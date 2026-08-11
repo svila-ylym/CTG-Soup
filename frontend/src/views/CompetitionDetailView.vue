@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
 import DOMPurify from 'dompurify'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
@@ -78,7 +79,7 @@ onMounted(load)
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <span class="text-sm text-blue-600">比赛 #{{ competition.id }}</span>
-              <h1 class="mt-2 break-words text-2xl font-bold sm:text-3xl">{{ competition.name }}</h1>
+              <h1 class="mt-2 break-words text-2xl font-bold sm:text-3xl"><LinkifiedText :text="competition.name" /></h1>
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <span class="h-5 w-5 border border-black/10" :style="{ backgroundColor: competition.competition_color }" :title="competition.competition_color"></span>

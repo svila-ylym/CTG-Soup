@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import type { MentionRef } from '@/types'
 
 const props = defineProps<{
@@ -47,5 +48,5 @@ const parts = computed<TextPart[]>(() => {
     :to="`/profile/${part.mention.uid}`"
     class="font-medium text-blue-600 hover:underline"
     @click.stop
-  >{{ part.text }}</router-link><template v-else>{{ part.text }}</template></template></span>
+  >{{ part.text }}</router-link><LinkifiedText v-else :text="part.text" /></template></span>
 </template>

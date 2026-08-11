@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { collectionApi } from '@/api/collections'
 import { tagApi } from '@/api/tags'
 import SoupImagePicker from '@/components/SoupImagePicker.vue'
-import type { SoupEditorState, Tag } from '@/types'
+import type { SoupCollectionSummary, SoupEditorState, Tag } from '@/types'
 
 const state = defineModel<SoupEditorState>({ required: true })
 const props = defineProps<{
@@ -14,6 +15,9 @@ const props = defineProps<{
 const emit = defineEmits<{ submit: []; cancel: [] }>()
 
 const tags = ref<Tag[]>([])
+const collections = ref<SoupCollectionSummary[]>([])
+const collectionsLoading = ref(false)
+const collectionsError = ref('')
 const newTag = ref('')
 const validationError = ref('')
 const tagCount = computed(() => state.value.tag_ids.length + state.value.custom_tags.length)
@@ -29,6 +33,24 @@ async function loadTags() {
     tags.value = items
   } catch {
     tags.value = []
+  }
+}
+
+async function loadCollections() {
+  collectionsLoading.value = true
+  collectionsError.value = ''
+  try {
+    const first = await collectionApi.mine(1, 100)
+    const items = [...first.data.items]
+    for (let page = 2; page <= (first.data.total_pages ?? 1); page += 1) {
+      const response = await collectionApi.mine(page, 100)
+      items.push(...response.data.items)
+    }
+    collections.value = items
+  } catch {
+    collectionsError.value = '合集加载失败'
+  } finally {
+    collectionsLoading.value = false
   }
 }
 
@@ -58,7 +80,10 @@ function submit() {
   emit('submit')
 }
 
-onMounted(loadTags)
+onMounted(() => {
+  void loadTags()
+  void loadCollections()
+})
 </script>
 
 <template>
@@ -66,6 +91,21 @@ onMounted(loadTags)
     <label class="block">
       <span class="mb-2 block text-sm font-medium">标题</span>
       <input v-model="state.title" class="form-control" maxlength="200" required>
+    </label>
+
+    <label class="block">
+      <span class="mb-2 block text-sm font-medium">合集</span>
+      <select v-model="state.collection_id" class="form-control" :disabled="collectionsLoading">
+        <option :value="null">不加入合集</option>
+        <option v-for="collection in collections" :key="collection.id" :value="collection.id">
+          {{ collection.name }}
+        </option>
+      </select>
+      <span v-if="collectionsLoading" class="mt-2 block text-xs text-slate-500">正在加载合集…</span>
+      <span v-else-if="collectionsError" class="mt-2 flex items-center gap-2 text-xs text-red-600">
+        {{ collectionsError }}
+        <button class="text-blue-600 hover:underline" type="button" @click="loadCollections">重试</button>
+      </span>
     </label>
 
     <div>
