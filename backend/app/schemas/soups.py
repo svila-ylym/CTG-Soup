@@ -41,6 +41,7 @@ def _normalized_custom_tags(values: list[str]) -> list[str]:
 
 class SoupCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+    collection_id: Optional[int] = Field(default=None, gt=0)
     puzzle: str = ""
     solution: str = ""
     genre: CreateGenre
@@ -84,6 +85,7 @@ class SoupCreate(BaseModel):
 
 class SoupUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    collection_id: Optional[int] = Field(default=None, gt=0)
     puzzle: Optional[str] = None
     solution: Optional[str] = None
     genre: Optional[CreateGenre] = None
@@ -161,9 +163,16 @@ class AuthorSummary(BaseModel):
     level_band: str = "black"
 
 
+class SoupCollectionRef(BaseModel):
+    id: int
+    owner_uid: int
+    name: str
+
+
 class SoupResponse(BaseModel):
     id: int
     title: str
+    collection: Optional[SoupCollectionRef] = None
     puzzle: str
     solution: Optional[str]
     puzzle_images: list[UploadedAssetResponse] = Field(default_factory=list)

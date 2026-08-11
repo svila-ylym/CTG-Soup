@@ -64,6 +64,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '海龟汤详情' },
   },
   {
+    path: '/collections/:id',
+    name: 'CollectionDetail',
+    component: () => import('@/views/CollectionDetailView.vue'),
+    meta: { title: '合集详情' },
+  },
+  {
     path: '/leaderboard',
     name: 'Leaderboard',
     component: () => import('@/views/LeaderboardView.vue'),

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ChatBubbleOvalLeftIcon, EyeIcon, HeartIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import MentionText from '@/components/MentionText.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
@@ -134,7 +135,7 @@ onMounted(load)
             <LevelBadge :level="post.author?.level" :band="post.author?.level_band" compact />
             <time>{{ formatChinaDateTime(post.created_at) }}</time>
           </div>
-          <h2 class="mt-3 break-words text-lg font-semibold text-slate-900 dark:text-white">{{ post.title }}</h2>
+          <h2 class="mt-3 break-words text-lg font-semibold text-slate-900 dark:text-white"><LinkifiedText :text="post.title" /></h2>
           <p class="mt-2 line-clamp-2 break-words whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300"><MentionText :text="post.content" :mentions="post.mentions" /></p>
           <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
             <span class="inline-flex items-center gap-1"><HeartIcon class="h-4 w-4" aria-hidden="true" />{{ post.like_count }}</span>

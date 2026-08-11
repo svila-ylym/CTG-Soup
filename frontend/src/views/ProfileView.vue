@@ -11,6 +11,8 @@ import { ArrowDownIcon, ArrowUpIcon, FlagIcon } from '@heroicons/vue/24/outline'
 import SigninControl from '@/components/SigninControl.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
+import ProfileCollectionsSection from '@/components/ProfileCollectionsSection.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -192,7 +194,7 @@ watch(
         </header>
       </div>
 
-      <p v-if="profile.user.bio" class="max-w-3xl break-words whitespace-pre-wrap py-6 text-slate-700 dark:text-slate-300">{{ profile.user.bio }}</p>
+      <p v-if="profile.user.bio" class="max-w-3xl break-words whitespace-pre-wrap py-6 text-slate-700 dark:text-slate-300"><LinkifiedText :text="profile.user.bio" /></p>
       <p v-else class="py-6 text-sm text-slate-500">暂无个人简介</p>
 
       <dl class="grid grid-cols-2 border-y border-slate-200 py-5 text-center dark:border-neutral-800 sm:grid-cols-5">
@@ -244,6 +246,11 @@ watch(
         </div>
         <p v-else class="mt-4 text-sm text-slate-500">暂未设置代表作</p>
       </section>
+
+      <ProfileCollectionsSection
+        :owner-uid="profile.user.uid"
+        :is-self="isSelf"
+      />
 
       <section class="border-t border-slate-200 py-7 dark:border-neutral-800">
         <h2 class="section-title">已发布海龟汤</h2>

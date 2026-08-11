@@ -12,7 +12,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const state = ref<SoupEditorState>({
-  title: '', puzzle: '', solution: '', genre: '' as CreateSoupGenre,
+  title: '', collection_id: null, puzzle: '', solution: '', genre: '' as CreateSoupGenre,
   soup_color: '' as CreateSoupColor, main_player_count: '', secondary_player_count: '',
   tag_ids: [], custom_tags: [], is_revealed: false, puzzle_images: [], solution_images: [],
 })
@@ -26,6 +26,7 @@ async function load() {
     }
     state.value = {
       title: soup.title,
+      collection_id: soup.collection?.id ?? null,
       puzzle: soup.puzzle,
       solution: soup.solution || '',
       genre: soup.genre as CreateSoupGenre,

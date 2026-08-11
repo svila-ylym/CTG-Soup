@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ArrowDownTrayIcon, ArrowPathIcon, ShieldExclamationIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
@@ -672,9 +673,9 @@ onUnmounted(stopUpdatePolling)
                 </div>
                 <span class="shrink-0 text-xs text-slate-500">{{ report.status }}</span>
               </div>
-              <p class="mt-3 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">{{ report.reason }}</p>
-              <p v-if="report.target_preview" class="mt-2 whitespace-pre-wrap break-words border-l-2 border-slate-300 pl-3 text-sm text-slate-500 dark:border-neutral-700">目标内容：{{ report.target_preview }}</p>
-              <p v-if="report.handle_result" class="mt-2 whitespace-pre-wrap break-words text-sm text-slate-500">处理结果：{{ report.handle_result }}</p>
+              <p class="mt-3 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200"><LinkifiedText :text="report.reason" /></p>
+              <p v-if="report.target_preview" class="mt-2 whitespace-pre-wrap break-words border-l-2 border-slate-300 pl-3 text-sm text-slate-500 dark:border-neutral-700">目标内容：<LinkifiedText :text="report.target_preview" /></p>
+              <p v-if="report.handle_result" class="mt-2 whitespace-pre-wrap break-words text-sm text-slate-500">处理结果：<LinkifiedText :text="report.handle_result" /></p>
               <div v-if="report.status === 'pending'" class="mt-3 flex flex-col gap-2 sm:flex-row">
                 <input v-model="reportDrafts[report.id]" class="form-control min-w-0 flex-1" maxlength="2000" placeholder="填写处理结果">
                 <button class="btn-primary" type="button" :disabled="savingKey === `report:${report.id}`" @click="decideReport(report, true)">采纳</button>
@@ -731,7 +732,7 @@ onUnmounted(stopUpdatePolling)
           <div v-else class="mt-4 overflow-x-auto">
             <table class="w-full min-w-[960px] text-left text-sm">
               <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-2 py-2">记录</th><th class="px-2 py-2">目标</th><th class="px-2 py-2">类型</th><th class="px-2 py-2">原因</th><th class="px-2 py-2">时间</th><th class="px-2 py-2">状态 / 操作</th></tr></thead>
-              <tbody><tr v-for="item in punishments" :key="item.id" class="border-b border-slate-100 align-top dark:border-neutral-800"><td class="px-2 py-3">#{{ item.id }}<small class="mt-1 block text-slate-400">操作人 UID {{ item.operator_uid }}</small></td><td class="px-2 py-3"><router-link class="text-blue-600 hover:underline" :to="`/profile/${item.target_uid}`">UID {{ item.target_uid }}</router-link></td><td class="px-2 py-3 font-medium">{{ punishmentLabel(item.punishment_type) }}</td><td class="max-w-80 break-words px-2 py-3">{{ item.reason }}</td><td class="px-2 py-3 text-xs text-slate-500">{{ formatDate(item.start_time) }}<span v-if="item.end_time" class="block">至 {{ formatDate(item.end_time) }}</span></td><td class="min-w-72 px-2 py-3"><span v-if="item.is_revoked" class="text-emerald-600">已撤销<span v-if="item.revoke_reason" class="block text-xs text-slate-500">{{ item.revoke_reason }}</span></span><span v-else-if="item.is_active === false" class="text-slate-500">已到期</span><div v-else-if="canRevokePunishment(item)" class="flex gap-2"><input v-model="revokeReasons[item.id]" class="form-control min-w-40" maxlength="2000" placeholder="撤销原因"><button class="btn-secondary whitespace-nowrap text-xs" type="button" :disabled="savingKey === `punishment:${item.id}`" @click="revokePunishment(item)">撤销</button></div><span v-else class="text-red-600">生效中</span></td></tr></tbody>
+              <tbody><tr v-for="item in punishments" :key="item.id" class="border-b border-slate-100 align-top dark:border-neutral-800"><td class="px-2 py-3">#{{ item.id }}<small class="mt-1 block text-slate-400">操作人 UID {{ item.operator_uid }}</small></td><td class="px-2 py-3"><router-link class="text-blue-600 hover:underline" :to="`/profile/${item.target_uid}`">UID {{ item.target_uid }}</router-link></td><td class="px-2 py-3 font-medium">{{ punishmentLabel(item.punishment_type) }}</td><td class="max-w-80 break-words px-2 py-3"><LinkifiedText :text="item.reason" /></td><td class="px-2 py-3 text-xs text-slate-500">{{ formatDate(item.start_time) }}<span v-if="item.end_time" class="block">至 {{ formatDate(item.end_time) }}</span></td><td class="min-w-72 px-2 py-3"><span v-if="item.is_revoked" class="text-emerald-600">已撤销<span v-if="item.revoke_reason" class="block text-xs text-slate-500"><LinkifiedText :text="item.revoke_reason" /></span></span><span v-else-if="item.is_active === false" class="text-slate-500">已到期</span><div v-else-if="canRevokePunishment(item)" class="flex gap-2"><input v-model="revokeReasons[item.id]" class="form-control min-w-40" maxlength="2000" placeholder="撤销原因"><button class="btn-secondary whitespace-nowrap text-xs" type="button" :disabled="savingKey === `punishment:${item.id}`" @click="revokePunishment(item)">撤销</button></div><span v-else class="text-red-600">生效中</span></td></tr></tbody>
             </table>
           </div>
         </section>

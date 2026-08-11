@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import DOMPurify from 'dompurify'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -170,7 +171,7 @@ onMounted(() => {
                 <ArrowLeftIcon class="h-5 w-5" aria-hidden="true" />
               </button>
               <div class="min-w-0 flex-1">
-                <h2 class="break-words text-lg font-semibold">{{ selected.title }}</h2>
+                <h2 class="break-words text-lg font-semibold"><LinkifiedText :text="selected.title" /></h2>
                 <p class="mt-1 text-xs text-slate-500">{{ formatDate(selected.created_at) }}</p>
               </div>
             </header>

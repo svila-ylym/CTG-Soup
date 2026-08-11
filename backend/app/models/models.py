@@ -6,7 +6,16 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from enum import Enum
-from sqlalchemy import CheckConstraint, JSON, Column, Enum as SAEnum, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    JSON,
+    Column,
+    Enum as SAEnum,
+    Text,
+    UniqueConstraint,
+)
 
 # ==================== 枚举类型 ====================
 class UserRole(str, Enum):
@@ -354,11 +363,31 @@ class Announcement(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class SoupCollection(SQLModel, table=True):
+    __tablename__ = "soup_collections"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_uid: int = Field(foreign_key="users.uid", index=True)
+    name: str = Field(max_length=100)
+    description: str = Field(default="", sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Soup(SQLModel, table=True):
     __tablename__ = "soups"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     author_uid: int = Field(foreign_key="users.uid", index=True)
+    collection_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("soup_collections.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
     title: str
     puzzle: str
     solution: str
