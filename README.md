@@ -14,6 +14,20 @@ chmod +x dev.sh
 
 单独运行：`./dev.sh backend` 或 `./dev.sh frontend`。默认使用清华 PyPI 和 npm 镜像；可通过 `PYTHON_INDEX_URL`、`NPM_REGISTRY_URL` 覆盖。
 
+### 版本与 OTA 更新
+
+运行版本以仓库根目录 `VERSION` 为准，页脚和 `/api/version` 会显示实际版本。GitHub Release 使用 `v1.2.3` 或 `1.2.3` 形式的 tag；管理后台 ROOT 账号可检查仓库的 Latest Release，并在确认后启动受控升级。
+
+手动迁移或升级时使用：
+
+```bash
+./dev.sh init
+./dev.sh migrate
+./Update.sh --tag v1.2.3
+```
+
+`Update.sh` 会在切换代码前保留数据库、环境文件、前端构建和运行时文件备份，升级失败时恢复原代码、依赖和前端资源。升级必须配置 `CTG_RESTART_COMMAND`，脚本会重启服务并轮询 `CTG_HEALTH_URL`，直到 `/health` 返回与发行版 tag 匹配的版本号后才解除 `private-storage/.ota-maintenance`；重启或健康检查失败时会保留维护标记，避免旧进程继续使用已迁移的数据库。若数据库迁移已经开始后失败，管理员从备份恢复数据库后再删除该标记。当前由 Screen 运行时，应将重启命令配置为可靠地停止旧进程并启动新进程。`GithubPAT.txt` 仅用于本地 Git 操作，不会被应用读取或提交；GitHub API 读取公开仓库时不需要 token。
+
 ### Windows 用户 (推荐 PowerShell)
 
 1. **右键点击** `setup.ps1` 选择 "使用 PowerShell 运行"

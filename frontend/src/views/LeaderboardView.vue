@@ -58,9 +58,9 @@
               v-for="(soup, index) in topThree"
               :key="soup.id"
               :to="`/soups/${soup.id}`"
-              class="podium-card group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-white p-6 text-slate-900 shadow-[6px_8px_0_rgba(15,23,42,.08)] dark:bg-neutral-950 dark:text-white dark:shadow-[6px_8px_0_rgba(0,0,0,.3)]"
+              class="competition-border-surface podium-card group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-white p-6 text-slate-900 shadow-[6px_8px_0_rgba(15,23,42,.08)] dark:bg-neutral-950 dark:text-white dark:shadow-[6px_8px_0_rgba(0,0,0,.3)]"
               :class="podiumClass(index)"
-              :style="{ animationDelay: `${index * 100 + 80}ms` }"
+              :style="{ ...competitionBorderStyle(soup.competition_colors), animationDelay: `${index * 100 + 80}ms` }"
             >
               <div class="flex items-start justify-between gap-4">
                 <span class="podium-rank flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-xl font-black text-white" :class="rankClass(index)">{{ index + 1 }}</span>
@@ -99,8 +99,8 @@
               v-for="(soup, index) in remainingEntries"
               :key="soup.id"
               :to="`/soups/${soup.id}`"
-              class="ranking-row group grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-blue-800 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5"
-              :style="{ animationDelay: `${Math.min(index, 10) * 45 + 160}ms` }"
+              class="competition-border-surface ranking-row group grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-blue-800 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5"
+              :style="{ ...competitionBorderStyle(soup.competition_colors), animationDelay: `${Math.min(index, 10) * 45 + 160}ms` }"
             >
               <span class="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-sm font-black text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-neutral-900 dark:text-slate-300">{{ index + 4 }}</span>
 
@@ -148,6 +148,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
+import { competitionBorderStyle } from '@/utils/competitionBorder'
 
 const soupStore = useSoupStore()
 const topThree = computed(() => soupStore.leaderboard.slice(0, 3))

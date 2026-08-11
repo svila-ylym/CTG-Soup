@@ -5,6 +5,18 @@ from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import secrets
+from pathlib import Path
+
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _default_app_version() -> str:
+    try:
+        value = (_REPOSITORY_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        value = ""
+    return value or "1.2.0"
 
 
 def _normalize_https_origin(value: str, field_name: str) -> str:
@@ -39,7 +51,8 @@ class Settings(BaseSettings):
 
     # 应用配置
     APP_NAME: str = "汤吧社区"
-    APP_VERSION: str = "1.2.0"
+    APP_VERSION: str = Field(default_factory=_default_app_version)
+    APP_VERSION_OVERRIDE: Optional[str] = None
     DEBUG: bool = True
     APP_URL: Optional[str] = "http://localhost:10000"  # 前端地址
     PUBLIC_WEB_URL: Optional[str] = None
@@ -86,6 +99,18 @@ class Settings(BaseSettings):
     PRIVATE_STORAGE_DIR: str = "private-storage"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
 
+    # OTA 更新
+    GITHUB_REPOSITORY: str = "svila-ylym/CTG-Soup"
+    GITHUB_API_URL: str = "https://api.github.com"
+    GITHUB_API_TOKEN: Optional[SecretStr] = None
+    GITHUB_RELEASE_CACHE_SECONDS: int = Field(default=300, ge=0, le=86400)
+    GITHUB_API_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0, le=60)
+    UPDATE_SCRIPT_PATH: Optional[str] = None
+    UPDATE_REPOSITORY_PATH: Optional[str] = None
+    UPDATE_LOG_DIR: str = "private-storage/update-logs"
+    UPDATE_RESTART_COMMAND: Optional[str] = None
+    UPDATE_HEALTH_URL: str = "http://127.0.0.1:10001/health"
+
     # 公开文件存储配置
     PUBLIC_STORAGE_BACKEND: Literal["local", "r2"] = "local"
     R2_ENDPOINT_URL: Optional[str] = None
@@ -129,6 +154,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_public_storage(self):
+        self.APP_VERSION = (self.APP_VERSION_OVERRIDE or _default_app_version()).strip()
         if self.PUBLIC_STORAGE_BACKEND == "local":
             return self
 

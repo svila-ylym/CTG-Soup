@@ -15,9 +15,30 @@
         <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>&copy; 2026 汤吧社区</span>
           <span class="text-slate-400 dark:text-neutral-600" aria-hidden="true">·</span>
-          <span>版本 1.2.0</span>
+          <span>版本 {{ version ? `v${version}` : '读取中…' }}</span>
         </p>
       </div>
     </div>
   </footer>
 </template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
+import http from '@/api/http'
+
+const version = ref('')
+let timer: number | undefined
+
+async function loadVersion() {
+  try {
+    version.value = (await http.get<{ version: string }>('/version')).data.version
+  } catch {
+    version.value = ''
+  }
+}
+
+onMounted(() => {
+  void loadVersion()
+  timer = window.setInterval(loadVersion, 300000)
+})
+onUnmounted(() => { if (timer) window.clearInterval(timer) })
+</script>

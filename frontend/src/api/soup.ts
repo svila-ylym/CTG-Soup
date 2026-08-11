@@ -1,6 +1,6 @@
 import http from './http'
 import type { AxiosResponse } from 'axios'
-import type { TurtleSoup, SoupCreate, SoupScore, PageResult, PageParams, SoupGenre, SoupColor, Comment } from '@/types'
+import type { TurtleSoup, SoupCreate, SoupScore, PageResult, PageParams, SoupGenre, SoupColor, Comment, SoupRating } from '@/types'
 
 export interface SoupListParams extends Partial<PageParams> {
   tag?: string
@@ -95,6 +95,10 @@ export const soupApi = {
 
   rate(id: number, score: number) {
     return http.put<{ average_score: number; rating_count: number; my_rating: number }>(`/turtle-soups/${id}/rating`, { score })
+  },
+
+  listRatings(id: number, params?: { page?: number; page_size?: number }) {
+    return http.get<PageResult<SoupRating>>(`/turtle-soups/${id}/ratings`, { params })
   },
 
   setInteraction(id: number, kind: 'like' | 'favorite', active: boolean) {

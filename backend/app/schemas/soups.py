@@ -172,6 +172,7 @@ class SoupResponse(BaseModel):
     is_solution_public: bool
     genre: ResponseGenre
     soup_color: ResponseSoupColor
+    competition_colors: list[str] = Field(default_factory=list)
     main_player_count: str
     secondary_player_count: str
     tags: list[TagResponse]

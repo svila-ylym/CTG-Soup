@@ -34,6 +34,26 @@ export function chinaLocalDateTimeToUtcIso(value: string): string {
   return date.toISOString()
 }
 
+export function utcIsoToChinaLocalDateTime(value: string): string {
+  const date = parseUtcDateTime(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHINA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(date).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value
+    return result
+  }, {})
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
+}
+
 export function formatChinaDateTime(value: string): string {
   const date = parseUtcDateTime(value)
   if (Number.isNaN(date.getTime())) return value

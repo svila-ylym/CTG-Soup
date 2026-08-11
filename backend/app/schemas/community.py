@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.database import AchievementConditionType, NotificationType, PostType
+from app.models.database import AchievementConditionType, NotificationType, PostType, UserRole
 from app.schemas.common import PageResponse
 
 
@@ -14,6 +14,8 @@ class UserSummary(BaseModel):
     avatar_url: str | None = None
     level: int = 0
     level_band: str = "black"
+    permission_groups: list[str] = Field(default_factory=list)
+    role: UserRole = UserRole.USER
 
 
 class MentionRef(BaseModel):
@@ -70,6 +72,16 @@ class PostResponse(BaseModel):
     updated_at: datetime
     mentions: list[MentionRef] = Field(default_factory=list)
     can_edit: bool
+    is_liked: bool = False
+
+
+class PostLikeUpdate(BaseModel):
+    active: bool
+
+
+class PostLikeResponse(BaseModel):
+    is_liked: bool
+    like_count: int
 
 
 class PostPageResponse(PageResponse[PostResponse]):
@@ -221,6 +233,7 @@ class SearchSoupResponse(BaseModel):
     average_score: float
     rating_count: int
     favorite_count: int
+    competition_colors: list[str] = Field(default_factory=list)
     created_at: datetime
 
 
