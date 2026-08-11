@@ -13,6 +13,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type ChatItem } from '@/stores/chat'
 import ReportDialog from '@/components/ReportDialog.vue'
@@ -260,7 +261,7 @@ onUnmounted(() => {
                 <div v-for="message in chat.activeMessages" :key="message.clientId || message.id" class="flex" :class="isMine(message) ? 'justify-end' : 'justify-start'">
                   <div class="max-w-[min(85%,38rem)]">
                     <div class="mb-1 flex items-center gap-2 text-xs" :class="isMine(message) ? 'justify-end' : 'justify-start'"><LevelBadge :level="messageLevel(message)" compact /></div>
-                    <div class="break-words whitespace-pre-wrap px-4 py-2.5 text-sm" :class="isMine(message) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-neutral-900 dark:text-slate-100'" :data-testid="isMine(message) ? 'outgoing-message' : 'incoming-message'">{{ message.content }}</div>
+                    <div class="break-words whitespace-pre-wrap px-4 py-2.5 text-sm" :class="isMine(message) ? 'bg-blue-600 text-white [&_a]:!text-white [&_a]:underline' : 'bg-slate-100 text-slate-800 dark:bg-neutral-900 dark:text-slate-100'" :data-testid="isMine(message) ? 'outgoing-message' : 'incoming-message'"><LinkifiedText :text="message.content" /></div>
                     <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" :class="isMine(message) ? 'justify-end' : 'justify-start'">
                       <time>{{ formatChinaMessageTime(message.created_at) }}</time>
                       <button v-if="!isMine(message) && message.id > 0" class="inline-flex items-center gap-1 text-red-600 hover:underline" type="button" @click="reportMessageId = message.id"><FlagIcon class="h-3 w-3" aria-hidden="true" />举报</button>

@@ -12,6 +12,7 @@ import SigninControl from '@/components/SigninControl.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 import ProfileCollectionsSection from '@/components/ProfileCollectionsSection.vue'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -193,7 +194,7 @@ watch(
         </header>
       </div>
 
-      <p v-if="profile.user.bio" class="max-w-3xl break-words whitespace-pre-wrap py-6 text-slate-700 dark:text-slate-300">{{ profile.user.bio }}</p>
+      <p v-if="profile.user.bio" class="max-w-3xl break-words whitespace-pre-wrap py-6 text-slate-700 dark:text-slate-300"><LinkifiedText :text="profile.user.bio" /></p>
       <p v-else class="py-6 text-sm text-slate-500">暂无个人简介</p>
 
       <dl class="grid grid-cols-2 border-y border-slate-200 py-5 text-center dark:border-neutral-800 sm:grid-cols-5">
