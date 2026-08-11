@@ -130,6 +130,14 @@
                   <StarIcon class="mr-1 h-4 w-4" aria-hidden="true" />
                   {{ soup.average_score.toFixed(1) }}
                 </span>
+                <button
+                  class="inline-flex items-center font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  type="button"
+                  @click.stop="openRatings(soup)"
+                >
+                  <UserGroupIcon class="mr-1 h-4 w-4" aria-hidden="true" />
+                  {{ soup.rating_count }} 人评分 · 查看评分人
+                </button>
                 <span class="flex items-center">
                   <HeartIcon class="mr-1 h-4 w-4" aria-hidden="true" />
                   {{ soup.like_count }}
@@ -196,20 +204,28 @@
           </button>
         </nav>
       </div>
+
+      <SoupRatingsDialog
+        :open="selectedRatingsSoup !== null"
+        :soup-id="selectedRatingsSoup?.id ?? null"
+        :soup-title="selectedRatingsSoup?.title ?? ''"
+        @close="closeRatings"
+      />
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ChatBubbleLeftRightIcon, FaceFrownIcon, HeartIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { ChatBubbleLeftRightIcon, FaceFrownIcon, HeartIcon, PlusIcon, UserGroupIcon } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
 import { parseUtcDateTime } from '@/utils/datetime'
 import { competitionBorderStyle } from '@/utils/competitionBorder'
 import { tagApi } from '@/api/tags'
-import type { CreateSoupColor, CreateSoupGenre, Tag } from '@/types'
+import type { CreateSoupColor, CreateSoupGenre, Tag, TurtleSoup } from '@/types'
 import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
+import SoupRatingsDialog from '@/components/SoupRatingsDialog.vue'
 
 const soupStore = useSoupStore()
 
@@ -220,7 +236,16 @@ const selectedGenre = ref<CreateSoupGenre | ''>('')
 const selectedColor = ref<CreateSoupColor | ''>('')
 const currentPage = ref(1)
 const totalPages = ref(0)
+const selectedRatingsSoup = ref<TurtleSoup | null>(null)
 const pageSize = 30
+
+function openRatings(soup: TurtleSoup) {
+  selectedRatingsSoup.value = soup
+}
+
+function closeRatings() {
+  selectedRatingsSoup.value = null
+}
 
 const formatDate = (dateString: string) => {
   const date = parseUtcDateTime(dateString)
