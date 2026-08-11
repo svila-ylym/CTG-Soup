@@ -22,6 +22,7 @@ const error = ref('')
 const restoring = ref(true)
 const state = ref<SoupEditorState>({
   title: '',
+  collection_id: null,
   puzzle: '',
   solution: '',
   genre: '' as CreateSoupGenre,
@@ -58,6 +59,7 @@ function snapshot(): SoupDraft {
 function hasDraft(draft: SoupDraft) {
   return Boolean(
     draft.title.trim()
+    || draft.collection_id !== null
     || draft.puzzle.trim()
     || draft.solution.trim()
     || draft.genre
@@ -83,6 +85,7 @@ async function restoreDraft() {
     const byId = new Map(assets.map(asset => [asset.id, asset]))
     Object.assign(state.value, {
       ...draft,
+      collection_id: typeof draft.collection_id === 'number' ? draft.collection_id : null,
       puzzle_images: (draft.puzzle_image_ids || []).flatMap(id => {
         const asset = byId.get(id)
         return asset ? [{ id, public_url: asset.public_url, mime_type: asset.mime_type, size: asset.size }] : []
@@ -93,7 +96,12 @@ async function restoreDraft() {
       }),
     })
   } catch {
-    Object.assign(state.value, { ...draft, puzzle_images: [], solution_images: [] })
+    Object.assign(state.value, {
+      ...draft,
+      collection_id: typeof draft.collection_id === 'number' ? draft.collection_id : null,
+      puzzle_images: [],
+      solution_images: [],
+    })
   } finally {
     restoring.value = false
   }
