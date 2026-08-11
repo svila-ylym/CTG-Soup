@@ -166,20 +166,39 @@ class LatestReleaseService:
                 checked_at=checked_at,
                 error=None if status_value not in {"invalid_latest_version", "unknown_current_version"} else "GitHub Release tag 不是有效版本号",
             )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return LatestReleaseResult(
+                    current_version=self.settings.APP_VERSION,
+                    latest_version=None,
+                    tag_name=None,
+                    release_name=None,
+                    published_at=None,
+                    html_url=None,
+                    status="no_release",
+                    update_available=False,
+                    checked_at=checked_at,
+                    error=None,
+                )
+            logger.warning("GitHub Latest Release check failed: HTTPStatusError")
+            return self._error_result(checked_at)
         except (httpx.HTTPError, json.JSONDecodeError, TypeError, ValueError) as exc:
             logger.warning("GitHub Latest Release check failed: %s", type(exc).__name__)
-            return LatestReleaseResult(
-                current_version=self.settings.APP_VERSION,
-                latest_version=None,
-                tag_name=None,
-                release_name=None,
-                published_at=None,
-                html_url=None,
-                status="error",
-                update_available=False,
-                checked_at=checked_at,
-                error="无法读取 GitHub Latest Release",
-            )
+            return self._error_result(checked_at)
+
+    def _error_result(self, checked_at: str) -> LatestReleaseResult:
+        return LatestReleaseResult(
+            current_version=self.settings.APP_VERSION,
+            latest_version=None,
+            tag_name=None,
+            release_name=None,
+            published_at=None,
+            html_url=None,
+            status="error",
+            update_available=False,
+            checked_at=checked_at,
+            error="无法读取 GitHub Latest Release",
+        )
 
 
 latest_release_service = LatestReleaseService()

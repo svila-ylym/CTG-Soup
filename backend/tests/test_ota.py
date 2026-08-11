@@ -1,6 +1,7 @@
 from pathlib import Path
 import stat
 
+import httpx
 import pytest
 from fastapi import Request, Response
 
@@ -68,6 +69,52 @@ async def test_latest_release_service_reads_only_latest_and_caches(monkeypatch, 
     assert second == first
     assert len(calls) == 1
     assert calls[0][0].endswith("/repos/svila-ylym/CTG-Soup/releases/latest")
+
+
+def _stub_latest_http_status(monkeypatch, status_code: int) -> None:
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            return httpx.Response(
+                status_code=status_code,
+                request=httpx.Request("GET", url, headers=headers),
+            )
+
+    monkeypatch.setattr(ota.httpx, "AsyncClient", Client)
+
+
+@pytest.mark.asyncio
+async def test_latest_release_404_means_no_published_release(monkeypatch, tmp_path):
+    _stub_latest_http_status(monkeypatch, 404)
+    service = ota.LatestReleaseService(_settings(tmp_path))
+
+    result = await service.check(force=True)
+
+    assert result.status == "no_release"
+    assert result.update_available is False
+    assert result.latest_version is None
+    assert result.tag_name is None
+    assert result.error is None
+
+
+@pytest.mark.asyncio
+async def test_latest_release_non_404_http_error_remains_error(monkeypatch, tmp_path):
+    _stub_latest_http_status(monkeypatch, 403)
+    service = ota.LatestReleaseService(_settings(tmp_path))
+
+    result = await service.check(force=True)
+
+    assert result.status == "error"
+    assert result.update_available is False
+    assert result.error == "无法读取 GitHub Latest Release"
 
 
 def test_update_script_is_fixed_to_repository_root(tmp_path):
