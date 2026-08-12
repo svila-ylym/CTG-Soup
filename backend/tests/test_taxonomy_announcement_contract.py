@@ -178,6 +178,29 @@ def test_tag_merge_rejects_locked_independent_competition_configuration():
         assert session.get(Tag, ids[2]).status == TagStatus.ACTIVE
 
 
+def test_tag_merge_preserves_settled_independent_competition_configuration():
+    client, engine, ids = _client()
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        competition.score_type = "independent"
+        competition.settled_at = datetime.utcnow()
+        competition.status = CompetitionStatus.COMPLETED
+        competition.result_snapshot = {"total": [], "groups": []}
+        session.commit()
+
+    response = client.post(
+        f"/api/admin/tags/{ids[2]}/merge",
+        json={"target_tag_id": ids[3]},
+    )
+
+    assert response.status_code == 200
+    with Session(engine) as session:
+        assert session.get(Competition, ids[5]).required_tag_ids == [ids[2]]
+        assert session.get(SoupTag, (ids[4], ids[2])) is None
+        assert session.get(SoupTag, (ids[4], ids[3])) is not None
+        assert session.get(Tag, ids[2]).status == TagStatus.DISABLED
+
+
 def test_disabling_tag_rebuilds_unsettled_membership_but_keeps_settled_entries():
     client, engine, ids = _client()
     with Session(engine) as session:
