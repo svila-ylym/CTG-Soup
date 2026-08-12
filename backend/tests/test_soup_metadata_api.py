@@ -231,6 +231,58 @@ def test_non_author_cannot_update_soup():
     assert response.status_code == 403
 
 
+def test_judged_independent_entry_locks_competition_tags_only():
+    client, engine, active_id, _, soup_id, _, _ = _client()
+    with Session(engine) as session:
+        soup = session.get(Soup, soup_id)
+        unrelated = Tag(
+            slug="无关标签",
+            name="无关标签",
+            kind=TagKind.CUSTOM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(unrelated)
+        session.flush()
+        competition = Competition(
+            creator_uid=soup.author_uid,
+            name="独评标签锁定",
+            description="比赛",
+            start_time=soup.created_at - timedelta(hours=1),
+            end_time=soup.created_at + timedelta(hours=1),
+            required_tag_ids=[active_id],
+            score_type="independent",
+            status=CompetitionStatus.ONGOING,
+        )
+        session.add(competition)
+        session.flush()
+        session.add(CompetitionEntry(
+            competition_id=competition.id,
+            soup_id=soup.id,
+            author_uid=soup.author_uid,
+            judge_score=8.0,
+        ))
+        session.commit()
+        unrelated_id = unrelated.id
+
+    unrelated_update = client.put(
+        f"/api/turtle-soups/{soup_id}",
+        json={"tag_ids": [active_id, unrelated_id], "custom_tags": []},
+    )
+    locked_update = client.put(
+        f"/api/turtle-soups/{soup_id}",
+        json={"tag_ids": [unrelated_id], "custom_tags": []},
+    )
+
+    assert unrelated_update.status_code == 200
+    assert locked_update.status_code == 409
+    assert locked_update.json()["detail"]["code"] == "INDEPENDENT_SCORING_LOCKED"
+    with Session(engine) as session:
+        tag_ids = set(session.exec(
+            select(SoupTag.tag_id).where(SoupTag.soup_id == soup_id)
+        ).all())
+        assert tag_ids == {active_id, unrelated_id}
+
+
 def test_tags_endpoint_returns_active_tags_only():
     client, _, _, _, _, _, _ = _client()
 

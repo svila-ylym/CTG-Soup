@@ -150,6 +150,34 @@ def test_tag_merge_moves_soups_and_preserves_alias():
         ).one() is not None
 
 
+def test_tag_merge_rejects_locked_independent_competition_configuration():
+    client, engine, ids = _client()
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        competition.score_type = "independent"
+        entry = CompetitionEntry(
+            competition_id=competition.id,
+            soup_id=ids[4],
+            author_uid=ids[0],
+            judge_score=8.0,
+        )
+        session.add(entry)
+        session.commit()
+
+    response = client.post(
+        f"/api/admin/tags/{ids[2]}/merge",
+        json={"target_tag_id": ids[3]},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "INDEPENDENT_SCORING_LOCKED"
+    with Session(engine) as session:
+        assert session.get(Competition, ids[5]).required_tag_ids == [ids[2]]
+        assert session.get(SoupTag, (ids[4], ids[2])) is not None
+        assert session.get(SoupTag, (ids[4], ids[3])) is None
+        assert session.get(Tag, ids[2]).status == TagStatus.ACTIVE
+
+
 def test_disabling_tag_rebuilds_unsettled_membership_but_keeps_settled_entries():
     client, engine, ids = _client()
     with Session(engine) as session:

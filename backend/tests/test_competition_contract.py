@@ -283,6 +283,25 @@ def test_ongoing_competition_cannot_be_settled_early():
     assert response.status_code == 409
 
 
+def test_competition_creator_can_settle_without_admin_role():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        competition.creator_uid = ids[1]
+        competition.end_time = datetime.utcnow() - timedelta(minutes=1)
+        session.commit()
+
+    async def override_creator():
+        with Session(engine) as session:
+            return session.get(User, ids[1])
+
+    client.app.dependency_overrides[get_current_active_user] = override_creator
+    response = client.post(f"/api/competitions/{ids[5]}/settle")
+
+    assert response.status_code == 200
+    assert response.json()["settled_at"] is not None
+
+
 def test_create_competition_accepts_timezone_aware_range():
     client, _, ids = _setup()
     now = datetime.now(timezone.utc)

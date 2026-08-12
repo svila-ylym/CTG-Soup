@@ -22,6 +22,7 @@ from app.services.soup_rules import validate_score
 from app.services.competition_entries import (
     competition_colors_for_soups,
     evaluate_soup_competitions,
+    locked_independent_tag_ids_for_soup,
     lock_competition_collection,
     remove_soup_from_unsettled_competitions,
     refresh_soup_competition_scores,
@@ -575,6 +576,19 @@ def update_soup(
     if tag_values_present:
         tags = _resolve_tags(db, values.pop("tag_ids", []), values.pop("custom_tags", []))
         lock_competition_collection(db)
+        selected_tag_ids = {tag.id for tag in tags}
+        current_tag_ids = set(db.exec(
+            select(SoupTag.tag_id).where(SoupTag.soup_id == soup.id)
+        ).all())
+        locked_tag_ids = locked_independent_tag_ids_for_soup(db, soup.id)
+        if locked_tag_ids.intersection(current_tag_ids.symmetric_difference(selected_tag_ids)):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "INDEPENDENT_SCORING_LOCKED",
+                    "message": "该作品已进入比赛方评分，不能修改相关比赛标签",
+                },
+            )
         _sync_tags(db, soup, tags)
     values.pop("is_revealed", None)
     if data.is_revealed is not None:
