@@ -882,6 +882,35 @@ def test_independent_scores_are_private_until_complete_settlement():
     assert settled.json()["entries"][0]["final_score"] == 7.5
 
 
+def test_independent_competition_exposes_configured_optional_group_names():
+    client, engine, ids = _setup()
+    competition_id, _entry_id = _make_independent_competition_ready_for_judging(
+        engine,
+        ids,
+    )
+    with Session(engine) as session:
+        optional = Tag(
+            slug="独评分组",
+            name="独评分组",
+            kind=TagKind.SYSTEM,
+            status=TagStatus.ACTIVE,
+        )
+        session.add(optional)
+        session.flush()
+        competition = session.get(Competition, competition_id)
+        competition.optional_tag_ids = [optional.id]
+        session.commit()
+        optional_id = optional.id
+
+    response = client.get(f"/api/competitions/{competition_id}")
+
+    assert response.status_code == 200
+    assert response.json()["rankings"] == {"total": [], "groups": []}
+    assert response.json()["optional_tags"] == [
+        {"id": optional_id, "name": "独评分组"},
+    ]
+
+
 def test_independent_judging_enforces_opening_score_format_and_permission():
     client, engine, ids = _setup()
     competition_id, entry_id = _make_independent_competition_ready_for_judging(
@@ -951,3 +980,53 @@ def test_independent_judging_locks_membership_configuration_after_first_score():
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "INDEPENDENT_SCORING_LOCKED"
+
+
+def test_independent_judging_freezes_entry_membership_after_first_score():
+    client, engine, ids = _setup()
+    competition_id, entry_id = _make_independent_competition_ready_for_judging(
+        engine,
+        ids,
+    )
+    assert client.put(
+        f"/api/competitions/{competition_id}/entries/{entry_id}/judge-score",
+        json={"score": 8.0},
+    ).status_code == 200
+
+    with Session(engine) as session:
+        competition = session.get(Competition, competition_id)
+        original_soup = session.get(Soup, ids[4])
+        original_tag = session.exec(
+            select(SoupTag).where(
+                SoupTag.soup_id == original_soup.id,
+                SoupTag.tag_id == ids[2],
+            )
+        ).one()
+        session.delete(original_tag)
+        session.flush()
+        assert evaluate_soup_competitions(session, original_soup)[0].id == entry_id
+
+        new_soup = Soup(
+            author_uid=ids[1],
+            title="评分开始后的作品",
+            puzzle="谜面",
+            solution="汤底",
+            genre="本格",
+            soup_color="清汤",
+            main_player_count=1,
+            secondary_player_count=0,
+            created_at=competition.start_time
+            + (competition.end_time - competition.start_time) / 2,
+        )
+        session.add(new_soup)
+        session.flush()
+        session.add(SoupTag(soup_id=new_soup.id, tag_id=ids[2]))
+        session.flush()
+        assert evaluate_soup_competitions(session, new_soup) == []
+
+        entries = session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == competition_id
+            )
+        ).all()
+        assert [entry.id for entry in entries] == [entry_id]

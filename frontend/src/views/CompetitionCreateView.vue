@@ -7,7 +7,7 @@ import http from '@/api/http'
 import { tagApi } from '@/api/tags'
 import { extractApiError } from '@/utils/auth'
 import { chinaLocalDateTimeToUtcIso } from '@/utils/datetime'
-import type { Competition, CompetitionCreate, Tag } from '@/types'
+import type { Competition, CompetitionCreate, CompetitionScoreType, Tag } from '@/types'
 
 type TagRole = 'required' | 'optional'
 
@@ -23,6 +23,8 @@ const form = reactive({
   description: '',
   start_time: '',
   end_time: '',
+  score_type: 'average' as CompetitionScoreType,
+  scoring_at: '',
   required_tag_ids: [] as number[],
   custom_tags: [] as string[],
   optional_tag_ids: [] as number[],
@@ -121,15 +123,23 @@ async function submit() {
 
   let startTime: string
   let endTime: string
+  let scoringAt: string | null = null
   try {
     startTime = chinaLocalDateTimeToUtcIso(form.start_time)
     endTime = chinaLocalDateTimeToUtcIso(form.end_time)
+    if (form.score_type === 'independent') {
+      scoringAt = chinaLocalDateTimeToUtcIso(form.scoring_at)
+    }
   } catch {
     error.value = '请填写有效的比赛时间'
     return
   }
   if (new Date(startTime).getTime() >= new Date(endTime).getTime()) {
     error.value = '结束时间必须晚于开始时间'
+    return
+  }
+  if (scoringAt && new Date(scoringAt).getTime() < new Date(endTime).getTime()) {
+    error.value = '评分日期不能早于比赛结束时间'
     return
   }
 
@@ -145,7 +155,8 @@ async function submit() {
       optional_tag_ids: form.optional_tag_ids,
       optional_custom_tags: form.optional_custom_tags,
       competition_color: form.competition_color,
-      score_type: 'average',
+      score_type: form.score_type,
+      scoring_at: scoringAt,
       top_n: form.top_n,
       custom_page_config: { format: 'rich_html', image_asset_ids: form.image_asset_ids },
     }
@@ -239,7 +250,12 @@ onMounted(loadTags)
         <div class="grid gap-5 sm:grid-cols-3">
           <div>
             <span class="mb-2 block text-sm font-medium">评分方式</span>
-            <p class="form-control bg-slate-50 text-slate-700 dark:bg-neutral-900 dark:text-slate-200">平均分</p>
+            <div class="grid h-11 grid-cols-2 border border-slate-300 p-1 dark:border-neutral-700">
+              <label v-for="option in ([['average', '平均分'], ['independent', '独评']] as const)" :key="option[0]" class="flex cursor-pointer items-center justify-center text-sm font-medium" :class="form.score_type === option[0] ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300'">
+                <input v-model="form.score_type" class="sr-only" type="radio" name="score-type" :value="option[0]">
+                {{ option[1] }}
+              </label>
+            </div>
           </div>
           <label class="block">
             <span class="mb-2 block text-sm font-medium">获奖名额</span>
@@ -253,6 +269,11 @@ onMounted(loadTags)
             </span>
           </label>
         </div>
+
+        <label v-if="form.score_type === 'independent'" class="block max-w-sm">
+          <span class="mb-2 block text-sm font-medium">评分日期（UTC+8）</span>
+          <input v-model="form.scoring_at" class="form-control" type="datetime-local" step="1" required>
+        </label>
 
         <p v-if="error" class="break-words text-sm text-red-600">{{ error }}</p>
 

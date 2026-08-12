@@ -118,6 +118,7 @@ class CompetitionResponse(BaseModel):
     required_tag_ids: list[int]
     required_tags: list[CompetitionTagResponse]
     optional_tag_ids: list[int]
+    optional_tags: list[CompetitionTagResponse]
     competition_color: str
     score_type: CompetitionScoreType
     scoring_at: datetime | None = None
