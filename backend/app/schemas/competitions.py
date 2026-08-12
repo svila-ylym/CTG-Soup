@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.database import CompetitionScoreType, CompetitionStatus
 from app.schemas.common import PageResponse
+from app.services.soup_rules import validate_score
 
 MAX_RAW_TAG_SELECTIONS = 100
 
@@ -31,7 +32,11 @@ class CompetitionCreate(BaseModel):
         max_length=MAX_RAW_TAG_SELECTIONS,
     )
     competition_color: str = Field(default="#2563EB", pattern=r"^#[0-9A-Fa-f]{6}$")
-    score_type: Literal[CompetitionScoreType.AVERAGE] = CompetitionScoreType.AVERAGE
+    score_type: Literal[
+        CompetitionScoreType.AVERAGE,
+        CompetitionScoreType.INDEPENDENT,
+    ] = CompetitionScoreType.AVERAGE
+    scoring_at: datetime | None = None
     top_n: int = Field(default=10, ge=1, le=100)
     custom_page_config: dict[str, Any] = Field(default_factory=dict)
 
@@ -61,10 +66,21 @@ class CompetitionCreate(BaseModel):
             self.start_time = self.start_time.replace(tzinfo=china_timezone)
         if self.end_time.tzinfo is None:
             self.end_time = self.end_time.replace(tzinfo=china_timezone)
+        if self.scoring_at is not None and self.scoring_at.tzinfo is None:
+            self.scoring_at = self.scoring_at.replace(tzinfo=china_timezone)
         self.start_time = self.start_time.astimezone(timezone.utc).replace(tzinfo=None)
         self.end_time = self.end_time.astimezone(timezone.utc).replace(tzinfo=None)
+        if self.scoring_at is not None:
+            self.scoring_at = self.scoring_at.astimezone(timezone.utc).replace(tzinfo=None)
         if self.start_time >= self.end_time:
             raise ValueError("开始时间必须早于结束时间")
+        if self.score_type == CompetitionScoreType.INDEPENDENT:
+            if self.scoring_at is None:
+                raise ValueError("独评比赛必须设置评分日期")
+            if self.scoring_at < self.end_time:
+                raise ValueError("评分日期不能早于比赛结束时间")
+        elif self.scoring_at is not None:
+            raise ValueError("平均分比赛不能设置评分日期")
         if set(self.required_tag_ids).intersection(self.optional_tag_ids):
             raise ValueError("同一标签不能同时设为必选和可选")
         return self
@@ -82,7 +98,7 @@ class CompetitionEntryResponse(BaseModel):
     soup_id: int
     soup_title: str = ""
     author_uid: int
-    final_score: float
+    final_score: float | None
     rank: int | None = None
     created_at: datetime
 
@@ -104,6 +120,7 @@ class CompetitionResponse(BaseModel):
     optional_tag_ids: list[int]
     competition_color: str
     score_type: CompetitionScoreType
+    scoring_at: datetime | None = None
     top_n: int
     custom_page_config: dict[str, Any]
     status: CompetitionStatus
@@ -117,3 +134,33 @@ class CompetitionResponse(BaseModel):
 
 class CompetitionPageResponse(PageResponse[CompetitionResponse]):
     pass
+
+
+class CompetitionJudgeScoreUpdate(BaseModel):
+    score: float
+
+    @field_validator("score")
+    @classmethod
+    def valid_score(cls, value: float) -> float:
+        return validate_score(value)
+
+
+class CompetitionJudgingEntryResponse(BaseModel):
+    entry_id: int
+    soup_id: int
+    soup_title: str
+    author_uid: int
+    judge_score: float | None = None
+    judged_by_uid: int | None = None
+    judged_at: datetime | None = None
+
+
+class CompetitionJudgingResponse(BaseModel):
+    competition_id: int
+    competition_name: str
+    score_type: CompetitionScoreType
+    scoring_at: datetime
+    settled_at: datetime | None = None
+    scored_count: int
+    total_count: int
+    entries: list[CompetitionJudgingEntryResponse]

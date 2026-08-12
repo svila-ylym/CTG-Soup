@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api import competitions
-from app.api.auth import get_current_admin_user
+from app.api.auth import get_current_active_user, get_current_admin_user
 from app.models.database import (
     Competition,
     CompetitionEntry,
@@ -103,6 +103,7 @@ def _setup():
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_admin_user] = override_admin
+    app.dependency_overrides[get_current_active_user] = override_admin
     return TestClient(app), engine, ids
 
 
@@ -786,3 +787,167 @@ def test_competition_colors_are_ordered_deduplicated_and_removed_on_delete():
     assert client.delete(f"/api/competitions/{ids[5]}").status_code == 204
     with Session(engine) as session:
         assert competition_colors_for_soups(session, [ids[4]]) == {ids[4]: []}
+
+
+def _make_independent_competition_ready_for_judging(engine, ids):
+    with Session(engine) as session:
+        competition = session.get(Competition, ids[5])
+        soup = session.get(Soup, ids[4])
+        competition.score_type = "independent"
+        evaluate_soup_competitions(session, soup)
+        competition.end_time = datetime.utcnow() - timedelta(hours=1)
+        competition.scoring_at = datetime.utcnow() - timedelta(minutes=30)
+        entry = session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == competition.id
+            )
+        ).one()
+        entry.final_score = 0
+        session.commit()
+        return competition.id, entry.id
+
+
+def test_independent_competition_requires_valid_scoring_date():
+    client, _engine, ids = _setup()
+    base = {
+        "name": "独评日期校验",
+        "description": "说明",
+        "start_time": "2026-08-08T00:00:00+08:00",
+        "end_time": "2026-08-09T00:00:00+08:00",
+        "required_tag_ids": [ids[2]],
+        "score_type": "independent",
+    }
+
+    missing = client.post("/api/competitions", json=base)
+    too_early = client.post(
+        "/api/competitions",
+        json={**base, "scoring_at": "2026-08-08T23:59:59+08:00"},
+    )
+    average_with_date = client.post(
+        "/api/competitions",
+        json={
+            **base,
+            "score_type": "average",
+            "scoring_at": "2026-08-09T00:00:00+08:00",
+        },
+    )
+
+    assert missing.status_code == 422
+    assert too_early.status_code == 422
+    assert average_with_date.status_code == 422
+
+
+def test_independent_scores_are_private_until_complete_settlement():
+    client, engine, ids = _setup()
+    competition_id, entry_id = _make_independent_competition_ready_for_judging(
+        engine,
+        ids,
+    )
+
+    public_before = client.get(f"/api/competitions/{competition_id}")
+    judging_before = client.get(f"/api/competitions/{competition_id}/judging")
+    incomplete = client.post(f"/api/competitions/{competition_id}/settle")
+    saved = client.put(
+        f"/api/competitions/{competition_id}/entries/{entry_id}/judge-score",
+        json={"score": 7.5},
+    )
+    public_during = client.get(f"/api/competitions/{competition_id}")
+
+    assert public_before.status_code == 200
+    assert public_before.json()["rankings"] == {"total": [], "groups": []}
+    assert public_before.json()["entries"][0]["final_score"] is None
+    assert "judge_score" not in public_before.json()["entries"][0]
+    assert judging_before.json()["scored_count"] == 0
+    assert incomplete.status_code == 409
+    assert incomplete.json()["detail"] == {
+        "code": "INDEPENDENT_SCORING_INCOMPLETE",
+        "message": "还有 1 件作品未完成比赛方评分",
+        "missing_count": 1,
+    }
+    assert saved.status_code == 200
+    assert saved.json()["judge_score"] == 7.5
+    assert saved.json()["judged_by_uid"] == ids[0]
+    assert public_during.json()["rankings"] == {"total": [], "groups": []}
+    assert public_during.json()["entries"][0]["final_score"] is None
+
+    with Session(engine) as session:
+        soup = session.get(Soup, ids[4])
+        soup.avg_rating = 10.0
+        session.commit()
+
+    settled = client.post(f"/api/competitions/{competition_id}/settle")
+
+    assert settled.status_code == 200
+    assert settled.json()["rankings"]["total"][0]["final_score"] == 7.5
+    assert settled.json()["entries"][0]["final_score"] == 7.5
+
+
+def test_independent_judging_enforces_opening_score_format_and_permission():
+    client, engine, ids = _setup()
+    competition_id, entry_id = _make_independent_competition_ready_for_judging(
+        engine,
+        ids,
+    )
+    with Session(engine) as session:
+        competition = session.get(Competition, competition_id)
+        competition.scoring_at = datetime.utcnow() + timedelta(hours=1)
+        session.commit()
+
+    early = client.put(
+        f"/api/competitions/{competition_id}/entries/{entry_id}/judge-score",
+        json={"score": 8.0},
+    )
+    invalid = client.put(
+        f"/api/competitions/{competition_id}/entries/{entry_id}/judge-score",
+        json={"score": 8.2},
+    )
+
+    async def override_non_owner():
+        with Session(engine) as session:
+            return session.get(User, ids[1])
+
+    client.app.dependency_overrides[get_current_active_user] = override_non_owner
+    forbidden = client.get(f"/api/competitions/{competition_id}/judging")
+
+    assert early.status_code == 409
+    assert early.json()["detail"]["code"] == "INDEPENDENT_SCORING_NOT_OPEN"
+    assert invalid.status_code == 422
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"]["code"] == "COMPETITION_JUDGING_FORBIDDEN"
+
+
+def test_independent_judging_locks_membership_configuration_after_first_score():
+    client, engine, ids = _setup()
+    competition_id, entry_id = _make_independent_competition_ready_for_judging(
+        engine,
+        ids,
+    )
+    assert client.put(
+        f"/api/competitions/{competition_id}/entries/{entry_id}/judge-score",
+        json={"score": 8.0},
+    ).status_code == 200
+
+    with Session(engine) as session:
+        competition = session.get(Competition, competition_id)
+        scoring_at = competition.scoring_at.replace(tzinfo=timezone.utc).isoformat()
+
+    response = client.put(
+        f"/api/competitions/{competition_id}",
+        json={
+            "name": "试图改范围",
+            "description": "说明",
+            "start_time": (
+                datetime.now(timezone.utc) - timedelta(hours=3)
+            ).isoformat(),
+            "end_time": (
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            ).isoformat(),
+            "required_tag_ids": [ids[2]],
+            "score_type": "independent",
+            "scoring_at": scoring_at,
+            "top_n": 10,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "INDEPENDENT_SCORING_LOCKED"

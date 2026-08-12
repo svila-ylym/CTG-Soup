@@ -17,16 +17,21 @@ class CompetitionJudgingMigrationReport:
     applied: bool
 
 
-def _postgres_enum_has_independent(engine: Engine) -> bool:
+def _postgres_enum_needs_independent(engine: Engine) -> bool:
     if engine.dialect.name != "postgresql":
-        return True
+        return False
     with engine.connect() as connection:
-        return bool(connection.execute(text(
+        row = connection.execute(text(
+            "SELECT EXISTS ("
+            "SELECT 1 FROM pg_type WHERE typname = 'competitionscoretype'"
+            ") AS type_exists, EXISTS ("
             "SELECT 1 FROM pg_type type "
             "JOIN pg_enum enum ON enum.enumtypid = type.oid "
             "WHERE type.typname = 'competitionscoretype' "
             "AND enum.enumlabel = 'INDEPENDENT'"
-        )).first())
+            ") AS value_exists"
+        )).one()
+    return bool(row.type_exists and not row.value_exists)
 
 
 def ensure_competition_judging_schema(
@@ -45,7 +50,7 @@ def ensure_competition_judging_schema(
     entry_columns = {
         column["name"] for column in inspector.get_columns("competition_entries")
     }
-    add_enum_value = not _postgres_enum_has_independent(engine)
+    add_enum_value = _postgres_enum_needs_independent(engine)
     actions = tuple(
         action
         for action, needed in (
