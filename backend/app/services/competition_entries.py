@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.models.database import (
     Competition,
     CompetitionEntry,
+    CompetitionScoreType,
     CompetitionStatus,
     Soup,
     SoupTag,
@@ -21,6 +22,16 @@ COMPETITION_COLLECTION_LOCK_ID = 0x43544701
 
 class CompetitionNotEndedError(ValueError):
     pass
+
+
+class IndependentScoringNotOpenError(ValueError):
+    pass
+
+
+class IndependentScoringIncompleteError(ValueError):
+    def __init__(self, missing_count: int) -> None:
+        self.missing_count = missing_count
+        super().__init__(f"还有 {missing_count} 件作品未完成比赛方评分")
 
 
 def _lock_competition_collection(db: Session) -> None:
@@ -123,7 +134,11 @@ def _ensure_entry(
             "competition_id": competition.id,
             "soup_id": soup.id,
             "author_uid": soup.author_uid,
-            "final_score": _entry_score(soup),
+            "final_score": (
+                0.0
+                if competition.score_type == CompetitionScoreType.INDEPENDENT
+                else _entry_score(soup)
+            ),
         }
         dialect = db.get_bind().dialect.name
         if dialect == "postgresql":
@@ -231,10 +246,17 @@ def evaluate_soup_competitions(db: Session, soup: Soup) -> list[CompetitionEntry
         entry = existing.get(competition.id)
         if not _matches_competition(competition, soup, active_tag_ids):
             if entry is not None:
-                db.delete(entry)
+                if (
+                    competition.score_type == CompetitionScoreType.INDEPENDENT
+                    and entry.judge_score is not None
+                ):
+                    entries.append(entry)
+                else:
+                    db.delete(entry)
             continue
         entry = entry or _ensure_entry(db, competition, soup)
-        entry.final_score = _entry_score(soup)
+        if competition.score_type != CompetitionScoreType.INDEPENDENT:
+            entry.final_score = _entry_score(soup)
         entries.append(entry)
     db.commit()
     for entry in entries:
@@ -249,15 +271,16 @@ def reconcile_soup_competitions(db: Session, soup: Soup) -> list[CompetitionEntr
 def refresh_soup_competition_scores(db: Session, soup: Soup) -> None:
     _lock_competition_collection(db)
     entries = db.exec(
-        select(CompetitionEntry)
+        select(CompetitionEntry, Competition)
         .join(Competition, Competition.id == CompetitionEntry.competition_id)
         .where(
             CompetitionEntry.soup_id == soup.id,
             Competition.settled_at.is_(None),
         )
     ).all()
-    for entry in entries:
-        entry.final_score = _entry_score(soup)
+    for entry, competition in entries:
+        if competition.score_type != CompetitionScoreType.INDEPENDENT:
+            entry.final_score = _entry_score(soup)
     db.flush()
 
 
@@ -300,6 +323,19 @@ def rebuild_competition_entries(
     if competition.settled_at is not None:
         return []
     _lock_competition_collection(db)
+    if competition.score_type == CompetitionScoreType.INDEPENDENT:
+        has_scores = db.exec(
+            select(CompetitionEntry.id).where(
+                CompetitionEntry.competition_id == competition.id,
+                CompetitionEntry.judge_score.is_not(None),
+            )
+        ).first()
+        if has_scores is not None:
+            return db.exec(
+                select(CompetitionEntry).where(
+                    CompetitionEntry.competition_id == competition.id
+                )
+            ).all()
     delete_competition_entries(db, competition.id)
     db.flush()
     return collect_competition_entries(db, competition)
@@ -342,7 +378,12 @@ def _competition_ranking_rows(
     ).all()
     ranked_rows = []
     for entry, soup in rows:
-        score = _entry_score(soup)
+        if competition.score_type == CompetitionScoreType.INDEPENDENT:
+            if entry.judge_score is None:
+                continue
+            score = float(entry.judge_score)
+        else:
+            score = _entry_score(soup)
         if persist_scores:
             entry.final_score = score
         ranked_rows.append((entry, soup, score))
@@ -431,6 +472,8 @@ def competition_rankings(db: Session, competition: Competition) -> dict:
         for item in entries:
             item.setdefault("soup_title", titles.get(item.get("soup_id"), "已删除作品"))
         return rankings
+    if competition.score_type == CompetitionScoreType.INDEPENDENT:
+        return {"total": [], "groups": []}
     return _build_rankings(db, competition)
 
 
@@ -470,6 +513,12 @@ def settle_competition(db: Session, competition: Competition) -> dict:
     entries = db.exec(select(CompetitionEntry).where(
         CompetitionEntry.competition_id == competition.id
     )).all()
+    if competition.score_type == CompetitionScoreType.INDEPENDENT:
+        if competition.scoring_at is None or datetime.utcnow() < competition.scoring_at:
+            raise IndependentScoringNotOpenError("尚未到比赛方评分日期")
+        missing_count = sum(entry.judge_score is None for entry in entries)
+        if missing_count:
+            raise IndependentScoringIncompleteError(missing_count)
     rankings = _build_rankings(db, competition, persist_scores=True)
     total_ranks = {
         item["entry_id"]: item["rank"] for item in rankings["total"]
