@@ -222,4 +222,3 @@ git commit -m "fix: harden independent competition scoring"
 - [ ] **Step 5: Push and update the existing pull request**
 
 Push `codex/soup-collections-1-4-0` and confirm the open PR head matches local HEAD. Do not deploy production unless the user explicitly requests it after reviewing this feature.
-
