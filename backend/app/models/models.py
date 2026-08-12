@@ -63,6 +63,7 @@ class FavoriteTargetType(str, Enum):
 class CompetitionScoreType(str, Enum):
     AVERAGE = "average"
     TOP_SCORE = "top_score"
+    INDEPENDENT = "independent"
 
 class CompetitionStatus(str, Enum):
     PENDING = "pending"
@@ -538,6 +539,7 @@ class Competition(SQLModel, table=True):
     )
     competition_color: str = Field(default="#2563EB", max_length=7)
     score_type: CompetitionScoreType = Field(default=CompetitionScoreType.AVERAGE)
+    scoring_at: Optional[datetime] = None
     top_n: int = Field(default=10)
     custom_page_config: Dict[str, Any] = Field(
         default_factory=dict,
@@ -563,6 +565,16 @@ class CompetitionEntry(SQLModel, table=True):
     soup_id: int = Field(foreign_key="soups.id", index=True)
     author_uid: int = Field(foreign_key="users.uid", index=True)
     final_score: float = Field(default=0.0)
+    judge_score: Optional[float] = None
+    judged_by_uid: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("users.uid", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    judged_at: Optional[datetime] = None
     rank: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
