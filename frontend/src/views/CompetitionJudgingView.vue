@@ -24,7 +24,6 @@ const isOpen = computed(() => Boolean(
 const editable = computed(() => isOpen.value && !judging.value?.settled_at)
 const complete = computed(() => Boolean(
   judging.value
-  && judging.value.total_count > 0
   && judging.value.scored_count === judging.value.total_count,
 ))
 
