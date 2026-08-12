@@ -264,6 +264,8 @@ export interface Comment {
 }
 
 // 比赛相关
+export type CompetitionScoreType = 'average' | 'independent'
+
 export interface Competition {
   id: number
   name: string
@@ -274,8 +276,10 @@ export interface Competition {
   required_tag_ids: number[]
   required_tags: Array<{ id: number; name: string }>
   optional_tag_ids: number[]
+  optional_tags: Array<{ id: number; name: string }>
   competition_color: string
-  score_type: 'average'
+  score_type: CompetitionScoreType
+  scoring_at: string | null
   top_n: number
   custom_page_config: Record<string, unknown>
   status: 'pending' | 'ongoing' | 'completed'
@@ -297,7 +301,8 @@ export interface CompetitionCreate {
   optional_tag_ids: number[]
   optional_custom_tags: string[]
   competition_color: string
-  score_type: 'average'
+  score_type: CompetitionScoreType
+  scoring_at: string | null
   top_n: number
   custom_page_config: Record<string, unknown>
 }
@@ -309,7 +314,7 @@ export interface CompetitionEntry {
   competition_id: number
   soup_id: number
   soup_title: string
-  final_score: number
+  final_score: number | null
   author_uid: number
   rank: number | null
   created_at: string
@@ -334,6 +339,27 @@ export interface CompetitionRankingGroup {
 export interface CompetitionRankings {
   total: CompetitionRankingEntry[]
   groups: CompetitionRankingGroup[]
+}
+
+export interface CompetitionJudgingEntry {
+  entry_id: number
+  soup_id: number
+  soup_title: string
+  author_uid: number
+  judge_score: number | null
+  judged_by_uid: number | null
+  judged_at: string | null
+}
+
+export interface CompetitionJudging {
+  competition_id: number
+  competition_name: string
+  score_type: CompetitionScoreType
+  scoring_at: string
+  settled_at: string | null
+  scored_count: number
+  total_count: number
+  entries: CompetitionJudgingEntry[]
 }
 
 // 社交相关

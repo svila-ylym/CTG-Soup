@@ -143,11 +143,13 @@ def _payload(
             for entry in entry_rows
         ]
     required_tag_ids = competition_tag_ids(competition)
+    optional_tag_ids = competition_optional_tag_ids(competition)
     if tag_names_by_id is None:
+        all_tag_ids = list(dict.fromkeys(required_tag_ids + optional_tag_ids))
         tag_names_by_id = {
             tag.id: tag.name
-            for tag in db.exec(select(Tag).where(Tag.id.in_(required_tag_ids))).all()
-        } if required_tag_ids else {}
+            for tag in db.exec(select(Tag).where(Tag.id.in_(all_tag_ids))).all()
+        } if all_tag_ids else {}
     return {
         "id": competition.id,
         "creator_uid": competition.creator_uid,
@@ -163,7 +165,14 @@ def _payload(
             }
             for tag_id in required_tag_ids
         ],
-        "optional_tag_ids": competition_optional_tag_ids(competition),
+        "optional_tag_ids": optional_tag_ids,
+        "optional_tags": [
+            {
+                "id": tag_id,
+                "name": tag_names_by_id.get(tag_id, f"标签 #{tag_id}"),
+            }
+            for tag_id in optional_tag_ids
+        ],
         "competition_color": competition.competition_color,
         "score_type": competition.score_type,
         "scoring_at": _utc(competition.scoring_at),
@@ -427,15 +436,18 @@ def list_competitions(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    required_tag_ids = list(dict.fromkeys(
+    tag_ids = list(dict.fromkeys(
         tag_id
         for competition in rows
-        for tag_id in competition_tag_ids(competition)
+        for tag_id in (
+            competition_tag_ids(competition)
+            + competition_optional_tag_ids(competition)
+        )
     ))
     tag_names_by_id = {
         tag.id: tag.name
-        for tag in db.exec(select(Tag).where(Tag.id.in_(required_tag_ids))).all()
-    } if required_tag_ids else {}
+        for tag in db.exec(select(Tag).where(Tag.id.in_(tag_ids))).all()
+    } if tag_ids else {}
     return {
         "items": [
             _payload(db, competition, tag_names_by_id=tag_names_by_id)
@@ -570,12 +582,13 @@ def update_competition_judge_score(
 @router.post("/{competition_id}/settle", response_model=CompetitionResponse)
 def settle_competition_endpoint(
     competition_id: int,
-    _current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     competition = db.get(Competition, competition_id)
     if competition is None:
         raise HTTPException(status_code=404, detail="比赛不存在")
+    _require_judging_access(competition, current_user)
     try:
         settle_competition(db, competition)
     except CompetitionNotEndedError as exc:

@@ -240,19 +240,29 @@ def evaluate_soup_competitions(db: Session, soup: Soup) -> list[CompetitionEntry
             relevant_window,
         )
     ).all()
+    competition_ids = [competition.id for competition in competitions]
+    locked_competition_ids = set(db.exec(
+        select(CompetitionEntry.competition_id)
+        .where(
+            CompetitionEntry.competition_id.in_(competition_ids),
+            CompetitionEntry.judge_score.is_not(None),
+        )
+        .distinct()
+    ).all()) if competition_ids else set()
 
     entries: list[CompetitionEntry] = []
     for competition in competitions:
         entry = existing.get(competition.id)
+        if (
+            competition.score_type == CompetitionScoreType.INDEPENDENT
+            and competition.id in locked_competition_ids
+        ):
+            if entry is not None:
+                entries.append(entry)
+            continue
         if not _matches_competition(competition, soup, active_tag_ids):
             if entry is not None:
-                if (
-                    competition.score_type == CompetitionScoreType.INDEPENDENT
-                    and entry.judge_score is not None
-                ):
-                    entries.append(entry)
-                else:
-                    db.delete(entry)
+                db.delete(entry)
             continue
         entry = entry or _ensure_entry(db, competition, soup)
         if competition.score_type != CompetitionScoreType.INDEPENDENT:
