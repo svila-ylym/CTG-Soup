@@ -57,6 +57,65 @@ def competition_optional_tag_ids(competition: Competition) -> list[int]:
     return _normalized_tag_ids(competition.optional_tag_ids)
 
 
+def locked_independent_competition_ids(db: Session) -> set[int]:
+    """Return unsettled independent competitions whose judging has started."""
+    return set(db.exec(
+        select(CompetitionEntry.competition_id)
+        .join(Competition, Competition.id == CompetitionEntry.competition_id)
+        .where(
+            Competition.score_type == CompetitionScoreType.INDEPENDENT,
+            Competition.settled_at.is_(None),
+            CompetitionEntry.judge_score.is_not(None),
+        )
+        .distinct()
+    ).all())
+
+
+def locked_independent_competition_ids_for_tags(
+    db: Session,
+    tag_ids: set[int],
+) -> list[int]:
+    normalized_tag_ids = {int(tag_id) for tag_id in tag_ids if int(tag_id) > 0}
+    if not normalized_tag_ids:
+        return []
+    locked_ids = locked_independent_competition_ids(db)
+    if not locked_ids:
+        return []
+    competitions = db.exec(
+        select(Competition).where(Competition.id.in_(locked_ids))
+    ).all()
+    return [
+        competition.id
+        for competition in competitions
+        if normalized_tag_ids.intersection(
+            competition_tag_ids(competition)
+            + competition_optional_tag_ids(competition)
+        )
+    ]
+
+
+def locked_independent_tag_ids_for_soup(db: Session, soup_id: int) -> set[int]:
+    locked_ids = locked_independent_competition_ids(db)
+    if not locked_ids:
+        return set()
+    competitions = db.exec(
+        select(Competition)
+        .join(CompetitionEntry, CompetitionEntry.competition_id == Competition.id)
+        .where(
+            Competition.id.in_(locked_ids),
+            CompetitionEntry.soup_id == soup_id,
+        )
+    ).all()
+    return {
+        tag_id
+        for competition in competitions
+        for tag_id in (
+            competition_tag_ids(competition)
+            + competition_optional_tag_ids(competition)
+        )
+    }
+
+
 def _normalized_tag_ids(values) -> list[int]:
     normalized: list[int] = []
     for value in values or []:
@@ -297,6 +356,7 @@ def refresh_soup_competition_scores(db: Session, soup: Soup) -> None:
 def remove_soup_from_unsettled_competitions(db: Session, soup_id: int) -> int:
     """Remove a deleted soup from competitions whose results are not frozen."""
     _lock_competition_collection(db)
+    locked_ids = locked_independent_competition_ids(db)
     entries = db.exec(
         select(CompetitionEntry)
         .join(Competition, Competition.id == CompetitionEntry.competition_id)
@@ -305,10 +365,14 @@ def remove_soup_from_unsettled_competitions(db: Session, soup_id: int) -> int:
             Competition.settled_at.is_(None),
         )
     ).all()
+    removed_count = 0
     for entry in entries:
+        if entry.competition_id in locked_ids:
+            continue
         db.delete(entry)
+        removed_count += 1
     db.flush()
-    return len(entries)
+    return removed_count
 
 
 def delete_competition_entries(db: Session, competition_id: int) -> int:

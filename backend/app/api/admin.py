@@ -14,6 +14,7 @@ from app.services.governance_rules import decide_report
 from app.schemas.announcements import TagAdminCreate, TagAdminUpdate, TagMergeRequest, AnnouncementCreate, AnnouncementUpdate
 from app.services.tag_rules import normalize_tag_name
 from app.services.competition_entries import (
+    locked_independent_competition_ids_for_tags,
     lock_competition_collection,
     rebuild_unsettled_competitions_for_tags,
 )
@@ -178,6 +179,19 @@ def admin_merge_tag(
     if not source or not target:
         raise HTTPException(404, "标签不存在")
     lock_competition_collection(db)
+    locked_competition_ids = locked_independent_competition_ids_for_tags(
+        db,
+        {source.id, target.id},
+    )
+    if locked_competition_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INDEPENDENT_SCORING_LOCKED",
+                "message": "标签用于已开始评分的独评比赛，暂时不能合并",
+                "competition_ids": locked_competition_ids,
+            },
+        )
     for relation in db.exec(select(SoupTag).where(SoupTag.tag_id == source.id)).all():
         if not db.get(SoupTag, (relation.soup_id, target.id)):
             db.add(SoupTag(soup_id=relation.soup_id, tag_id=target.id))
