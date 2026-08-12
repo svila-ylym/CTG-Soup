@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
+from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, CompetitionScoreType, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
 from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse, MessageResponse
 from app.api.auth import get_current_admin_user, get_current_root_user, get_current_user
 from app.models.database import UserRole, UserStatus, PunishmentType
@@ -198,6 +198,11 @@ def admin_merge_tag(
         db.delete(relation)
     # Keep competition references valid when a taxonomy entry is merged.
     for competition in db.exec(select(Competition)).all():
+        if (
+            competition.score_type == CompetitionScoreType.INDEPENDENT
+            and competition.settled_at is not None
+        ):
+            continue
         changed = False
         updated_tag_sets = {}
         for field_name in ("required_tag_ids", "optional_tag_ids"):
