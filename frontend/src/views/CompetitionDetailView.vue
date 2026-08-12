@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, PencilSquareIcon, StarIcon } from '@heroicons/vue/24/outline'
 import DOMPurify from 'dompurify'
 import LinkifiedText from '@/components/LinkifiedText.vue'
 import http from '@/api/http'
@@ -23,13 +23,20 @@ const safeDescription = computed(() => DOMPurify.sanitize(
   competition.value?.description || '',
   { USE_PROFILES: { html: true }, ADD_TAGS: ['img'], ADD_ATTR: ['src', 'alt', 'title'] },
 ))
-const canSettle = computed(() => auth.isAdmin
-  && competition.value !== null
+const canSettle = computed(() => competition.value !== null
+  && (auth.isAdmin || competition.value.creator_uid === auth.user?.uid)
   && competition.value.settled_at === null
-  && Date.now() >= parseUtcDateTime(competition.value.end_time).getTime())
+  && competition.value.score_type === 'average'
+  && Date.now() >= parseUtcDateTime(competition.value.end_time).getTime()
+)
 const canEdit = computed(() => competition.value !== null
   && competition.value.creator_uid === auth.user?.uid
   && competition.value.settled_at === null)
+const canJudge = computed(() => competition.value?.score_type === 'independent'
+  && Boolean(auth.user)
+  && (auth.isAdmin || competition.value?.creator_uid === auth.user?.uid))
+const awaitingIndependentSettlement = computed(() => competition.value?.score_type === 'independent'
+  && !competition.value?.settled_at)
 const rankingLabel = computed(() => competition.value?.settled_at ? '最终排行' : '实时排行')
 
 async function load() {
@@ -91,19 +98,34 @@ onMounted(load)
 
           <dl class="mt-8 grid gap-5 border-t border-slate-200 pt-6 sm:grid-cols-2 lg:grid-cols-4 dark:border-neutral-800">
             <div><dt class="text-sm text-slate-500">时间（UTC+8）</dt><dd class="mt-1 text-sm">{{ formatChinaDateTime(competition.start_time) }}<br>至 {{ formatChinaDateTime(competition.end_time) }}</dd></div>
-            <div><dt class="text-sm text-slate-500">评分</dt><dd class="mt-1">平均分 · 前 {{ competition.top_n }} 名</dd></div>
+            <div><dt class="text-sm text-slate-500">评分</dt><dd class="mt-1">{{ competition.score_type === 'independent' ? '独评' : '平均分' }} · 前 {{ competition.top_n }} 名<span v-if="competition.scoring_at" class="mt-1 block text-xs text-slate-500">{{ formatChinaDateTime(competition.scoring_at) }} 开放评分</span></dd></div>
             <div><dt class="text-sm text-slate-500">必选标签</dt><dd class="mt-1 break-words">{{ competition.required_tags.map(tag => tag.name).join('、') }}</dd></div>
-            <div><dt class="text-sm text-slate-500">可选分组</dt><dd class="mt-1 break-words">{{ competition.rankings.groups.length ? competition.rankings.groups.map(group => group.tag_name).join('、') : '无' }}</dd></div>
+            <div><dt class="text-sm text-slate-500">可选分组</dt><dd class="mt-1 break-words">{{ competition.optional_tags.length ? competition.optional_tags.map(tag => tag.name).join('、') : '无' }}</dd></div>
           </dl>
 
           <div class="mt-8 flex flex-wrap items-center gap-3">
             <router-link v-if="canEdit" class="btn-secondary gap-2" :to="`/competitions/${competition.id}/edit`"><PencilSquareIcon class="h-4 w-4" aria-hidden="true" />修改比赛</router-link>
-            <button v-if="canSettle" class="btn-secondary" :disabled="settling" @click="settle">{{ settling ? '结算中…' : '管理员结算' }}</button>
+            <router-link v-if="canJudge" class="btn-secondary gap-2" :to="`/competitions/${competition.id}/judging`"><StarIcon class="h-4 w-4" aria-hidden="true" />比赛方评分</router-link>
+            <button v-if="canSettle" class="btn-secondary" :disabled="settling" @click="settle">{{ settling ? '结算中…' : '结算比赛' }}</button>
             <span v-if="settleMessage" class="min-w-0 break-words text-sm" :class="settleMessage.includes('失败') ? 'text-red-600' : 'text-emerald-600'">{{ settleMessage }}</span>
           </div>
         </section>
 
-        <section class="mt-8 border-t border-slate-200 pt-7 dark:border-neutral-800">
+        <section v-if="awaitingIndependentSettlement" class="mt-8 border-t border-slate-200 pt-7 dark:border-neutral-800">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div><p class="text-xs font-semibold text-slate-500">独评尚未公开</p><h2 class="section-title mt-1">参赛作品</h2></div>
+            <span class="text-sm text-slate-500">已收录 {{ competition.entries?.length || 0 }} 部作品</span>
+          </div>
+          <p class="mt-3 text-sm text-slate-500">等待比赛方完成评分并统一结算。</p>
+          <div v-if="competition.entries?.length" class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+              <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-3 py-2">作品</th><th class="px-3 py-2">作者 UID</th></tr></thead>
+              <tbody><tr v-for="entry in competition.entries" :key="entry.id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section v-else class="mt-8 border-t border-slate-200 pt-7 dark:border-neutral-800">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p class="text-xs font-semibold text-slate-500">{{ rankingLabel }}</p>

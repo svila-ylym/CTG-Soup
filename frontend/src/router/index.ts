@@ -112,6 +112,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '修改比赛', requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/competitions/:id/judging',
+    name: 'CompetitionJudging',
+    component: () => import('@/views/CompetitionJudgingView.vue'),
+    meta: { title: '比赛方评分', requiresAuth: true },
+  },
+  {
     path: '/competitions/:id',
     name: 'CompetitionDetail',
     component: () => import('@/views/CompetitionDetailView.vue'),

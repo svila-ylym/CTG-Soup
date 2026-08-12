@@ -421,6 +421,29 @@ def test_soup_delete_preserves_frozen_results_and_competition_delete_cleans_entr
         assert ("delete", "competition") in actions
 
 
+def test_soup_delete_preserves_entry_after_independent_judging_starts():
+    client, engine, ids, _current = _management_app()
+    with Session(engine) as session:
+        competition = session.get(Competition, ids["unsettled"])
+        competition.score_type = "independent"
+        entry = session.exec(
+            select(CompetitionEntry).where(
+                CompetitionEntry.competition_id == competition.id,
+                CompetitionEntry.soup_id == ids["soup"],
+            )
+        ).one()
+        entry.judge_score = 8.0
+        session.commit()
+        entry_id = entry.id
+
+    response = client.delete(f"/api/turtle-soups/{ids['soup']}")
+
+    assert response.status_code == 204
+    with Session(engine) as session:
+        assert session.get(Soup, ids["soup"]).status == "deleted"
+        assert session.get(CompetitionEntry, entry_id) is not None
+
+
 def test_admin_can_soft_delete_post_and_comment_with_audit_logs():
     client, engine, ids, current = _management_app()
     current["active"] = ids["moderator"]
