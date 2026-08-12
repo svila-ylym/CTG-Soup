@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import LinkifiedText from '@/components/LinkifiedText.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ArrowDownTrayIcon, ArrowPathIcon, ShieldExclamationIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownTrayIcon, ArrowPathIcon, ShieldExclamationIcon, StarIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/utils/auth'
@@ -255,7 +255,9 @@ function canRevokePunishment(item: AdminPunishment) {
 }
 
 function canSettle(competition: Competition) {
-  return !competition.settled_at && new Date(competition.end_time).getTime() <= Date.now()
+  return competition.score_type === 'average'
+    && !competition.settled_at
+    && new Date(competition.end_time).getTime() <= Date.now()
 }
 
 async function fetchAllPages<T>(url: string): Promise<T[]> {
@@ -740,7 +742,7 @@ onUnmounted(stopUpdatePolling)
         <section v-else-if="activeTab === 'competitions'" class="surface-card p-5">
           <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="section-title">比赛管理</h2><router-link class="btn-primary" to="/competitions/create">发布比赛</router-link></div>
           <div v-if="!competitions.length" class="py-10 text-center text-sm text-slate-500">暂无比赛。</div>
-          <div v-else class="mt-4 overflow-x-auto"><table class="w-full min-w-[840px] text-left text-sm"><thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-2 py-2">比赛</th><th class="px-2 py-2">周期</th><th class="px-2 py-2">状态</th><th class="px-2 py-2">标签</th><th class="px-2 py-2">操作</th></tr></thead><tbody><tr v-for="item in competitions" :key="item.id" class="border-b border-slate-100 dark:border-neutral-800"><td class="px-2 py-3"><router-link class="font-semibold text-blue-600 hover:underline" :to="`/competitions/${item.id}`">{{ item.name }}</router-link><small class="mt-1 block text-slate-400">#{{ item.id }} · 创建人 UID {{ item.creator_uid }}</small></td><td class="px-2 py-3 text-xs text-slate-500">{{ formatDate(item.start_time) }}<span class="block">{{ formatDate(item.end_time) }}</span></td><td class="px-2 py-3">{{ item.settled_at ? '已结算' : item.status }}</td><td class="px-2 py-3">{{ item.required_tag_ids.length }} 个</td><td class="px-2 py-3"><div class="flex items-center gap-3"><button v-if="canSettle(item)" class="btn-secondary text-xs" type="button" :disabled="savingKey === `competition:${item.id}`" @click="settleCompetition(item)">结算</button><button class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700" type="button" :disabled="savingKey === `competition:${item.id}`" @click="deleteCompetition(item)"><TrashIcon class="h-4 w-4" aria-hidden="true" />删除</button></div></td></tr></tbody></table></div>
+          <div v-else class="mt-4 overflow-x-auto"><table class="w-full min-w-[840px] text-left text-sm"><thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-2 py-2">比赛</th><th class="px-2 py-2">周期</th><th class="px-2 py-2">状态</th><th class="px-2 py-2">标签</th><th class="px-2 py-2">操作</th></tr></thead><tbody><tr v-for="item in competitions" :key="item.id" class="border-b border-slate-100 dark:border-neutral-800"><td class="px-2 py-3"><router-link class="font-semibold text-blue-600 hover:underline" :to="`/competitions/${item.id}`">{{ item.name }}</router-link><small class="mt-1 block text-slate-400">#{{ item.id }} · 创建人 UID {{ item.creator_uid }}</small></td><td class="px-2 py-3 text-xs text-slate-500">{{ formatDate(item.start_time) }}<span class="block">{{ formatDate(item.end_time) }}</span></td><td class="px-2 py-3">{{ item.settled_at ? '已结算' : item.status }}</td><td class="px-2 py-3">{{ item.required_tag_ids.length }} 个</td><td class="px-2 py-3"><div class="flex items-center gap-3"><router-link v-if="item.score_type === 'independent' && !item.settled_at" class="btn-secondary gap-1 text-xs" :to="`/competitions/${item.id}/judging`"><StarIcon class="h-4 w-4" aria-hidden="true" />评分</router-link><button v-if="canSettle(item)" class="btn-secondary text-xs" type="button" :disabled="savingKey === `competition:${item.id}`" @click="settleCompetition(item)">结算</button><button class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700" type="button" :disabled="savingKey === `competition:${item.id}`" @click="deleteCompetition(item)"><TrashIcon class="h-4 w-4" aria-hidden="true" />删除</button></div></td></tr></tbody></table></div>
         </section>
 
         <section v-else-if="activeTab === 'tags'" class="surface-card p-5">

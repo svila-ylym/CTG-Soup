@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 
 from app.db import engine as default_engine
 from app.migrations.competition_groups import ensure_competition_group_schema
+from app.migrations.competition_judging import ensure_competition_judging_schema
 from app.migrations.finalize_schema import finalize_schema
 from app.migrations.soup_collections import ensure_soup_collection_schema
 from app.migrations.soup_metadata import ensure_soup_metadata_schema
@@ -40,6 +41,10 @@ def _upgrade_foundation(engine: Engine, dry_run: bool) -> PhaseUpgradeResult:
     people_actions = _upgrade_people_columns(engine, dry_run)
     schema_report = finalize_schema(engine, dry_run=dry_run)
     competition_group_report = ensure_competition_group_schema(engine, dry_run=dry_run)
+    competition_judging_report = ensure_competition_judging_schema(
+        engine,
+        dry_run=dry_run,
+    )
     return PhaseUpgradeResult(
         actions=(
             root_actions
@@ -48,6 +53,7 @@ def _upgrade_foundation(engine: Engine, dry_run: bool) -> PhaseUpgradeResult:
             + people_actions
             + schema_report.actions
             + competition_group_report.actions
+            + competition_judging_report.actions
         ),
         counts={"promoted_root_users": promoted_root_users},
     )

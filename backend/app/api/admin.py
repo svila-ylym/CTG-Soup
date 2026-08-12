@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
+from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, CompetitionScoreType, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
 from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse, MessageResponse
 from app.api.auth import get_current_admin_user, get_current_root_user, get_current_user
 from app.models.database import UserRole, UserStatus, PunishmentType
@@ -14,6 +14,7 @@ from app.services.governance_rules import decide_report
 from app.schemas.announcements import TagAdminCreate, TagAdminUpdate, TagMergeRequest, AnnouncementCreate, AnnouncementUpdate
 from app.services.tag_rules import normalize_tag_name
 from app.services.competition_entries import (
+    locked_independent_competition_ids_for_tags,
     lock_competition_collection,
     rebuild_unsettled_competitions_for_tags,
 )
@@ -178,12 +179,30 @@ def admin_merge_tag(
     if not source or not target:
         raise HTTPException(404, "标签不存在")
     lock_competition_collection(db)
+    locked_competition_ids = locked_independent_competition_ids_for_tags(
+        db,
+        {source.id, target.id},
+    )
+    if locked_competition_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INDEPENDENT_SCORING_LOCKED",
+                "message": "标签用于已开始评分的独评比赛，暂时不能合并",
+                "competition_ids": locked_competition_ids,
+            },
+        )
     for relation in db.exec(select(SoupTag).where(SoupTag.tag_id == source.id)).all():
         if not db.get(SoupTag, (relation.soup_id, target.id)):
             db.add(SoupTag(soup_id=relation.soup_id, tag_id=target.id))
         db.delete(relation)
     # Keep competition references valid when a taxonomy entry is merged.
     for competition in db.exec(select(Competition)).all():
+        if (
+            competition.score_type == CompetitionScoreType.INDEPENDENT
+            and competition.settled_at is not None
+        ):
+            continue
         changed = False
         updated_tag_sets = {}
         for field_name in ("required_tag_ids", "optional_tag_ids"):
