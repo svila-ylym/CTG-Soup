@@ -11,7 +11,7 @@ import logging
 from sqlmodel import Session
 
 from app.core.config import get_settings
-from app.api import auth, users, posts, turtle_soups, collections, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home, update
+from app.api import auth, users, posts, turtle_soups, collections, competitions, social, messages, notifications, achievements, admin, search, uploads, tags, announcements, message_socket, system_messages, home, update, surveys
 from pathlib import Path
 from app.db import engine, init_db
 from app.services.dependency_health import optional_dependency_status
@@ -168,6 +168,7 @@ app.include_router(update.router, prefix="/api/admin/update", tags=["OTA 更新"
 app.include_router(search.router, prefix="/api/search", tags=["搜索"])
 app.include_router(uploads.router, prefix="/api/uploads", tags=["上传"])
 app.include_router(home.router, prefix="/api/home", tags=["首页"])
+app.include_router(surveys.router, prefix="/api/surveys", tags=["问卷"])
 storage_dir = Path(settings.LOCAL_STORAGE_DIR)
 if not storage_dir.is_absolute():
     storage_dir = Path(__file__).resolve().parents[1] / storage_dir
