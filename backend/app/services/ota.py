@@ -26,16 +26,16 @@ _VERSION_PATTERN = re.compile(
     r"(?:-(?P<prerelease>[0-9A-Za-z.-]+))?"
     r"(?:\+[0-9A-Za-z.-]+)?$"
 )
+
+# Tag pattern: aawbbx where aa=year(2 digits), w=fixed, bb=week(01-53), x=submission(a-z)
+_TAG_PATTERN = re.compile(r"^(?P<year>\d{2})w(?P<week>[0-5]\d)(?P<submission>[a-z])$")
+
 _TASK_LOCK = threading.Lock()
 _TASKS: dict[str, dict[str, Any]] = {}
 
 
-def repository_root(settings: Settings | None = None) -> Path:
-    configured = (settings or get_settings()).UPDATE_REPOSITORY_PATH
-    return Path(configured).expanduser().resolve() if configured else Path(__file__).resolve().parents[3]
-
-
-def _version_parts(value: str) -> tuple[int, int, int, tuple[int, Any]] | None:
+def _parse_semantic_version(value: str) -> tuple[int, int, int, tuple[int, Any]] | None:
+    """Parse semantic version (e.g., 1.4.1, 1.4.10, 1.101.0)."""
     match = _VERSION_PATTERN.fullmatch(value.strip())
     if match is None:
         return None
@@ -53,6 +53,43 @@ def _version_parts(value: str) -> tuple[int, int, int, tuple[int, Any]] | None:
         int(match.group("patch") or 0),
         pre_key,
     )
+
+
+def _parse_tag_version(value: str) -> tuple[int, int, int, str] | None:
+    """Parse tag version (e.g., 24w52c): year, week, submission order."""
+    match = _TAG_PATTERN.fullmatch(value.strip().lower())
+    if match is None:
+        return None
+    year = int(match.group("year"))
+    week = int(match.group("week"))
+    submission = match.group("submission")
+    # Convert submission letter to numeric value (a=0, b=1, ..., z=25)
+    submission_val = ord(submission) - ord('a')
+    return (year, week, submission_val, submission)
+
+
+def repository_root(settings: Settings | None = None) -> Path:
+    configured = (settings or get_settings()).UPDATE_REPOSITORY_PATH
+    return Path(configured).expanduser().resolve() if configured else Path(__file__).resolve().parents[3]
+
+
+def _version_parts(value: str) -> tuple[int, ...] | None:
+    """Parse version supporting both semantic (1.4.1) and tag (24w52c) formats."""
+    # Try semantic version first (e.g., 1.4.1, 1.4.10, 1.101.0)
+    semantic_result = _parse_semantic_version(value)
+    if semantic_result is not None:
+        # Return as (999, major, minor, patch) - semantic versions sort after tag versions
+        major, minor, patch, _ = semantic_result
+        return (999, major, minor, patch)
+    
+    # Try tag version (e.g., 24w52c)
+    tag_result = _parse_tag_version(value)
+    if tag_result is not None:
+        year, week, submission_val, _ = tag_result
+        # Return as (year, week, submission_val) - tag versions use actual year
+        return (year, week, submission_val)
+    
+    return None
 
 
 def normalize_version(value: str) -> str:
@@ -117,6 +154,7 @@ class LatestReleaseService:
         )
 
     async def check(self, force: bool = False) -> LatestReleaseResult:
+        # Always force refresh when OTA_UPDATE_MODE changes to ensure correct tag filtering
         now = asyncio.get_running_loop().time()
         if (
             not force
@@ -133,6 +171,7 @@ class LatestReleaseService:
                 and now - self._cached_at < self.settings.GITHUB_RELEASE_CACHE_SECONDS
             ):
                 return self._cached
+            # Clear cache on mode switch to re-scan for appropriate tags
             result = await self._fetch_latest()
             self._cached = result
             self._cached_at = asyncio.get_running_loop().time()
@@ -146,21 +185,79 @@ class LatestReleaseService:
         }
         if self.settings.GITHUB_API_TOKEN:
             headers["Authorization"] = f"Bearer {self.settings.GITHUB_API_TOKEN.get_secret_value()}"
+        
+        # Determine which tag format to accept based on OTA_UPDATE_MODE
+        ota_mode = self.settings.OTA_UPDATE_MODE  # "Latest" or "Dev"
+        
         try:
+            # Fetch all releases to find the appropriate one based on mode
+            releases_url = f"{self.settings.GITHUB_API_URL.rstrip('/')}/repos/{self.settings.GITHUB_REPOSITORY.strip('/')}/releases"
             async with httpx.AsyncClient(timeout=self.settings.GITHUB_API_TIMEOUT_SECONDS, follow_redirects=True) as client:
-                response = await client.get(self.endpoint, headers=headers)
+                response = await client.get(releases_url, headers=headers)
             response.raise_for_status()
-            payload = response.json()
-            tag_name = str(payload.get("tag_name") or "").strip()
+            all_releases = response.json()
+            
+            if not all_releases:
+                return LatestReleaseResult(
+                    current_version=self.settings.APP_VERSION,
+                    latest_version=None,
+                    tag_name=None,
+                    release_name=None,
+                    published_at=None,
+                    html_url=None,
+                    status="no_release",
+                    update_available=False,
+                    checked_at=checked_at,
+                    error=None,
+                )
+            
+            # Filter releases based on OTA mode
+            filtered_releases = []
+            for release in all_releases:
+                tag = str(release.get("tag_name") or "").strip()
+                if not tag:
+                    continue
+                
+                is_semantic = bool(re.fullmatch(r"[vV]?\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", tag))
+                is_tag = bool(re.fullmatch(r"\d{2}w[0-5]\d[a-z]", tag.lower()))
+                
+                if ota_mode == "Latest" and is_semantic:
+                    filtered_releases.append((release, tag, True))  # True = semantic
+                elif ota_mode == "Dev" and is_tag:
+                    filtered_releases.append((release, tag, False))  # False = tag
+            
+            if not filtered_releases:
+                return LatestReleaseResult(
+                    current_version=self.settings.APP_VERSION,
+                    latest_version=None,
+                    tag_name=None,
+                    release_name=None,
+                    published_at=None,
+                    html_url=None,
+                    status="no_release",
+                    update_available=False,
+                    checked_at=checked_at,
+                    error=None,
+                )
+            
+            # Sort by version to find the latest
+            def sort_key(item):
+                _, tag, is_sem = item
+                parts = _version_parts(tag)
+                return parts if parts else (0, 0, 0)
+            
+            filtered_releases.sort(key=sort_key, reverse=True)
+            best_release, tag_name, _ = filtered_releases[0]
+            
             latest_version = normalize_version(tag_name) if tag_name else None
             status_value = compare_versions(self.settings.APP_VERSION, latest_version or "")
             return LatestReleaseResult(
                 current_version=self.settings.APP_VERSION,
                 latest_version=latest_version,
                 tag_name=tag_name or None,
-                release_name=str(payload.get("name") or tag_name or "") or None,
-                published_at=payload.get("published_at"),
-                html_url=payload.get("html_url"),
+                release_name=str(best_release.get("name") or tag_name or "") or None,
+                published_at=best_release.get("published_at"),
+                html_url=best_release.get("html_url"),
                 status=status_value,
                 update_available=status_value == "update_available",
                 checked_at=checked_at,
@@ -259,8 +356,11 @@ def get_task(task_id: str) -> dict[str, Any] | None:
 def start_update_task(tag_name: str, settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
     script = _update_script(settings)
-    if not re.fullmatch(r"[vV]?\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", tag_name):
-        raise ValueError("Latest Release tag 格式不受支持")
+    # Support both semantic versions (1.4.1) and tag versions (24w52c)
+    is_semantic = re.fullmatch(r"[vV]?\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", tag_name)
+    is_tag = re.fullmatch(r"\d{2}w[0-5]\d[a-z]", tag_name.lower())
+    if not (is_semantic or is_tag):
+        raise ValueError("Latest Release tag 格式不受支持 (支持语义版本如 1.4.1 或标签版本如 24w52c)")
     with _TASK_LOCK:
         if any(item["status"] in {"queued", "running"} for item in _TASKS.values()):
             raise RuntimeError("已有升级任务正在执行")

@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     UPDATE_LOG_DIR: str = "private-storage/update-logs"
     UPDATE_RESTART_COMMAND: Optional[str] = None
     UPDATE_HEALTH_URL: str = "http://127.0.0.1:10001/health"
+    OTA_UPDATE_MODE: Literal["Latest", "Dev"] = "Latest"
 
     # 公开文件存储配置
     PUBLIC_STORAGE_BACKEND: Literal["local", "r2"] = "local"
