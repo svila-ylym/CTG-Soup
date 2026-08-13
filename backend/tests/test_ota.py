@@ -37,12 +37,15 @@ async def test_latest_release_service_reads_only_latest_and_caches(monkeypatch, 
             return None
 
         def json(self):
-            return {
-                "tag_name": "v1.3.0",
-                "name": "CTG 1.3.0",
-                "published_at": "2026-08-11T00:00:00Z",
-                "html_url": "https://github.com/svila-ylym/CTG-Soup/releases/tag/v1.3.0",
-            }
+            # Return a list of releases (not a single release)
+            return [
+                {
+                    "tag_name": "v1.3.0",
+                    "name": "CTG 1.3.0",
+                    "published_at": "2026-08-11T00:00:00Z",
+                    "html_url": "https://github.com/svila-ylym/CTG-Soup/releases/tag/v1.3.0",
+                }
+            ]
 
     class Client:
         def __init__(self, **_kwargs):
@@ -68,7 +71,8 @@ async def test_latest_release_service_reads_only_latest_and_caches(monkeypatch, 
     assert first.latest_version == "1.3.0"
     assert second == first
     assert len(calls) == 1
-    assert calls[0][0].endswith("/repos/svila-ylym/CTG-Soup/releases/latest")
+    # The new implementation fetches all releases, not just the latest one
+    assert calls[0][0].endswith("/repos/svila-ylym/CTG-Soup/releases")
 
 
 def _stub_latest_http_status(monkeypatch, status_code: int) -> None:
