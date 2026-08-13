@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_CACHE_ENABLED: bool = True
+    REDIS_CACHE_DEFAULT_TTL: int = 300
     
     # Elasticsearch配置
     ELASTICSEARCH_URL: str = "http://localhost:9200"
@@ -112,6 +114,7 @@ class Settings(BaseSettings):
     UPDATE_LOG_DIR: str = "private-storage/update-logs"
     UPDATE_RESTART_COMMAND: Optional[str] = None
     UPDATE_HEALTH_URL: str = "http://127.0.0.1:10001/health"
+    OTA_UPDATE_MODE: Literal["Latest", "Dev"] = "Latest"
 
     # 公开文件存储配置
     PUBLIC_STORAGE_BACKEND: Literal["local", "r2"] = "local"
