@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_CACHE_ENABLED: bool = True
+    REDIS_CACHE_DEFAULT_TTL: int = 300
     
     # Elasticsearch配置
     ELASTICSEARCH_URL: str = "http://localhost:9200"

@@ -11,6 +11,7 @@ from app.schemas.surveys import (
     SurveyCreate, SurveyUpdate, SurveyDetail, SurveySummary,
     SurveyPageResponse, SurveySubmit, SurveyStatistics
 )
+from app.utils.cache import cache_delete_pattern, cached
 
 router = APIRouter()
 
@@ -174,6 +175,9 @@ def create_survey(
             db.add(notification)
         survey.notification_sent = True
         db.commit()
+        
+        # 清除问卷列表缓存
+        cache_delete_pattern("soup:surveys:*")
     
     questions = db.exec(
         select(SurveyQuestion).where(SurveyQuestion.survey_id == survey.id)

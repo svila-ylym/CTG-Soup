@@ -172,6 +172,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '通知', requiresAuth: true },
   },
   {
+    path: '/surveys',
+    name: 'Surveys',
+    component: () => import('@/views/SurveyListView.vue'),
+    meta: { title: '问卷调查' },
+  },
+  {
+    path: '/surveys/:id',
+    name: 'SurveyDetail',
+    component: () => import('@/views/SurveyDetailView.vue'),
+    meta: { title: '问卷详情' },
+  },
+  {
     path: '/error/:code(4\\d\\d|5\\d\\d)',
     name: 'Error',
     component: () => import('@/views/ErrorView.vue'),
