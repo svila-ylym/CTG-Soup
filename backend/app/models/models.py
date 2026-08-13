@@ -145,6 +145,20 @@ class EmailCampaignRecipientStatus(str, Enum):
     DELIVERED = "delivered"
     FAILED = "failed"
 
+
+class SurveyStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    CLOSED = "closed"
+    EXPIRED = "expired"
+
+
+class SurveyQuestionType(str, Enum):
+    SINGLE_CHOICE = "single_choice"
+    MULTIPLE_CHOICE = "multiple_choice"
+    TEXT = "text"
+    RATING = "rating"
+
 # ==================== 用户系统 ====================
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -891,3 +905,72 @@ class SigninRecord(SQLModel, table=True):
     user_uid: int = Field(foreign_key="users.uid", index=True)
     signin_day: date = Field(default_factory=date.today, index=True)
     points_earned: int = Field(default=10)
+
+
+# ==================== 问卷系统 ====================
+class Survey(SQLModel, table=True):
+    __tablename__ = "surveys"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    author_uid: int = Field(foreign_key="users.uid", index=True)
+    title: str = Field(max_length=200)
+    description: Optional[str] = None
+    status: SurveyStatus = Field(default=SurveyStatus.DRAFT, index=True)
+    starts_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    notification_sent: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SurveyQuestion(SQLModel, table=True):
+    __tablename__ = "survey_questions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_id: int = Field(foreign_key="surveys.id", index=True)
+    question_text: str = Field(sa_column=Column(Text, nullable=False))
+    question_type: SurveyQuestionType = Field(
+        sa_column=Column(
+            SAEnum(
+                SurveyQuestionType,
+                values_callable=lambda values: [value.value for value in values],
+                native_enum=False,
+                length=32,
+            ),
+            nullable=False,
+        )
+    )
+    options: Optional[List[str]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
+    required: bool = Field(default=True)
+    sort_order: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SurveyResponse(SQLModel, table=True):
+    __tablename__ = "survey_responses"
+    __table_args__ = (
+        UniqueConstraint("survey_id", "user_uid", name="uq_survey_responses_user"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_id: int = Field(foreign_key="surveys.id", index=True)
+    user_uid: int = Field(foreign_key="users.uid", index=True)
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SurveyAnswer(SQLModel, table=True):
+    __tablename__ = "survey_answers"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    response_id: int = Field(foreign_key="survey_responses.id", index=True)
+    question_id: int = Field(foreign_key="survey_questions.id", index=True)
+    answer_text: Optional[str] = Field(default=None, sa_column=Column(Text))
+    answer_option_ids: Optional[List[int]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON())
+    )
+    answer_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    created_at: datetime = Field(default_factory=datetime.utcnow)

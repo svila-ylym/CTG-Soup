@@ -1,41 +1,84 @@
-# Environment and secrets
+```
+# Dependencies
+node_modules/
+
+# Environment
 .env
+.env.local
 .env.*
-!.env.example
-GithubPAT.txt
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
 # Python
 __pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-.venv/
-.venv*/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
 venv/
+.venv/
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage*
+.nocoverage*
 
-# Node and frontend builds
-node_modules/
+# Build and distribution artifacts
+build/
 dist/
-test-results/
-*.tsbuildinfo
-vite.config.js
-vite.config.d.ts
+*.egg
+*.egg-info/
+*.so
+.libs/
+.deps/
 
-# Runtime data
-storage/
-private-storage/
-backups/
-*.log
-archive.zip
+# Testing
+.pytest_cache/
+.hypothesis/
 
-# Editors and operating systems
-.idea/
+# Frontend build artifacts
+frontend/dist/
+frontend/build/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
 Thumbs.db
 
-# Local worktrees
-.worktrees/
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```
