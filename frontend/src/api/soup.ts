@@ -8,7 +8,10 @@ export interface SoupListParams extends Partial<PageParams> {
   genre?: Exclude<SoupGenre, '未分类'>
   soup_color?: Exclude<SoupColor, '未分类'>
   sort_by?: string
+  ranking_scope?: LeaderboardScope
 }
+
+export type LeaderboardScope = 'regular' | 'bie'
 
 type LegacySoupPayload = TurtleSoup & { author_uuid?: number }
 
@@ -121,9 +124,14 @@ export const soupApi = {
     return http.delete(`/turtle-soups/${id}/comments/${commentId}`)
   },
 
-  getLeaderboard(params?: { limit?: number }) {
+  getLeaderboard(params?: { limit?: number; scope?: LeaderboardScope }) {
     return http.get<PageResult<TurtleSoup>>('/turtle-soups', {
-      params: { page: 1, page_size: params?.limit ?? 10, sort_by: 'score' },
+      params: {
+        page: 1,
+        page_size: params?.limit ?? 10,
+        sort_by: 'score',
+        ranking_scope: params?.scope ?? 'regular',
+      },
     }).then(normalizeSoupPageResponse)
   },
 

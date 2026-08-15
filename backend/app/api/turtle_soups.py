@@ -1,6 +1,6 @@
 """Canonical turtle soup API with normalized taxonomy metadata."""
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
@@ -415,9 +415,14 @@ def list_soups(
     genre: Optional[str] = None,
     soup_color: Optional[str] = None,
     sort_by: str = Query("created_at"),
+    ranking_scope: Optional[Literal["regular", "bie"]] = None,
     db: Session = Depends(get_db),
 ):
     query = select(Soup).where(Soup.status.in_(["published", "revealed"]))
+    if ranking_scope == "regular":
+        query = query.where(Soup.genre != "鳖汤")
+    elif ranking_scope == "bie":
+        query = query.where(Soup.genre == "鳖汤")
     selected_tag: Optional[Tag] = None
     if tag_id:
         selected_tag = db.get(Tag, tag_id)
@@ -761,16 +766,6 @@ def delete_comment(
     db.commit()
 
 
-def _rating_already_submitted() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail={
-            "code": "RATING_ALREADY_SUBMITTED",
-            "message": "评分确认后不可修改",
-        },
-    )
-
-
 @router.put("/{soup_id}/rating")
 def rate_soup(
     soup_id: int,
@@ -784,13 +779,24 @@ def rate_soup(
         raise HTTPException(400, detail={"code": "SELF_RATING_FORBIDDEN", "message": "不能给自己的作品评分"})
     rating = db.exec(select(Rating).where(Rating.user_uid == current_user.uid, Rating.soup_id == soup_id)).first()
     if rating:
-        raise _rating_already_submitted()
-    try:
-        with db.begin_nested():
-            db.add(Rating(user_uid=current_user.uid, soup_id=soup_id, score=data.score))
-            db.flush()
-    except IntegrityError as exc:
-        raise _rating_already_submitted() from exc
+        rating.score = data.score
+        rating.updated_at = datetime.utcnow()
+    else:
+        try:
+            with db.begin_nested():
+                db.add(Rating(user_uid=current_user.uid, soup_id=soup_id, score=data.score))
+                db.flush()
+        except IntegrityError:
+            rating = db.exec(
+                select(Rating).where(
+                    Rating.user_uid == current_user.uid,
+                    Rating.soup_id == soup_id,
+                )
+            ).first()
+            if rating is None:
+                raise
+            rating.score = data.score
+            rating.updated_at = datetime.utcnow()
     _refresh_soup_rating(db, soup)
     refresh_soup_competition_scores(db, soup)
     db.commit()

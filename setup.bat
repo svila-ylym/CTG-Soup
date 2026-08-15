@@ -67,6 +67,7 @@ REM 创建配置文件
 echo [6/6] 初始化数据库配置...
 if not exist "backend\.env" (
     copy /Y backend\.env.example backend\.env >nul
+    backend\venv\Scripts\python.exe -c "from pathlib import Path; import secrets; p=Path(r'backend/.env'); s=p.read_text(encoding='utf-8'); p.write_text(s.replace('SECRET_KEY=replace-with-a-random-secret-at-least-32-characters-long', 'SECRET_KEY='+secrets.token_urlsafe(48)), encoding='utf-8')"
     echo [成功] 配置文件 backend\.env 已创建
     echo [提示] 请编辑 backend\.env 文件配置数据库和其他服务
 ) else (
@@ -98,7 +99,7 @@ exit /b 1
 echo 启动后端服务...
 cd backend
 call venv\Scripts\activate.bat
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 10001
 goto END
 
 :START_FRONTEND
@@ -109,7 +110,7 @@ goto END
 
 :START_BOTH
 echo 同时启动前后端服务...
-echo 后端将在 http://localhost:8000 运行
+echo 后端将在 http://localhost:10001 运行
 echo 前端将在 http://localhost:10000 运行
 echo.
 echo 按 Ctrl+C 停止所有服务
@@ -118,7 +119,7 @@ echo.
 REM 启动后端（后台）
 cd backend
 call venv\Scripts\activate.bat
-start "" cmd /k "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "" cmd /k "uvicorn app.main:app --reload --host 0.0.0.0 --port 10001"
 cd ..
 
 REM 启动前端

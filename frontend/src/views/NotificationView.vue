@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '@/api/http'
 import { useUnreadStore } from '@/stores/unread'
@@ -12,7 +12,9 @@ const router = useRouter()
 const unreadStore = useUnreadStore()
 const notifications = ref<Notification[]>([])
 const loading = ref(true)
+const markingAll = ref(false)
 const error = ref('')
+const hasUnread = computed(() => unreadStore.hasNotifications || notifications.value.some(item => !item.is_read))
 
 async function load() {
   loading.value = true
@@ -48,6 +50,21 @@ async function open(item: Notification) {
   }
 }
 
+async function markAllRead() {
+  if (markingAll.value || !hasUnread.value) return
+  markingAll.value = true
+  error.value = ''
+  try {
+    await http.put<{ updated_count: number }>('/notifications/read-all')
+    notifications.value.forEach((item) => { item.is_read = true })
+    unreadStore.markNotificationsRead()
+  } catch (reason) {
+    error.value = extractApiError(reason, '全部已读操作失败，请稍后重试')
+  } finally {
+    markingAll.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -56,12 +73,17 @@ onMounted(load)
     <div class="page-container max-w-3xl">
       <div class="mb-6 flex items-end justify-between gap-4">
         <div><h1 class="section-title text-3xl">通知</h1><p class="mt-2 text-slate-500">{{ unreadStore.hasNotifications ? '有未读通知' : '全部通知已读' }}</p></div>
-        <button class="btn-secondary" type="button" @click="load">刷新</button>
+        <div class="flex shrink-0 flex-wrap justify-end gap-2">
+          <button v-if="hasUnread" class="btn-primary" type="button" :disabled="markingAll" @click="markAllRead">{{ markingAll ? '处理中…' : '全部已读' }}</button>
+          <button class="btn-secondary" type="button" :disabled="loading || markingAll" @click="load">刷新</button>
+        </div>
       </div>
       <div v-if="loading" class="py-16 text-center text-slate-500">正在加载通知…</div>
-      <div v-else-if="error" class="py-12 text-center"><p class="text-red-600">{{ error }}</p><button class="btn-secondary mt-4" type="button" @click="load">重新加载</button></div>
-      <p v-else-if="!notifications.length" class="py-16 text-center text-slate-500">暂无通知</p>
-      <div v-else class="divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
+      <div v-else-if="error && !notifications.length" class="py-12 text-center"><p class="text-red-600">{{ error }}</p><button class="btn-secondary mt-4" type="button" @click="load">重新加载</button></div>
+      <template v-else>
+        <p v-if="error" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300" role="alert">{{ error }}</p>
+        <p v-if="!notifications.length" class="py-16 text-center text-slate-500">暂无通知</p>
+        <div v-else class="divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
         <article
           v-for="item in notifications"
           :key="item.id"
@@ -79,7 +101,8 @@ onMounted(load)
           </div>
           <time class="mt-3 block text-xs text-slate-500">{{ formatChinaDateTime(item.created_at) }}</time>
         </article>
-      </div>
+        </div>
+      </template>
     </div>
   </main>
 </template>

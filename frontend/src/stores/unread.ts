@@ -62,6 +62,11 @@ export const useUnreadStore = defineStore('unread', () => {
     hasSystemMessages.value = true
   }
 
+  function markNotificationsRead() {
+    notificationRequestId += 1
+    hasNotifications.value = false
+  }
+
   function reset() {
     stateGeneration += 1
     stopPolling()
@@ -77,6 +82,7 @@ export const useUnreadStore = defineStore('unread', () => {
     refreshAll,
     startPolling,
     stopPolling,
+    markNotificationsRead,
     markSystemMessagesUnread,
     reset,
   }

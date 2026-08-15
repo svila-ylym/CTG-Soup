@@ -83,6 +83,10 @@ onMounted(load)
         </button>
 
         <section class="surface-card border-t-4 p-5 sm:p-8" :style="{ borderTopColor: competition.competition_color }">
+          <div class="-mx-5 -mt-5 mb-6 aspect-[16/7] overflow-hidden bg-slate-100 sm:-mx-8 sm:-mt-8 dark:bg-neutral-900">
+            <img v-if="competition.cover_url" :src="competition.cover_url" :alt="`${competition.name} 比赛封面`" class="h-full w-full object-cover">
+            <div v-else class="h-full w-full" :style="{ background: `linear-gradient(135deg, ${competition.competition_color} 0%, color-mix(in srgb, ${competition.competition_color} 35%, #0f172a) 100%)` }" aria-hidden="true"></div>
+          </div>
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <span class="text-sm text-blue-600">比赛 #{{ competition.id }}</span>

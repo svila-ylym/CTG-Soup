@@ -277,6 +277,8 @@ export interface Competition {
   required_tags: Array<{ id: number; name: string }>
   optional_tag_ids: number[]
   optional_tags: Array<{ id: number; name: string }>
+  cover_asset_id: number | null
+  cover_url: string | null
   competition_color: string
   score_type: CompetitionScoreType
   scoring_at: string | null
@@ -300,6 +302,7 @@ export interface CompetitionCreate {
   custom_tags: string[]
   optional_tag_ids: number[]
   optional_custom_tags: string[]
+  cover_asset_id: number | null
   competition_color: string
   score_type: CompetitionScoreType
   scoring_at: string | null
@@ -360,6 +363,41 @@ export interface CompetitionJudging {
   scored_count: number
   total_count: number
   entries: CompetitionJudgingEntry[]
+}
+
+export interface HomeCompetitionSummary {
+  id: number
+  name: string
+  description_excerpt: string
+  cover_asset_id: number | null
+  cover_url: string | null
+  competition_color: string
+  status: Competition['status']
+  start_time: string
+  end_time: string
+  score_type: CompetitionScoreType
+  top_n: number
+  required_tags: string[]
+  entry_count: number
+}
+
+export interface HomeSoupSummary {
+  id: number
+  title: string
+  puzzle_excerpt: string
+  genre: string
+  soup_color: string
+  average_score: number
+  rating_count: number
+  author_name: string
+  competition_colors: string[]
+  created_at: string
+}
+
+export interface HomeDiscovery {
+  lines: string[]
+  latest_competition: HomeCompetitionSummary | null
+  random_soups: HomeSoupSummary[]
 }
 
 // 社交相关

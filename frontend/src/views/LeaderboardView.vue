@@ -6,10 +6,10 @@
           <div class="max-w-2xl">
             <p class="mb-3 inline-flex items-center gap-2 text-sm font-bold text-amber-300">
               <SparklesIcon class="h-5 w-5" aria-hidden="true" />
-              社区高分作品
+              {{ activeCopy.eyebrow }}
             </p>
-            <h1 class="text-3xl font-black text-white sm:text-5xl">海龟汤排行榜</h1>
-            <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">评分会实时改变席位。看看哪些谜面经得住最多人的追问。</p>
+            <h1 class="text-3xl font-black text-white sm:text-5xl">{{ activeCopy.title }}</h1>
+            <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{{ activeCopy.description }}</p>
           </div>
           <dl v-if="soupStore.leaderboard.length" class="grid grid-cols-2 gap-x-8 gap-y-3 border-l border-slate-700 pl-5 sm:flex sm:gap-9 sm:pl-7">
             <div>
@@ -23,6 +23,23 @@
           </dl>
         </div>
       </header>
+
+      <nav class="mt-6 flex justify-center sm:justify-start" aria-label="社区排行榜分类">
+        <div class="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-neutral-800 dark:bg-neutral-950" role="tablist">
+          <button
+            v-for="option in scopeOptions"
+            :key="option.value"
+            class="min-h-10 rounded-lg px-5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black"
+            :class="activeScope === option.value ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-neutral-900'"
+            type="button"
+            role="tab"
+            :aria-selected="activeScope === option.value"
+            @click="selectScope(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </nav>
 
       <section v-if="soupStore.isLoading" class="py-10" aria-live="polite" aria-label="正在加载排行榜">
         <div class="grid gap-5 md:grid-cols-3">
@@ -127,7 +144,7 @@
       <section v-else class="py-20 text-center">
         <ChartBarIcon class="mx-auto h-12 w-12 text-slate-400" aria-hidden="true" />
         <h2 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">暂无上榜作品</h2>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">新的评分出现后，榜单会在这里更新。</p>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ activeCopy.empty }}</p>
         <router-link to="/soups" class="btn-primary mt-6">去看看海龟汤</router-link>
       </section>
     </div>
@@ -135,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   ArrowPathIcon,
   ChartBarIcon,
@@ -148,15 +165,42 @@ import {
 } from '@heroicons/vue/24/outline'
 import { StarIcon } from '@heroicons/vue/20/solid'
 import { useSoupStore } from '@/stores/soup'
+import type { LeaderboardScope } from '@/api/soup'
 import { competitionBorderStyle } from '@/utils/competitionBorder'
 
 const soupStore = useSoupStore()
+const activeScope = ref<LeaderboardScope>('regular')
+const scopeOptions: Array<{ value: LeaderboardScope; label: string }> = [
+  { value: 'regular', label: '海龟汤榜' },
+  { value: 'bie', label: '鳖汤榜' },
+]
+const copyByScope: Record<LeaderboardScope, { eyebrow: string; title: string; description: string; empty: string }> = {
+  regular: {
+    eyebrow: '社区高分作品',
+    title: '海龟汤排行榜',
+    description: '评分会实时改变席位。看看哪些谜面经得住最多人的追问。',
+    empty: '新的海龟汤评分出现后，榜单会在这里更新。',
+  },
+  bie: {
+    eyebrow: '社区整活作品',
+    title: '鳖汤排行榜',
+    description: '鳖汤拥有自己的席位，不再与本格、变格作品混排。',
+    empty: '新的鳖汤评分出现后，榜单会在这里更新。',
+  },
+}
+const activeCopy = computed(() => copyByScope[activeScope.value])
 const topThree = computed(() => soupStore.leaderboard.slice(0, 3))
 const remainingEntries = computed(() => soupStore.leaderboard.slice(3))
 const totalRatings = computed(() => soupStore.leaderboard.reduce((total, soup) => total + soup.rating_count, 0))
 
 function loadLeaderboard() {
-  void soupStore.fetchLeaderboard(50).catch(() => undefined)
+  void soupStore.fetchLeaderboard(50, activeScope.value).catch(() => undefined)
+}
+
+function selectScope(scope: LeaderboardScope) {
+  if (scope === activeScope.value) return
+  activeScope.value = scope
+  loadLeaderboard()
 }
 
 function formatScore(score: number) {

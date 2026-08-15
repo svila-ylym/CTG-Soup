@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { soupApi } from '@/api/soup'
+import { soupApi, type LeaderboardScope } from '@/api/soup'
 import type { TurtleSoup, SoupCreate, SoupGenre, SoupColor } from '@/types'
 
 export const useSoupStore = defineStore('soup', () => {
@@ -9,6 +9,7 @@ export const useSoupStore = defineStore('soup', () => {
   const leaderboard = ref<TurtleSoup[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  let leaderboardRequestId = 0
 
   // 获取海龟汤列表
   async function fetchList(
@@ -130,18 +131,22 @@ export const useSoupStore = defineStore('soup', () => {
   }
 
   // 获取排行榜
-  async function fetchLeaderboard(limit = 10) {
+  async function fetchLeaderboard(limit = 10, scope: LeaderboardScope = 'regular') {
+    const requestId = ++leaderboardRequestId
     isLoading.value = true
     error.value = null
     try {
-      const res = await soupApi.getLeaderboard({ limit })
+      const res = await soupApi.getLeaderboard({ limit, scope })
+      if (requestId !== leaderboardRequestId) return res.data.items
       leaderboard.value = res.data.items
       return res.data.items
     } catch (e: any) {
-      error.value = e.response?.data?.detail?.message || e.response?.data?.detail || '获取排行榜失败'
+      if (requestId === leaderboardRequestId) {
+        error.value = e.response?.data?.detail?.message || e.response?.data?.detail || '获取排行榜失败'
+      }
       throw e
     } finally {
-      isLoading.value = false
+      if (requestId === leaderboardRequestId) isLoading.value = false
     }
   }
 

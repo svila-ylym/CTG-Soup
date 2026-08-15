@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 const baseSoup = {
   id: 42,
-  title: '不可更改的评分',
+  title: '可以更改的评分',
   puzzle: '谜面',
   solution: null,
   solution_available: true,
@@ -34,7 +34,7 @@ async function mockSharedRoutes(page: Page) {
   }))
 }
 
-test('rating slider submits only after irreversible confirmation and then locks', async ({ page }) => {
+test('rating slider supports a first score and later replacement', async ({ page }) => {
   const ratingRequests: number[] = []
   let soup = { ...baseSoup }
   await mockSharedRoutes(page)
@@ -67,38 +67,27 @@ test('rating slider submits only after irreversible confirmation and then locks'
 
   await page.getByRole('button', { name: '确认评分' }).click()
   await expect(page.getByRole('dialog')).toContainText('8.5')
-  await expect(page.getByRole('dialog')).toContainText('提交后不可修改')
-  await page.getByRole('button', { name: '取消' }).click()
-  expect(ratingRequests).toEqual([])
-
-  await page.getByRole('button', { name: '确认评分' }).click()
+  await expect(page.getByRole('dialog')).toContainText('保存后仍可')
   await page.getByRole('button', { name: '确认并提交' }).click()
-  await expect(slider).toBeDisabled()
-  await expect(page.getByText('已评分 8.5 分，评分已锁定')).toBeVisible()
-  expect(ratingRequests).toEqual([8.5])
+
+  await expect(slider).toBeEnabled()
+  await expect(page.getByText('当前评分 8.5 分，可随时调整')).toBeVisible()
+  await expect(page.getByRole('button', { name: '修改评分' })).toBeDisabled()
+
+  await slider.fill('7')
+  await page.getByRole('button', { name: '修改评分' }).click()
+  await expect(page.getByRole('dialog')).toContainText('从 8.5 分 修改为 7.0 分')
+  await page.getByRole('button', { name: '确认修改' }).click()
+
+  await expect(slider).toBeEnabled()
+  await expect(slider).toHaveValue('7')
+  await expect(page.getByText('当前评分 7.0 分，可随时调整')).toBeVisible()
+  expect(ratingRequests).toEqual([8.5, 7])
 })
 
-test('historical rating is locked on first render', async ({ page }) => {
-  await mockSharedRoutes(page)
-  await page.route('**/api/turtle-soups/42**', route => {
-    const pathname = new URL(route.request().url()).pathname
-    if (pathname.endsWith('/comments')) {
-      return route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 50, total_pages: 0 } })
-    }
-    return route.fulfill({ json: { ...baseSoup, my_rating: 7.5 } })
-  })
-
-  await page.goto('/soups/42')
-
-  const slider = page.getByRole('slider', { name: '评分' })
-  await expect(slider).toHaveValue('7.5')
-  await expect(slider).toBeDisabled()
-  await expect(page.getByText('已评分 7.5 分，评分已锁定')).toBeVisible()
-  await expect(page.getByRole('button', { name: '确认评分' })).toHaveCount(0)
-})
-
-test('rating conflict reloads and locks the server value', async ({ page }) => {
-  let serverRating: number | null = null
+test('historical rating is editable on first render', async ({ page }) => {
+  const ratingRequests: number[] = []
+  let myRating = 7.5
   await mockSharedRoutes(page)
   await page.route('**/api/turtle-soups/42**', route => {
     const request = route.request()
@@ -107,27 +96,52 @@ test('rating conflict reloads and locks the server value', async ({ page }) => {
       return route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 50, total_pages: 0 } })
     }
     if (pathname.endsWith('/rating') && request.method() === 'PUT') {
-      serverRating = 6.5
+      myRating = (request.postDataJSON() as { score: number }).score
+      ratingRequests.push(myRating)
+      return route.fulfill({ json: { average_score: myRating, rating_count: 1, my_rating: myRating } })
+    }
+    return route.fulfill({ json: { ...baseSoup, average_score: myRating, rating_count: 1, my_rating: myRating } })
+  })
+
+  await page.goto('/soups/42')
+
+  const slider = page.getByRole('slider', { name: '评分' })
+  await expect(slider).toHaveValue('7.5')
+  await expect(slider).toBeEnabled()
+  await expect(page.getByText('当前评分 7.5 分，可随时调整')).toBeVisible()
+  await expect(page.getByRole('button', { name: '修改评分' })).toBeDisabled()
+
+  await slider.fill('9')
+  await page.getByRole('button', { name: '修改评分' }).click()
+  await page.getByRole('button', { name: '确认修改' }).click()
+  await expect(page.getByText('当前评分 9.0 分，可随时调整')).toBeVisible()
+  expect(ratingRequests).toEqual([9])
+})
+
+test('failed rating update keeps the selected score available for retry', async ({ page }) => {
+  await mockSharedRoutes(page)
+  await page.route('**/api/turtle-soups/42**', route => {
+    const request = route.request()
+    const pathname = new URL(request.url()).pathname
+    if (pathname.endsWith('/comments')) {
+      return route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 50, total_pages: 0 } })
+    }
+    if (pathname.endsWith('/rating') && request.method() === 'PUT') {
       return route.fulfill({
-        status: 409,
-        json: {
-          detail: {
-            code: 'RATING_ALREADY_SUBMITTED',
-            message: '评分确认后不可修改',
-          },
-        },
+        status: 503,
+        json: { detail: { code: 'TEMPORARY_FAILURE', message: '评分暂时保存失败' } },
       })
     }
-    return route.fulfill({ json: { ...baseSoup, my_rating: serverRating } })
+    return route.fulfill({ json: { ...baseSoup, average_score: 6.5, rating_count: 1, my_rating: 6.5 } })
   })
 
   await page.goto('/soups/42')
   const slider = page.getByRole('slider', { name: '评分' })
   await slider.fill('9')
-  await page.getByRole('button', { name: '确认评分' }).click()
-  await page.getByRole('button', { name: '确认并提交' }).click()
+  await page.getByRole('button', { name: '修改评分' }).click()
+  await page.getByRole('button', { name: '确认修改' }).click()
 
-  await expect(slider).toHaveValue('6.5')
-  await expect(slider).toBeDisabled()
-  await expect(page.getByText('已评分 6.5 分，评分已锁定')).toBeVisible()
+  await expect(page.getByRole('dialog')).toContainText('评分暂时保存失败')
+  await page.getByRole('button', { name: '取消' }).click()
+  await expect(slider).toHaveValue('9')
 })

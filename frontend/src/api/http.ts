@@ -73,9 +73,9 @@ class HttpClient {
           localStorage.removeItem('user_role')
           if (window.location.pathname !== '/login') window.location.href = '/login'
         }
-        if (error.response?.status >= 500 && !window.location.pathname.startsWith('/error/')) {
-          window.location.href = '/error/500'
-        }
+        // Let each request owner render a local retry/error state. A failed
+        // background request (for example the footer version) must not replace
+        // the user's current page with a global 500 route.
         return Promise.reject(error)
       }
     )
