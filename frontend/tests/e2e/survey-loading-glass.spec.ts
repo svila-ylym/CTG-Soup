@@ -6,7 +6,7 @@ async function mockAnnouncements(page: Page) {
     json: { items: [], total: 0, page: 1, page_size: 5, total_pages: 0 },
   }))
   await page.route('http://127.0.0.1:10000/api/version', route => route.fulfill({
-    json: { version: '1.5.0' },
+    json: { version: '26w34a' },
   }))
 }
 

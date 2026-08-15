@@ -434,10 +434,37 @@ body {
   to { background-position: -100% 0; }
 }
 
-html.is-animating :where(#app > div, nav, main, footer, section, article, aside, .glass-panel, .glass-card, .form-control) {
+html.theme-transitioning :where(body, #app, .app-frame, .page-shell, .surface-card, .glass-panel, .glass-card, .glass-button, .glass-nav, .glass-drawer, .glass-popover, .glass-control, [data-layout-region]) {
   transition-property: background-color, border-color, color, box-shadow;
-  transition-duration: .3s;
-  transition-timing-function: ease;
+  transition-duration: .34s;
+  transition-timing-function: cubic-bezier(.22, .8, .25, 1);
+}
+
+@supports (view-transition-name: root) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: .34s;
+    animation-timing-function: cubic-bezier(.22, .8, .25, 1);
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-old(root) {
+    animation-name: theme-root-out;
+  }
+
+  ::view-transition-new(root) {
+    animation-name: theme-root-in;
+  }
+}
+
+@keyframes theme-root-out {
+  to { opacity: 0; }
+}
+
+@keyframes theme-root-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 html {

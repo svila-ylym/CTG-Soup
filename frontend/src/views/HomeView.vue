@@ -385,7 +385,7 @@ onBeforeUnmount(() => {
 .scene-night .banner-sun { background: #e8eff1; box-shadow: inset -1.15rem -.35rem 0 #becdd4, 0 0 2rem rgba(211, 235, 242, .2); }
 .scene-night .landscape { filter: hue-rotate(8deg) saturate(.52) brightness(.3); }
 .scene-night .banner-wash,
-:global(.dark) .banner-wash { background: linear-gradient(90deg, rgba(0, 0, 0, .72) 0%, rgba(0, 0, 0, .38) 48%, rgba(0, 0, 0, .06) 74%); }
+:global(.dark .banner-wash) { background: linear-gradient(90deg, rgba(0, 0, 0, .72) 0%, rgba(0, 0, 0, .38) 48%, rgba(0, 0, 0, .06) 74%); }
 .scene-night .banner-kicker,
 .scene-sunset .banner-kicker { color: rgba(207, 250, 254, .86); }
 .scene-night .banner-title,
@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 639px) {
   .banner-wash { background: linear-gradient(90deg, rgba(239, 249, 255, .82), rgba(239, 249, 255, .5)); }
-  :global(.dark) .banner-wash { background: linear-gradient(90deg, rgba(0, 0, 0, .7), rgba(0, 0, 0, .42)); }
+  :global(.dark .banner-wash) { background: linear-gradient(90deg, rgba(0, 0, 0, .7), rgba(0, 0, 0, .42)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

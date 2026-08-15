@@ -241,7 +241,7 @@ onMounted(loadLeaderboard)
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92), 0 1.25rem 3.5rem rgba(15, 23, 42, .09);
 }
 
-:global(.dark) .leaderboard-header {
+:global(.dark .leaderboard-header) {
   border-color: rgba(255, 255, 255, .11);
   background: rgba(8, 8, 8, .7);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 1.25rem 3.5rem rgba(0, 0, 0, .42);
@@ -261,7 +261,7 @@ onMounted(loadLeaderboard)
   animation: header-mark-float 8s ease-in-out infinite;
 }
 
-:global(.dark) .leaderboard-header::after {
+:global(.dark .leaderboard-header::after) {
   opacity: .11;
 }
 
@@ -274,7 +274,7 @@ onMounted(loadLeaderboard)
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
 }
 
-:global(.dark) .leaderboard-stats > div {
+:global(.dark .leaderboard-stats > div) {
   border-color: rgba(255, 255, 255, .1);
   background: rgba(255, 255, 255, .035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
@@ -285,7 +285,7 @@ onMounted(loadLeaderboard)
   background: rgba(255, 255, 255, .62);
 }
 
-:global(.dark) .leaderboard-tabs {
+:global(.dark .leaderboard-tabs) {
   background: rgba(8, 8, 8, .7);
 }
 
@@ -304,7 +304,7 @@ onMounted(loadLeaderboard)
   transition: transform 280ms cubic-bezier(.2, .75, .25, 1), box-shadow 280ms ease, border-color 280ms ease;
 }
 
-:global(.dark) .podium-card {
+:global(.dark .podium-card) {
   --competition-card-bg: rgba(13, 13, 13, .8);
   border-color: rgba(255, 255, 255, .12);
   background-color: rgba(13, 13, 13, .8);
@@ -316,7 +316,7 @@ onMounted(loadLeaderboard)
   box-shadow: 9px 13px 0 rgba(15, 23, 42, .11), 0 18px 35px rgba(15, 23, 42, .1);
 }
 
-:global(.dark) .podium-card:hover {
+:global(.dark .podium-card:hover) {
   box-shadow: 9px 13px 0 rgba(0, 0, 0, .34), 0 18px 35px rgba(0, 0, 0, .28);
 }
 

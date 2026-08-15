@@ -219,7 +219,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useUnreadStore } from '@/stores/unread'
-import { applyTheme, storedTheme } from '@/utils/theme'
+import { applyTheme } from '@/utils/theme'
 import SigninControl from '@/components/SigninControl.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 
@@ -231,7 +231,7 @@ const unreadStore = useUnreadStore()
 
 const searchQuery = ref('')
 const showUserMenu = ref(false)
-const isDark = ref(false)
+const isDark = ref(document.documentElement.classList.contains('dark'))
 const mobileOpen = ref(false)
 const mobileMenuButton = ref<HTMLButtonElement | null>(null)
 const mobileCloseButton = ref<HTMLButtonElement | null>(null)
@@ -340,7 +340,6 @@ onMounted(() => {
   document.addEventListener('click', closeUserMenu)
   window.addEventListener('keydown', closeOnEscape)
   window.addEventListener('themechange', syncThemeState)
-  applyTheme(storedTheme())
   syncThemeState()
 })
 
@@ -381,7 +380,7 @@ onUnmounted(() => {
   backdrop-filter: blur(4px) saturate(110%);
 }
 
-:global(.dark) .mobile-drawer-backdrop {
+:global(.dark .mobile-drawer-backdrop) {
   background: rgba(0, 0, 0, .64);
 }
 
@@ -391,7 +390,7 @@ onUnmounted(() => {
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .3);
 }
 
-:global(.dark) .drawer-glass-header {
+:global(.dark .drawer-glass-header) {
   background: rgba(255, 255, 255, .025);
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05);
 }
@@ -441,12 +440,12 @@ onUnmounted(() => {
   box-shadow: inset 0 1px 0 var(--glass-highlight), 0 3px 9px rgba(15, 23, 42, .06);
 }
 
-:global(.dark) .drawer-search-panel {
+:global(.dark .drawer-search-panel) {
   background: color-mix(in srgb, var(--glass-card) 84%, transparent);
   box-shadow: inset 0 1px 0 var(--glass-highlight), 0 14px 34px rgba(0, 0, 0, .28);
 }
 
-:global(.dark) .drawer-search-input {
+:global(.dark .drawer-search-input) {
   color: rgb(248 250 252);
 }
 </style>
