@@ -69,7 +69,10 @@ class Settings(BaseSettings):
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_CACHE_ENABLED: bool = True
-    REDIS_CACHE_DEFAULT_TTL: int = 300
+    REDIS_CACHE_DEFAULT_TTL: int = Field(default=300, ge=1, le=86400)
+    REDIS_CACHE_CONNECT_TIMEOUT_SECONDS: float = Field(default=0.25, gt=0, le=5)
+    REDIS_CACHE_SOCKET_TIMEOUT_SECONDS: float = Field(default=0.5, gt=0, le=10)
+    REDIS_CACHE_RETRY_SECONDS: float = Field(default=5.0, ge=0.1, le=300)
     
     # Elasticsearch配置
     ELASTICSEARCH_URL: str = "http://localhost:9200"
