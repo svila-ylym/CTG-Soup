@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.api.auth import get_current_active_user
 from app.models.database import Notification, User, get_db
-from app.schemas.community import NotificationPageResponse, NotificationResponse
+from app.schemas.community import (
+    NotificationPageResponse,
+    NotificationReadAllResponse,
+    NotificationResponse,
+)
 
 router = APIRouter()
 
@@ -32,6 +37,23 @@ def list_notifications(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
     }
+
+
+@router.put("/read-all", response_model=NotificationReadAllResponse)
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    result = db.exec(
+        update(Notification)
+        .where(
+            Notification.recipient_uid == current_user.uid,
+            Notification.is_read == False,
+        )
+        .values(is_read=True)
+    )
+    db.commit()
+    return {"updated_count": max(result.rowcount or 0, 0)}
 
 
 @router.put("/{notification_id}/read", response_model=NotificationResponse)

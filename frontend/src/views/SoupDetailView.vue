@@ -85,15 +85,15 @@
                 min="1"
                 max="10"
                 step="0.5"
-                :disabled="ratingLocked || ratingSubmitting"
+                :disabled="ratingSubmitting"
               >
               <div class="mt-1 flex justify-between text-xs text-slate-500" aria-hidden="true">
                 <span>1 分</span>
                 <span>10 分</span>
               </div>
-              <div class="mt-3 flex min-h-9 items-center">
-                <p v-if="ratingLocked" class="text-sm font-medium text-emerald-700 dark:text-emerald-400">已评分 {{ score.toFixed(1) }} 分，评分已锁定</p>
-                <button v-else class="btn-primary" type="button" :disabled="ratingSubmitting" @click="openRatingDialog">确认评分</button>
+              <div class="mt-3 flex min-h-9 flex-wrap items-center gap-3">
+                <p v-if="hasRating" class="text-sm font-medium text-emerald-700 dark:text-emerald-400">当前评分 {{ soup.my_rating?.toFixed(1) }} 分，可随时调整</p>
+                <button class="btn-primary" type="button" :disabled="ratingSubmitting || !ratingChanged" @click="openRatingDialog">{{ hasRating ? '修改评分' : '确认评分' }}</button>
               </div>
             </div>
             <button class="inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 py-2 text-sm" :class="soup.is_liked ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-gray-200'" @click="toggle('like')"><HeartIcon class="h-4 w-4" aria-hidden="true" />{{ soup.like_count }}</button>
@@ -171,15 +171,18 @@
                   leave-to="opacity-0 translate-y-2"
                 >
                   <DialogPanel class="w-full max-w-md rounded-md bg-white p-5 shadow-xl dark:bg-neutral-900 sm:p-6">
-                    <DialogTitle class="text-lg font-semibold text-slate-900 dark:text-white">确认评分</DialogTitle>
-                    <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                      你将提交 <strong class="text-amber-600 dark:text-amber-400">{{ score.toFixed(1) }} 分</strong>。提交后不可修改，请确认这是你的最终评分。
+                    <DialogTitle class="text-lg font-semibold text-slate-900 dark:text-white">{{ hasRating ? '修改评分' : '确认评分' }}</DialogTitle>
+                    <p v-if="hasRating" class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      你将评分从 <strong>{{ soup.my_rating?.toFixed(1) }} 分</strong> 修改为 <strong class="text-amber-600 dark:text-amber-400">{{ score.toFixed(1) }} 分</strong>。保存后仍可再次调整。
+                    </p>
+                    <p v-else class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      你将提交 <strong class="text-amber-600 dark:text-amber-400">{{ score.toFixed(1) }} 分</strong>。保存后仍可按新的感受调整评分。
                     </p>
                     <p v-if="ratingError" class="mt-3 break-words text-sm text-red-600 dark:text-red-400">{{ ratingError }}</p>
                     <div class="mt-6 flex flex-wrap justify-end gap-3">
                       <button class="btn-secondary" type="button" :disabled="ratingSubmitting" @click="closeRatingDialog">取消</button>
                       <button class="btn-primary" type="button" :disabled="ratingSubmitting" @click="submitRating">
-                        {{ ratingSubmitting ? '提交中…' : '确认并提交' }}
+                        {{ ratingSubmitting ? '提交中…' : hasRating ? '确认修改' : '确认并提交' }}
                       </button>
                     </div>
                   </DialogPanel>
@@ -239,7 +242,8 @@ const deletingCommentId = ref<number | null>(null)
 const commentReportId = ref<number | null>(null)
 const ratingsOpen = ref(false)
 const displayScore = computed(() => soup.value?.average_score ?? 0)
-const ratingLocked = computed(() => soup.value?.my_rating != null)
+const hasRating = computed(() => soup.value?.my_rating != null)
+const ratingChanged = computed(() => !hasRating.value || score.value !== soup.value?.my_rating)
 
 async function load(revealSolution = false) {
   loading.value = true
@@ -272,7 +276,7 @@ async function reveal() {
   }
 }
 function openRatingDialog() {
-  if (ratingLocked.value || ratingSubmitting.value) return
+  if (!ratingChanged.value || ratingSubmitting.value) return
   ratingError.value = ''
   ratingDialogOpen.value = true
 }
@@ -282,7 +286,7 @@ function closeRatingDialog() {
   ratingError.value = ''
 }
 async function submitRating() {
-  if (!soup.value || ratingLocked.value || ratingSubmitting.value || score.value < 1 || score.value > 10 || score.value * 2 % 1 !== 0) return
+  if (!soup.value || !ratingChanged.value || ratingSubmitting.value || score.value < 1 || score.value > 10 || score.value * 2 % 1 !== 0) return
   ratingSubmitting.value = true
   ratingError.value = ''
   try {
@@ -291,11 +295,6 @@ async function submitRating() {
     score.value = response.data.my_rating
     ratingDialogOpen.value = false
   } catch (cause: any) {
-    if (cause.response?.status === 409) {
-      ratingDialogOpen.value = false
-      await load()
-      return
-    }
     const detail = cause.response?.data?.detail
     ratingError.value = detail?.message || (typeof detail === 'string' ? detail : '') || '评分提交失败'
   } finally {

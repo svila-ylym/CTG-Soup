@@ -64,13 +64,11 @@
             <router-link to="/register" class="rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700">注册</router-link>
           </template>
 
-          <button class="flex h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300" type="button" aria-label="切换主题" title="切换主题" @click="toggleDarkMode">
-            <MoonIcon v-if="!isDark" class="h-6 w-6" aria-hidden="true" />
-            <SunIcon v-else class="h-6 w-6" aria-hidden="true" />
-          </button>
+          <ThemeToggle id="theme-toggle-btn" :is-dark="isDark" @toggle="toggleDarkMode" />
         </div>
 
         <button
+          ref="mobileMenuButton"
           class="mobile-menu-button ml-auto xl:hidden"
           type="button"
           :aria-expanded="mobileOpen"
@@ -88,8 +86,8 @@
     <Transition name="mobile-drawer">
       <div v-if="mobileOpen" class="fixed inset-0 z-[80] xl:hidden" role="dialog" aria-modal="true" aria-label="移动端导航">
         <button class="mobile-drawer-backdrop absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]" type="button" aria-label="关闭导航侧栏" @click="closeMobileMenu"></button>
-        <aside class="mobile-drawer-panel absolute inset-y-0 right-0 flex w-[min(22rem,calc(100%-2rem))] flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-950">
-          <header class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] dark:border-neutral-800">
+        <aside class="mobile-drawer-panel glass-panel absolute bottom-2 right-2 top-2 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-[1.5rem] border-white/60 bg-white/90 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-black/88">
+          <header class="flex items-center justify-between gap-4 border-b border-slate-200/80 bg-gradient-to-br from-sky-50/90 to-white/60 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] dark:border-neutral-800 dark:from-sky-950/40 dark:to-black/50">
             <div class="flex min-w-0 items-center gap-2">
               <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 shrink-0 object-contain" />
               <div class="min-w-0">
@@ -97,7 +95,7 @@
                 <p class="mt-0.5 text-xs text-slate-500">完整导航</p>
               </div>
             </div>
-            <button class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-neutral-800 dark:hover:text-white" type="button" aria-label="关闭导航侧栏" title="关闭" @click="closeMobileMenu">
+            <button ref="mobileCloseButton" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-neutral-800 dark:hover:text-white" type="button" aria-label="关闭导航侧栏" title="关闭" @click="closeMobileMenu">
               <XMarkIcon class="h-6 w-6" aria-hidden="true" />
             </button>
           </header>
@@ -120,6 +118,14 @@
                 <span class="block truncate text-xs text-slate-500">@{{ authStore.user?.username }} · UID {{ authStore.user?.uid }}</span>
               </div>
             </div>
+
+            <section class="drawer-appearance mt-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50 to-indigo-50/70 p-3.5 dark:border-sky-950 dark:from-sky-950/45 dark:to-indigo-950/25" aria-labelledby="drawer-appearance-heading">
+              <div class="min-w-0">
+                <h2 id="drawer-appearance-heading" class="text-sm font-bold text-slate-900 dark:text-white">外观主题</h2>
+                <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ isDark ? '深色模式' : '浅色模式' }}</p>
+              </div>
+              <ThemeToggle id="theme-toggle-sidebar" :is-dark="isDark" @toggle="toggleDarkMode" />
+            </section>
 
             <section class="mobile-drawer-section">
               <h2 class="mobile-drawer-heading">浏览</h2>
@@ -173,7 +179,6 @@
                 <router-link to="/login" class="mobile-drawer-link" @click="closeMobileMenu"><ArrowRightOnRectangleIcon class="h-5 w-5 shrink-0" aria-hidden="true" /><span>登录</span></router-link>
                 <router-link to="/register" class="mobile-drawer-link" @click="closeMobileMenu"><UserPlusIcon class="h-5 w-5 shrink-0" aria-hidden="true" /><span>注册</span></router-link>
               </template>
-              <button class="mobile-drawer-link w-full" type="button" @click="toggleDarkMode"><MoonIcon v-if="!isDark" class="h-5 w-5 shrink-0" aria-hidden="true" /><SunIcon v-else class="h-5 w-5 shrink-0" aria-hidden="true" /><span>{{ isDark ? '切换浅色模式' : '切换深色模式' }}</span></button>
               <button v-if="authStore.isAuthenticated" class="mobile-drawer-link w-full text-red-600 dark:text-red-400" type="button" @click="handleLogout"><ArrowLeftOnRectangleIcon class="h-5 w-5 shrink-0" aria-hidden="true" /><span>退出登录</span></button>
             </section>
           </div>
@@ -184,7 +189,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOnRectangleIcon,
@@ -198,13 +203,11 @@ import {
   InboxIcon,
   MagnifyingGlassIcon,
   MegaphoneIcon,
-  MoonIcon,
   PlusCircleIcon,
   PuzzlePieceIcon,
   RectangleStackIcon,
   ShieldCheckIcon,
   SparklesIcon,
-  SunIcon,
   TrophyIcon,
   UserCircleIcon,
   UserPlusIcon,
@@ -215,6 +218,7 @@ import { useChatStore } from '@/stores/chat'
 import { useUnreadStore } from '@/stores/unread'
 import { applyTheme, storedTheme } from '@/utils/theme'
 import SigninControl from '@/components/SigninControl.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -226,6 +230,8 @@ const searchQuery = ref('')
 const showUserMenu = ref(false)
 const isDark = ref(false)
 const mobileOpen = ref(false)
+const mobileMenuButton = ref<HTMLButtonElement | null>(null)
+const mobileCloseButton = ref<HTMLButtonElement | null>(null)
 let previousBodyOverflow = ''
 
 const browseLinks = [
@@ -301,12 +307,16 @@ watch(
   },
 )
 
-watch(mobileOpen, (open) => {
+watch(mobileOpen, async (open) => {
   if (open) {
     previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    await nextTick()
+    mobileCloseButton.value?.focus()
   } else {
     document.body.style.overflow = previousBodyOverflow
+    await nextTick()
+    mobileMenuButton.value?.focus()
   }
 })
 
@@ -359,6 +369,15 @@ onUnmounted(() => {
 
 .mobile-drawer-enter-from .mobile-drawer-panel,
 .mobile-drawer-leave-to .mobile-drawer-panel {
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 1rem));
+}
+
+.mobile-drawer-panel.glass-panel {
+  border-radius: 1.5rem;
+  box-shadow: -1.25rem 0 4rem rgba(15, 23, 42, .2), 0 1.5rem 4rem rgba(15, 23, 42, .18);
+}
+
+:global(.dark) .mobile-drawer-panel {
+  box-shadow: -1.25rem 0 4rem rgba(0, 0, 0, .7), 0 1.5rem 4rem rgba(0, 0, 0, .55);
 }
 </style>

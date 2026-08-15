@@ -19,6 +19,7 @@ from app.models.database import (
     User,
     UserRole,
     UserStatus,
+    UploadedAsset,
     get_db,
 )
 from app.services.competition_entries import (
@@ -127,6 +128,82 @@ def test_create_competition_uses_canonical_creator_and_required_tag_ids():
     assert payload["required_tag_ids"] == [ids[2]]
     assert "creator_id" not in payload
     assert "entry_tags" not in payload
+
+
+def test_competition_cover_is_owned_controlled_preserved_and_removable():
+    client, engine, ids = _setup()
+    with Session(engine) as session:
+        owned = UploadedAsset(
+            owner_uid=ids[0],
+            kind="image",
+            storage_key="images/admin/cover.webp",
+            public_url="/storage/images/admin/cover.webp",
+            mime_type="image/webp",
+            size=1024,
+        )
+        foreign = UploadedAsset(
+            owner_uid=ids[1],
+            kind="image",
+            storage_key="images/author/cover.webp",
+            public_url="/storage/images/author/cover.webp",
+            mime_type="image/webp",
+            size=2048,
+        )
+        session.add_all([owned, foreign])
+        session.commit()
+        session.refresh(owned)
+        session.refresh(foreign)
+        owned_id = owned.id
+        foreign_id = foreign.id
+
+    now = datetime.now(timezone.utc)
+    create_payload = {
+        "name": "封面比赛",
+        "description": "带封面的比赛",
+        "start_time": (now - timedelta(hours=1)).isoformat(),
+        "end_time": (now + timedelta(hours=1)).isoformat(),
+        "required_tag_ids": [ids[2]],
+        "cover_asset_id": owned_id,
+        "custom_page_config": {
+            "cover_url": "https://attacker.invalid/spoof.webp",
+        },
+    }
+    created = client.post("/api/competitions", json=create_payload)
+
+    assert created.status_code == 201
+    assert created.json()["cover_asset_id"] == owned_id
+    assert created.json()["cover_url"] == "/storage/images/admin/cover.webp"
+    assert created.json()["custom_page_config"]["cover_url"] == "/storage/images/admin/cover.webp"
+
+    competition_id = created.json()["id"]
+    update_payload = {
+        "name": "保留封面的比赛",
+        "description": "旧客户端没有发送封面字段",
+        "start_time": (now - timedelta(hours=1)).isoformat(),
+        "end_time": (now + timedelta(hours=2)).isoformat(),
+        "required_tag_ids": [ids[2]],
+        "custom_page_config": {"cover_url": "https://attacker.invalid/replaced.webp"},
+    }
+    preserved = client.put(f"/api/competitions/{competition_id}", json=update_payload)
+    assert preserved.status_code == 200
+    assert preserved.json()["cover_asset_id"] == owned_id
+    assert preserved.json()["cover_url"] == "/storage/images/admin/cover.webp"
+
+    removed = client.put(
+        f"/api/competitions/{competition_id}",
+        json={**update_payload, "cover_asset_id": None},
+    )
+    assert removed.status_code == 200
+    assert removed.json()["cover_asset_id"] is None
+    assert removed.json()["cover_url"] is None
+    assert "cover_url" not in removed.json()["custom_page_config"]
+
+    rejected = client.post(
+        "/api/competitions",
+        json={**create_payload, "name": "越权封面", "cover_asset_id": foreign_id},
+    )
+    assert rejected.status_code == 403
+    assert rejected.json()["detail"] == "比赛封面必须使用本人上传的图片"
 
 
 def test_create_competition_creates_global_custom_keyword():

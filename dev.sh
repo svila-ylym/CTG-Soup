@@ -30,7 +30,20 @@ init() {
   fi
   if [[ ! -f "$BACKEND_DIR/.env" ]]; then
     cp "$BACKEND_DIR/.env.example" "$BACKEND_DIR/.env"
-    log "已创建 backend/.env，请按需填写 PostgreSQL、Redis、SMTP 配置"
+    "$VENV_DIR/bin/python" - "$BACKEND_DIR/.env" <<'PY'
+from pathlib import Path
+import secrets
+import sys
+
+path = Path(sys.argv[1])
+content = path.read_text(encoding="utf-8")
+content = content.replace(
+    "SECRET_KEY=replace-with-a-random-secret-at-least-32-characters-long",
+    f"SECRET_KEY={secrets.token_urlsafe(48)}",
+)
+path.write_text(content, encoding="utf-8")
+PY
+    log "已创建 backend/.env 并生成本地密钥，请按需填写 PostgreSQL、Redis、SMTP 配置"
   else
     log "保留现有 backend/.env"
   fi

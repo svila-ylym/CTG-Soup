@@ -7,6 +7,12 @@ __pycache__/
 
 # Dependencies
 frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+.venv/
+.worktrees/
 
 # Environment variables
 .env

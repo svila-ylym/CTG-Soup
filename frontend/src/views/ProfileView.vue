@@ -287,10 +287,8 @@ watch(
 }
 
 .profile-hero-overlay {
-  background: linear-gradient(90deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .78) 58%, rgba(255, 255, 255, .35));
-}
-
-:global(.dark) .profile-hero-overlay {
-  background: linear-gradient(90deg, rgba(3, 7, 18, .96), rgba(3, 7, 18, .82) 58%, rgba(3, 7, 18, .44));
+  background: var(--profile-hero-overlay);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+  backdrop-filter: blur(10px) saturate(110%);
 }
 </style>

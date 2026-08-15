@@ -102,7 +102,7 @@ backend/
 - `GET /api/users/{user_id}/profile` - 用户主页
 
 ### 海龟汤
-- `GET /api/turtle-soups/ranking` - 排行榜
+- `GET /api/turtle-soups?sort_by=score&ranking_scope=regular|bie` - 社区海龟汤榜/鳖汤榜
 - `POST /api/turtle-soups` - 发布海龟汤
 - `GET /api/turtle-soups/{id}` - 获取详情
 - `POST /api/turtle-soups/{id}/rate` - 评分

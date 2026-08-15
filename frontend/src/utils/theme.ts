@@ -1,15 +1,10 @@
 import type { ThemePreference } from '@/types'
 
-const STORAGE_KEY = 'theme_preference'
+const STORAGE_KEY = 'app-theme'
+const LEGACY_STORAGE_KEY = 'theme_preference'
 const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
 let activePreference: ThemePreference = 'system'
 let listening = false
-let renderedDark: boolean | null = null
-let transitionId = 0
-
-type ThemeTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => { finished: Promise<void> }
-}
 
 function isThemePreference(value: string | null): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system'
@@ -21,42 +16,33 @@ function resolvedDark(preference: ThemePreference): boolean {
 
 function renderTheme() {
   const dark = resolvedDark(activePreference)
-  const currentTransitionId = ++transitionId
-  const shouldAnimate = renderedDark !== null
-    && renderedDark !== dark
-    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  const commitTheme = () => {
-    if (currentTransitionId !== transitionId) return
-    document.documentElement.classList.toggle('dark', dark)
-    window.dispatchEvent(new CustomEvent('themechange', {
-      detail: { preference: activePreference, dark },
-    }))
-    renderedDark = dark
-  }
-
-  const transitionDocument = document as ThemeTransitionDocument
-  if (!shouldAnimate || !transitionDocument.startViewTransition) {
-    commitTheme()
-    return
-  }
-
-  document.documentElement.dataset.themeTransition = dark ? 'to-dark' : 'to-light'
-  const transition = transitionDocument.startViewTransition(commitTheme)
-  void transition.finished.then(
-    () => { if (currentTransitionId === transitionId) delete document.documentElement.dataset.themeTransition },
-    () => { if (currentTransitionId === transitionId) delete document.documentElement.dataset.themeTransition },
-  )
+  document.documentElement.classList.toggle('dark', dark)
+  window.dispatchEvent(new CustomEvent('themechange', {
+    detail: { preference: activePreference, dark },
+  }))
 }
 
-export function storedTheme(): ThemePreference {
-  const value = localStorage.getItem(STORAGE_KEY)
-  return isThemePreference(value) ? value : 'system'
+export function storedTheme(fallback: ThemePreference = 'system'): ThemePreference {
+  try {
+    const appTheme = localStorage.getItem(STORAGE_KEY)
+    if (appTheme === 'light' || appTheme === 'dark') return appTheme
+    const legacyTheme = localStorage.getItem(LEGACY_STORAGE_KEY)
+    return isThemePreference(legacyTheme) ? legacyTheme : fallback
+  } catch (error) {
+    console.warn('Could not access localStorage for theme setting.', error)
+    return fallback
+  }
 }
 
 export function applyTheme(preference: ThemePreference) {
   activePreference = preference
-  localStorage.setItem(STORAGE_KEY, preference)
+  try {
+    localStorage.setItem(LEGACY_STORAGE_KEY, preference)
+    if (preference === 'system') localStorage.removeItem(STORAGE_KEY)
+    else localStorage.setItem(STORAGE_KEY, preference)
+  } catch (error) {
+    console.warn('Could not save theme to localStorage.', error)
+  }
   renderTheme()
   if (!listening) {
     darkModeQuery.addEventListener('change', renderTheme)

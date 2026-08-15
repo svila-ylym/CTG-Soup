@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" href="/icon.ico" type="image/x-icon" />
     <title>汤吧社区</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('app-theme') || localStorage.getItem('theme_preference')
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          document.documentElement.classList.toggle('dark', theme === 'dark' || (theme !== 'light' && systemDark))
+        } catch (error) {
+          console.warn('Could not access the saved theme preference.', error)
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

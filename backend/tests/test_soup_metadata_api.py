@@ -12,6 +12,7 @@ from app.models.database import (
     Competition,
     CompetitionEntry,
     CompetitionStatus,
+    Rating,
     Soup,
     SoupImage,
     SoupTag,
@@ -211,6 +212,64 @@ def test_list_and_detail_include_competition_colors():
     assert detail.json()["competition_colors"] == ["#2468AC"]
 
 
+def test_rating_can_be_updated_without_increasing_count_and_refreshes_competition_score():
+    client, engine, _active_id, _, soup_id, _override_author, override_other = _client()
+    client.app.dependency_overrides[get_current_active_user] = override_other
+    with Session(engine) as session:
+        soup = session.get(Soup, soup_id)
+        competition = Competition(
+            creator_uid=soup.author_uid,
+            name="评分更新赛",
+            description="比赛",
+            start_time=soup.created_at - timedelta(hours=1),
+            end_time=soup.created_at + timedelta(days=1),
+            required_tag_ids=[],
+            status=CompetitionStatus.ONGOING,
+        )
+        session.add(competition)
+        session.flush()
+        entry = CompetitionEntry(
+            competition_id=competition.id,
+            soup_id=soup.id,
+            author_uid=soup.author_uid,
+        )
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        entry_id = entry.id
+
+    first = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 6.5})
+    assert first.status_code == 200
+    assert first.json() == {
+        "average_score": 6.5,
+        "rating_count": 1,
+        "my_rating": 6.5,
+    }
+
+    with Session(engine) as session:
+        rating = session.exec(select(Rating).where(Rating.soup_id == soup_id)).one()
+        rating.updated_at = datetime(2020, 1, 1)
+        session.commit()
+
+    updated = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8})
+    assert updated.status_code == 200
+    assert updated.json() == {
+        "average_score": 8.0,
+        "rating_count": 1,
+        "my_rating": 8.0,
+    }
+    with Session(engine) as session:
+        ratings = session.exec(select(Rating).where(Rating.soup_id == soup_id)).all()
+        soup = session.get(Soup, soup_id)
+        entry = session.get(CompetitionEntry, entry_id)
+        assert len(ratings) == 1
+        assert ratings[0].score == 8.0
+        assert ratings[0].updated_at > datetime(2020, 1, 1)
+        assert soup.avg_rating == 8.0
+        assert soup.rating_count == 1
+        assert entry.final_score == 8.0
+
+
 def test_non_author_cannot_update_soup():
     client, _, _, _, soup_id, _, override_other = _client()
     client.app.dependency_overrides[get_current_active_user] = override_other
@@ -317,6 +376,48 @@ def test_list_supports_average_rating_sort():
 
     assert response.status_code == 200
     assert response.json()["items"][0]["id"] == existing_soup_id
+
+
+def test_community_ranking_scopes_keep_bie_soups_separate():
+    client, engine, _, _, existing_soup_id, _, _ = _client()
+    with Session(engine) as session:
+        existing = session.get(Soup, existing_soup_id)
+        existing.avg_rating = 8.5
+        bie = Soup(
+            author_uid=existing.author_uid,
+            title="独立鳖汤榜作品",
+            puzzle="谜面",
+            solution="汤底",
+            genre="鳖汤",
+            soup_color="黑汤",
+            main_player_count="一人",
+            secondary_player_count="",
+            avg_rating=9.5,
+        )
+        session.add(bie)
+        session.commit()
+        session.refresh(bie)
+        bie_id = bie.id
+
+    regular = client.get(
+        "/api/turtle-soups",
+        params={"sort_by": "score", "ranking_scope": "regular"},
+    )
+    bie = client.get(
+        "/api/turtle-soups",
+        params={"sort_by": "score", "ranking_scope": "bie"},
+    )
+    unscoped = client.get("/api/turtle-soups", params={"sort_by": "score"})
+    invalid = client.get("/api/turtle-soups", params={"ranking_scope": "unknown"})
+
+    assert regular.status_code == bie.status_code == unscoped.status_code == 200
+    assert [item["id"] for item in regular.json()["items"]] == [existing_soup_id]
+    assert [item["id"] for item in bie.json()["items"]] == [bie_id]
+    assert {item["id"] for item in unscoped.json()["items"]} == {
+        existing_soup_id,
+        bie_id,
+    }
+    assert invalid.status_code == 422
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import CompetitionCoverPicker from '@/components/CompetitionCoverPicker.vue'
 import CompetitionRichTextEditor from '@/components/CompetitionRichTextEditor.vue'
 import http from '@/api/http'
 import { tagApi } from '@/api/tags'
@@ -34,6 +35,8 @@ const form = reactive({
   custom_tags: [] as string[],
   optional_tag_ids: [] as number[],
   optional_custom_tags: [] as string[],
+  cover_asset_id: null as number | null,
+  cover_url: null as string | null,
   image_asset_ids: [] as number[],
   top_n: 10,
   competition_color: '#2563EB',
@@ -137,6 +140,8 @@ async function loadCompetition() {
       : ''
     form.required_tag_ids = [...competition.required_tag_ids]
     form.optional_tag_ids = [...competition.optional_tag_ids]
+    form.cover_asset_id = competition.cover_asset_id
+    form.cover_url = competition.cover_url
     form.top_n = competition.top_n
     form.competition_color = competition.competition_color
     pageConfig.value = { ...competition.custom_page_config }
@@ -195,6 +200,7 @@ async function submit() {
       custom_tags: form.custom_tags,
       optional_tag_ids: form.optional_tag_ids,
       optional_custom_tags: form.optional_custom_tags,
+      cover_asset_id: form.cover_asset_id,
       competition_color: form.competition_color,
       score_type: form.score_type,
       scoring_at: scoringAt,
@@ -237,6 +243,12 @@ onMounted(() => { void Promise.all([loadTags(), loadCompetition()]) })
           <span class="mb-2 block text-sm font-medium">比赛名称</span>
           <input v-model="form.name" class="form-control" maxlength="200" required>
         </label>
+
+        <CompetitionCoverPicker
+          v-model:asset-id="form.cover_asset_id"
+          v-model:url="form.cover_url"
+          :disabled="submitting"
+        />
 
         <div>
           <label class="mb-2 block text-sm font-medium">比赛说明</label>
