@@ -35,7 +35,7 @@ onBeforeUnmount(() => {
     :aria-label="props.isDark ? '切换到浅色主题' : '切换到深色主题'"
     @click="handleClick"
   >
-    <div ref="container" class="theme-toggle__container" @transitionend="handleTransitionEnd">
+    <div ref="container" class="theme-toggle__container" aria-hidden="true" @transitionend="handleTransitionEnd">
       <div class="theme-toggle__clouds"></div>
       <div class="theme-toggle__stars">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 55" fill="none" aria-hidden="true">
@@ -55,7 +55,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .theme-toggle {
-  --base-scale: 12px;
+  --base-scale: 16px;
+  --transition-standard: .3s ease;
   --toggle-width: 5.625em;
   --toggle-height: 2.5em;
   --radius-pill: 100em;
@@ -73,11 +74,14 @@ onBeforeUnmount(() => {
   --shadow-highlight: rgba(255, 255, 255, .94);
   --halo-color: rgba(255, 255, 255, .1);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
   background: none;
   font-size: var(--base-scale);
+  line-height: 1;
 }
 
 .theme-toggle__container {
@@ -89,10 +93,10 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-pill);
   background-color: var(--bg-toggle-light);
   box-shadow: .06em .06em .125em var(--shadow-highlight);
-  transition: background-color .3s ease;
+  transition: background-color var(--transition-standard);
 }
 
-:global(html.dark) .theme-toggle__container { background-color: var(--bg-toggle-dark); }
+.theme-toggle[aria-checked='true'] .theme-toggle__container { background-color: var(--bg-toggle-dark); }
 
 .theme-toggle__container::after {
   content: '';
@@ -119,10 +123,10 @@ onBeforeUnmount(() => {
   background-color: var(--color-sun);
   box-shadow: .05em .125em .125em var(--shadow-primary), 0 .05em .125em var(--shadow-primary), .05em .05em .05em 0 rgba(254, 255, 239, .61) inset, 0 -.05em .05em 0 #a1872a inset, 0 0 0 .625em var(--halo-color), 0 0 0 1.25em var(--halo-color), 0 0 0 1.875em var(--halo-color);
   transform: translateX(var(--sun-offset));
-  transition: transform .3s ease;
+  transition: transform var(--transition-standard);
 }
 
-:global(html.dark) .theme-toggle__sun {
+.theme-toggle[aria-checked='true'] .theme-toggle__sun {
   transform: translateX(calc(var(--toggle-width) - var(--sun-diameter) - var(--sun-offset)));
 }
 
@@ -134,10 +138,10 @@ onBeforeUnmount(() => {
   background-color: var(--color-moon);
   box-shadow: .062em .062em .062em 0 rgba(254, 255, 239, .61) inset, 0 -.062em .062em 0 #969696 inset;
   transform: translateX(100%);
-  transition: transform .3s ease;
+  transition: transform var(--transition-standard);
 }
 
-:global(html.dark) .theme-toggle__moon-mask { transform: translateX(0); }
+.theme-toggle[aria-checked='true'] .theme-toggle__moon-mask { transform: translateX(0); }
 
 .theme-toggle__crater {
   position: absolute;
@@ -155,9 +159,10 @@ onBeforeUnmount(() => {
   width: 2.75em;
   color: var(--color-star);
   transform: translateY(-2em);
-  transition: transform .3s ease;
+  transition: transform var(--transition-standard);
 }
-:global(html.dark) .theme-toggle__stars { transform: translateY(.5em); }
+.theme-toggle__stars svg { display: block; width: 100%; height: auto; }
+.theme-toggle[aria-checked='true'] .theme-toggle__stars { transform: translateY(.5em); }
 
 .theme-toggle__clouds {
   position: absolute;
@@ -169,12 +174,12 @@ onBeforeUnmount(() => {
   background-color: var(--color-cloud-front);
   box-shadow: .937em .312em var(--color-cloud-front), 1.437em .375em var(--color-cloud-front), 2.187em 0 var(--color-cloud-front), 2.937em .312em var(--color-cloud-front), 3.625em -.062em var(--color-cloud-front), 4.5em -.312em var(--color-cloud-front), 4.625em -1.75em 0 .437em var(--color-cloud-front), -.312em -.312em var(--color-cloud-back), .5em -.125em var(--color-cloud-back), 1.25em -.062em var(--color-cloud-back), 2em -.312em var(--color-cloud-back), 2.625em 0 var(--color-cloud-back), 3.375em -.437em var(--color-cloud-back), 4em -.625em var(--color-cloud-back), 4.125em -2.125em 0 .437em var(--color-cloud-back);
   transform: translateY(0);
-  transition: transform .3s ease;
+  transition: transform var(--transition-standard);
 }
-:global(html.dark) .theme-toggle__clouds { transform: translateY(3em); }
+.theme-toggle[aria-checked='true'] .theme-toggle__clouds { transform: translateY(3em); }
 
 .theme-toggle__container:hover .theme-toggle__sun { transform: translateX(calc(var(--sun-offset) + .187em)); }
-:global(html.dark) .theme-toggle__container:hover .theme-toggle__sun {
+.theme-toggle[aria-checked='true'] .theme-toggle__container:hover .theme-toggle__sun {
   transform: translateX(calc(var(--toggle-width) - var(--sun-diameter) - var(--sun-offset) - .187em));
 }
 

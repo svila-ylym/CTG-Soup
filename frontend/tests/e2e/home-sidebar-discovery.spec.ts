@@ -75,11 +75,22 @@ test('mobile sidebar embeds the animated accessible theme switch', async ({ page
   await expect(switchControl).toHaveAttribute('aria-checked', 'false')
   await expect(switchControl).toHaveAttribute('aria-label', '切换到深色主题')
   await expect(page.getByText('外观主题')).toBeVisible()
+  const toggleBox = await switchControl.boundingBox()
+  expect(toggleBox?.width).toBeGreaterThanOrEqual(89)
+  expect(toggleBox?.height).toBeGreaterThanOrEqual(39)
   await switchControl.click()
 
   await expect(page.locator('html')).toHaveClass(/dark/)
   await expect(switchControl).toHaveAttribute('aria-checked', 'true')
   await expect(switchControl).toHaveAttribute('aria-label', '切换到浅色主题')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('app-theme'))).toBe('dark')
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+  await expect(switchControl.locator('.theme-toggle__container')).toHaveCSS('background-color', 'rgb(29, 31, 44)')
+  await expect.poll(async () => {
+    const transform = await switchControl.locator('.theme-toggle__sun').evaluate(element => getComputedStyle(element).transform)
+    return Number(transform.match(/matrix\([^,]+,[^,]+,[^,]+,[^,]+,\s*([^,]+)/)?.[1] || 0)
+  }).toBeGreaterThan(45)
+  await expect.poll(() => page.locator('html').evaluate(element => element.classList.contains('is-animating'))).toBe(false)
   const drawer = page.locator('.mobile-drawer-panel')
   await expect(drawer).toHaveCSS('border-radius', '24px')
 
@@ -150,6 +161,21 @@ test('notifications can be marked read in one action', async ({ page }) => {
       theme_preference: 'light',
       created_at: '2026-08-15T00:00:00Z',
     },
+  }))
+  await page.route('http://127.0.0.1:10000/api/users/me/signin', route => route.fulfill({
+    json: {
+      signed_in: false,
+      signin_day: '2026-08-15',
+      consecutive_days: 0,
+      experience_points: 0,
+      experience_gained: 0,
+      level: 1,
+      level_start: 0,
+      next_level_start: 100,
+    },
+  }))
+  await page.route('http://127.0.0.1:10000/api/messages/conversations', route => route.fulfill({
+    json: { items: [], total: 0 },
   }))
   await page.route('http://127.0.0.1:10000/api/system-messages**', route => route.fulfill({
     json: { items: [], total: 0, page: 1, page_size: 1, total_pages: 0 },

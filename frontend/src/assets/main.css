@@ -25,6 +25,7 @@
   --glass-radius-panel: 1rem;
   --glass-radius-card: 0.75rem;
   --profile-hero-overlay: linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.74) 58%, rgba(255, 255, 255, 0.34));
+  --transition-standard: 0.3s ease;
   color-scheme: light;
 }
 
@@ -56,7 +57,7 @@ body {
   background: var(--page);
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transition: background-color 180ms ease, color 180ms ease;
+  transition: background-color var(--transition-standard), color var(--transition-standard);
 }
 
 /* 全局毛玻璃 + 圆角效果 */
@@ -67,6 +68,7 @@ body {
   background: var(--glass-panel-fallback);
   background-clip: padding-box;
   box-shadow: var(--glass-shadow);
+  transition: background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard), box-shadow var(--transition-standard);
 }
 
 .glass-card {
@@ -77,7 +79,7 @@ body {
   background: var(--glass-card-fallback);
   background-clip: padding-box;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), 0 2px 8px rgba(15, 23, 42, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, background-color var(--transition-standard), color var(--transition-standard), box-shadow 0.2s ease, border-color var(--transition-standard);
 }
 
 .glass-card-interactive:hover {
@@ -159,28 +161,10 @@ body {
   to { background-position: -100% 0; }
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-html[data-theme-transition='to-dark']::view-transition-new(root) {
-  animation: theme-curtain-close 680ms cubic-bezier(.22,.61,.36,1) both;
-}
-
-html[data-theme-transition='to-light']::view-transition-new(root) {
-  animation: theme-curtain-open 680ms cubic-bezier(.22,.61,.36,1) both;
-}
-
-@keyframes theme-curtain-close {
-  from { clip-path: polygon(0 0, 0 0, 0 0, 0 0); }
-  to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
-}
-
-@keyframes theme-curtain-open {
-  from { clip-path: polygon(100% 100%, 100% 100%, 100% 100%, 100% 100%); }
-  to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+html.is-animating :where(#app > div, nav, main, footer, section, article, aside, .glass-panel, .glass-card, .form-control) {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: .3s;
+  transition-timing-function: ease;
 }
 
 html {
