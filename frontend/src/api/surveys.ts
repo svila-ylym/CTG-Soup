@@ -2,7 +2,7 @@ import http from './http'
 import type { PageParams, PageResult } from '@/types'
 
 export interface SurveyQuestion {
-  id?: number
+  id: number
   survey_id?: number
   question_text: string
   question_type: 'single_choice' | 'multiple_choice' | 'text' | 'rating'
@@ -26,7 +26,10 @@ export interface Survey {
   questions?: SurveyQuestion[]
   question_count?: number
   response_count?: number
+  has_submitted?: boolean
 }
+
+export type SurveyQuestionInput = Omit<SurveyQuestion, 'id' | 'survey_id' | 'created_at'>
 
 export interface SurveyCreate {
   title: string
@@ -34,7 +37,7 @@ export interface SurveyCreate {
   status?: 'draft' | 'active' | 'closed' | 'expired'
   starts_at?: string | null
   expires_at?: string | null
-  questions?: SurveyQuestion[]
+  questions?: SurveyQuestionInput[]
 }
 
 export interface SurveyUpdate {
@@ -69,27 +72,27 @@ export interface SurveyStatistics {
 }
 
 export const surveysApi = {
-  list(params: PageParams & { status?: string }) {
-    return http.get<PageResult<Survey>>('/api/surveys', { params })
+  list(params: PageParams & { status?: 'active' | 'all' }) {
+    return http.get<PageResult<Survey>>('/surveys', { params })
   },
 
   getById(id: number) {
-    return http.get<Survey>(`/api/surveys/${id}`)
+    return http.get<Survey>(`/surveys/${id}`)
   },
 
   create(data: SurveyCreate) {
-    return http.post<Survey>('/api/surveys', data)
+    return http.post<Survey>('/surveys', data)
   },
 
   update(id: number, data: SurveyUpdate) {
-    return http.put<Survey>(`/api/surveys/${id}`, data)
+    return http.put<Survey>(`/surveys/${id}`, data)
   },
 
   submit(id: number, data: SurveySubmit) {
-    return http.post<{ message: string }>(`/api/surveys/${id}/submit`, data)
+    return http.post<{ message: string }>(`/surveys/${id}/submit`, data)
   },
 
   getStatistics(id: number) {
-    return http.get<SurveyStatistics>(`/api/surveys/${id}/statistics`)
+    return http.get<SurveyStatistics>(`/surveys/${id}/statistics`)
   },
 }
