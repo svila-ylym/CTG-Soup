@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 $BackendDir = Join-Path $ProjectRoot "backend"
 $FrontendDir = Join-Path $ProjectRoot "frontend"
-$EnvFile = Join-Path $ProjectRoot ".env"
+$EnvFile = Join-Path $BackendDir ".env"
 
 function Write-Color {
     param([string]$Text, [string]$Color = "White")
@@ -85,6 +85,17 @@ function Generate-Env {
     if (!(Test-Path $EnvFile)) {
         Write-Host "  -> Generating default .env configuration file..." -ForegroundColor Gray
         Copy-Item (Join-Path $BackendDir ".env.example") $EnvFile
+        $SecretBytes = New-Object byte[] 48
+        $SecretGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        $SecretGenerator.GetBytes($SecretBytes)
+        $SecretGenerator.Dispose()
+        $GeneratedSecret = [Convert]::ToBase64String($SecretBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+        $EnvContent = [IO.File]::ReadAllText($EnvFile).Replace(
+            "SECRET_KEY=replace-with-a-random-secret-at-least-32-characters-long",
+            "SECRET_KEY=$GeneratedSecret"
+        )
+        $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($EnvFile, $EnvContent, $Utf8NoBom)
         Write-Color "  OK .env file generated" "Green"
     } else {
         Write-Host "  OK .env file already exists" -ForegroundColor Gray
@@ -129,7 +140,7 @@ function Start-Backend {
         }
     }
     Push-Location $BackendDir
-    $port = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8000" }
+    $port = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "10001" }
     if (Test-Path $PythonCmd) {
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$PythonCmd' -m uvicorn app.main:app --reload --host 0.0.0.0 --port $port"
     } else {
@@ -156,12 +167,12 @@ function Start-Both {
     Write-Color "============================================================" "Cyan"
     Write-Color "  All services started successfully!" "Green"
     Write-Color "  Frontend: http://localhost:10000" "White"
-    Write-Color "  Backend:  http://localhost:8000/docs" "White"
+    Write-Color "  Backend:  http://localhost:10001/docs" "White"
     Write-Color "============================================================" "Cyan"
 }
 
 function Open-Docs {
-    $port = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8000" }
+    $port = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "10001" }
     Start-Process "http://localhost:$port/docs"
     Write-Color "API documentation opened in browser" "Green"
 }

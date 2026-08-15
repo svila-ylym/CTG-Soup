@@ -106,6 +106,16 @@ def _sync_statuses(db: Session, competitions: list[Competition]) -> None:
         db.commit()
 
 
+def _config_optional_int(config: dict | None, key: str) -> int | None:
+    value = (config or {}).get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def _config_optional_str(config: dict | None, key: str) -> str | None:
+    value = (config or {}).get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
 def _payload(
     db: Session,
     competition: Competition,
@@ -173,6 +183,14 @@ def _payload(
             }
             for tag_id in optional_tag_ids
         ],
+        "cover_asset_id": _config_optional_int(
+            competition.custom_page_config,
+            "cover_asset_id",
+        ),
+        "cover_url": _config_optional_str(
+            competition.custom_page_config,
+            "cover_url",
+        ),
         "competition_color": competition.competition_color,
         "score_type": competition.score_type,
         "scoring_at": _utc(competition.scoring_at),
@@ -264,11 +282,33 @@ def _competition_content(
     if any(source not in owned_urls for source in image_sources):
         raise HTTPException(status_code=422, detail="比赛正文图片必须来自已上传的图片")
 
+    cover: UploadedAsset | None = None
+    if data.cover_asset_id is not None:
+        cover = db.exec(
+            select(UploadedAsset).where(
+                UploadedAsset.id == data.cover_asset_id,
+                UploadedAsset.owner_uid == owner_uid,
+                UploadedAsset.kind == "image",
+            )
+        ).first()
+        if cover is None:
+            raise HTTPException(
+                status_code=403,
+                detail="比赛封面必须使用本人上传的图片",
+            )
+
     custom_page_config = dict(data.custom_page_config)
+    custom_page_config.pop("cover_asset_id", None)
+    custom_page_config.pop("cover_url", None)
     custom_page_config.update({
         "format": "rich_html",
         "image_asset_ids": unique_image_asset_ids,
     })
+    if cover is not None:
+        custom_page_config.update({
+            "cover_asset_id": cover.id,
+            "cover_url": cover.public_url,
+        })
     return description, custom_page_config
 
 
@@ -343,6 +383,13 @@ def update_competition(
             "optional_tag_ids": competition_optional_tag_ids(competition),
             "optional_custom_tags": [],
         })
+    if "cover_asset_id" not in data.model_fields_set:
+        resolved_data = resolved_data.model_copy(update={
+            "cover_asset_id": _config_optional_int(
+                competition.custom_page_config,
+                "cover_asset_id",
+            ),
+        })
     if resolved_data.score_type == CompetitionScoreType.INDEPENDENT:
         if resolved_data.scoring_at is None:
             raise HTTPException(
@@ -369,7 +416,11 @@ def update_competition(
             },
         )
     required_tags, optional_tags = _resolve_competition_tags(db, resolved_data)
-    description, custom_page_config = _competition_content(db, data, current_user.uid)
+    description, custom_page_config = _competition_content(
+        db,
+        resolved_data,
+        current_user.uid,
+    )
     next_required_tag_ids = [tag.id for tag in required_tags]
     next_optional_tag_ids = [tag.id for tag in optional_tags]
     has_judge_scores = db.exec(

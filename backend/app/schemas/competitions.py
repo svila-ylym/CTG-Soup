@@ -31,6 +31,7 @@ class CompetitionCreate(BaseModel):
         default_factory=list,
         max_length=MAX_RAW_TAG_SELECTIONS,
     )
+    cover_asset_id: int | None = Field(default=None, gt=0)
     competition_color: str = Field(default="#2563EB", pattern=r"^#[0-9A-Fa-f]{6}$")
     score_type: Literal[
         CompetitionScoreType.AVERAGE,
@@ -119,6 +120,8 @@ class CompetitionResponse(BaseModel):
     required_tags: list[CompetitionTagResponse]
     optional_tag_ids: list[int]
     optional_tags: list[CompetitionTagResponse]
+    cover_asset_id: int | None = None
+    cover_url: str | None = None
     competition_color: str
     score_type: CompetitionScoreType
     scoring_at: datetime | None = None

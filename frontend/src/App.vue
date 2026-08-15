@@ -12,10 +12,10 @@
       </div>
     </section>
     
-    <div class="min-w-0 flex-1" data-layout-region="content">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
+    <div class="relative min-w-0 flex-1" data-layout-region="content">
+      <router-view v-slot="{ Component, route }">
+        <transition name="route-fade">
+          <component :is="Component" :key="route.fullPath" />
         </transition>
       </router-view>
     </div>

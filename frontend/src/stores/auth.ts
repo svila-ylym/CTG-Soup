@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import type { User, TokenResponse } from '@/types'
 import { extractApiError } from '@/utils/auth'
-import { applyTheme } from '@/utils/theme'
+import { applyTheme, storedTheme } from '@/utils/theme'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -84,7 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = res.data
       localStorage.setItem('user_uid', String(res.data.uid))
       localStorage.setItem('user_role', res.data.role)
-      applyTheme(res.data.theme_preference || 'system')
+      applyTheme(storedTheme(res.data.theme_preference || 'system'))
     } catch (error) {
       logout()
     }

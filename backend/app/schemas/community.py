@@ -176,6 +176,10 @@ class NotificationPageResponse(PageResponse[NotificationResponse]):
     pass
 
 
+class NotificationReadAllResponse(BaseModel):
+    updated_count: int = Field(ge=0)
+
+
 class AchievementCreate(BaseModel):
     code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9_]+$")
     name: str = Field(min_length=1, max_length=100)

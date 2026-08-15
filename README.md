@@ -9,7 +9,7 @@
 ```bash
 chmod +x dev.sh
 ./dev.sh init   # 创建虚拟环境、安装依赖、生成 backend/.env
-./dev.sh dev    # 后端 8000 + 前端 10000
+./dev.sh dev    # 后端 10001 + 前端 10000
 ```
 
 单独运行：`./dev.sh backend` 或 `./dev.sh frontend`。默认使用清华 PyPI 和 npm 镜像；可通过 `PYTHON_INDEX_URL`、`NPM_REGISTRY_URL` 覆盖。
@@ -26,7 +26,7 @@ chmod +x dev.sh
 ./Update.sh --tag v1.2.3
 ```
 
-`Update.sh` 会在切换代码前保留数据库、环境文件、前端构建和运行时文件备份，升级失败时恢复原代码、依赖和前端资源。升级必须配置 `CTG_RESTART_COMMAND`，且该命令必须调用脱离 updater 所在控制组的 helper；脚本会重启服务并轮询 `CTG_HEALTH_URL`，直到 `/health` 返回与发行版 tag 匹配的版本号后才解除 `private-storage/.ota-maintenance`。已知的同控制组 `systemctl restart`、`supervisorctl restart` 和 `docker compose restart` 形式会被拒绝；systemd 应使用 `systemd-run --no-block` 启动独立 helper，Screen 应使用独立会话/控制命令。重启或健康检查失败时会保留维护标记，避免旧进程继续使用已迁移的数据库。若数据库迁移已经开始后失败，管理员从备份恢复数据库后再删除该标记。`GithubPAT.txt` 仅用于本地 Git 操作，不会被应用读取或提交；GitHub API 读取公开仓库时不需要 token。
+`Update.sh` 会在切换代码前保留数据库、环境文件、前端构建和运行时文件备份，升级失败时恢复原代码、依赖和前端资源。升级必须配置 `CTG_RESTART_COMMAND`，且该命令必须调用脱离 updater 所在控制组的 helper；脚本会重启服务并轮询 `CTG_HEALTH_URL`，直到 `/health` 返回与发行版 tag 匹配的版本号后才解除 `private-storage/.ota-maintenance`。已知的同控制组 `systemctl restart`、`supervisorctl restart` 和 `docker compose restart` 形式会被拒绝；systemd 应使用 `systemd-run --no-block` 启动独立 helper，Screen 应使用独立会话/控制命令。重启或健康检查失败时会保留维护标记，避免旧进程继续使用已迁移的数据库。若数据库迁移已经开始后失败，管理员从备份恢复数据库后再删除该标记。`GithubPAT.txt` 仅用于本地 Git 操作，不会被应用读取或提交；GitHub API 读取公开仓库时不需要 token。初始化脚本会为首次创建的 `backend/.env` 生成随机 `SECRET_KEY`，不会覆盖已有环境文件；生产部署仍应使用独立生成并妥善保存的密钥。
 
 ### Windows 用户 (推荐 PowerShell)
 
@@ -59,7 +59,7 @@ python -m venv venv
 # Windows: venv\Scripts\activate
 # Linux/Mac: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 10001
 ```
 
 ### 前端
@@ -72,7 +72,7 @@ npm run dev
 ## 🌐 访问地址
 
 - **前端**: http://localhost:10000
-- **后端 API 文档**: http://localhost:8000/docs
+- **后端 API 文档**: http://localhost:10001/docs
 
 ## 📦 技术栈
 
@@ -103,7 +103,8 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/turtle_soup
 REDIS_URL=redis://localhost:6379/0
 
 # JWT
-SECRET_KEY=your-secret-key-here
+# 先运行：python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=粘贴上一步生成的随机值
 ```
 
 ## 📖 详细文档
