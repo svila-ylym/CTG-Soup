@@ -71,6 +71,7 @@ def get_redis() -> Optional[redis.Redis]:
             return _redis_client
         if monotonic() < _redis_retry_at:
             return None
+        client: Optional[redis.Redis] = None
         try:
             client = redis.Redis.from_url(
                 _settings.REDIS_URL,
@@ -82,6 +83,7 @@ def get_redis() -> Optional[redis.Redis]:
             )
             client.ping()
         except _CACHE_ERRORS as error:
+            _close_client(client)
             _mark_redis_unavailable("connect", error)
             return None
         _redis_client = client

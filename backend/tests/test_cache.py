@@ -118,6 +118,25 @@ def test_connection_failure_enters_cooldown(monkeypatch):
     assert cache._redis_retry_at == 105.0
 
 
+def test_failed_ping_closes_candidate_client(monkeypatch):
+    cache._reset_cache_state()
+    monkeypatch.setattr(cache, "_settings", _settings())
+    client = FakeRedis()
+
+    def fail_ping():
+        raise RedisError("offline")
+
+    client.ping = fail_ping
+    monkeypatch.setattr(
+        cache.redis.Redis,
+        "from_url",
+        staticmethod(lambda *args, **kwargs: client),
+    )
+
+    assert cache.get_redis() is None
+    assert client.closed is True
+
+
 def test_disabled_cache_never_constructs_client(monkeypatch):
     cache._reset_cache_state()
     monkeypatch.setattr(cache, "_settings", _settings(REDIS_CACHE_ENABLED=False))
