@@ -56,11 +56,11 @@ def _use_client(monkeypatch, client):
 
 
 def test_cache_key_is_stable_across_parameter_order():
-    first = cache.generate_cache_key("surveys-list", page=2, status="active")
-    second = cache.generate_cache_key("surveys-list", status="active", page=2)
+    first = cache.generate_cache_key("surveys:list", page=2, status="active")
+    second = cache.generate_cache_key("surveys:list", status="active", page=2)
 
     assert first == second
-    assert first.startswith("ctg:v1:surveys-list:")
+    assert first.startswith("ctg:v1:surveys:list:")
     assert len(first.rsplit(":", 1)[-1]) == 20
 
 

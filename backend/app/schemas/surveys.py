@@ -20,7 +20,7 @@ class SurveyCreate(BaseModel):
     status: SurveyStatus = SurveyStatus.DRAFT
     starts_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
-    questions: List[SurveyQuestionCreate] = []
+    questions: List[SurveyQuestionCreate] = Field(default_factory=list)
 
 
 class SurveyUpdate(BaseModel):
@@ -61,7 +61,8 @@ class SurveyDetail(SurveyCreate):
     notification_sent: bool
     created_at: datetime
     updated_at: datetime
-    questions: List[SurveyQuestionResponse] = []
+    questions: List[SurveyQuestionResponse] = Field(default_factory=list)
+    has_submitted: bool = False
 
     class Config:
         from_attributes = True

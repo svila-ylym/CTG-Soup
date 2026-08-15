@@ -90,8 +90,8 @@ def get_redis() -> Optional[redis.Redis]:
 
 def generate_cache_key(namespace: str, **parameters: JSONValue) -> str:
     """Generate a stable, compact key from JSON-safe parameters."""
-    if not namespace or ":" in namespace:
-        raise ValueError("cache namespace must be a non-empty segment")
+    if not namespace or any(not segment for segment in namespace.split(":")):
+        raise ValueError("cache namespace must contain non-empty segments")
     payload = json.dumps(
         parameters,
         ensure_ascii=False,

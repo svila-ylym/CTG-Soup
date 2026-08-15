@@ -1,22 +1,81 @@
 """问卷 API - 汤吧社区"""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import ValidationError
 from sqlmodel import Session, select, func
 from datetime import datetime
-from typing import List
+from typing import List, Literal, Optional, Sequence
 
 from app.api.auth import get_current_active_user
 from app.models.database import get_db
-from app.models.models import Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, User, UserRole, Notification, NotificationType
-from app.schemas.surveys import (
-    SurveyCreate, SurveyUpdate, SurveyDetail, SurveySummary,
-    SurveyPageResponse, SurveySubmit, SurveyStatistics
+from app.models.models import (
+    Notification,
+    NotificationType,
+    Survey,
+    SurveyAnswer,
+    SurveyQuestion,
+    SurveyResponse,
+    SurveyStatus,
+    User,
+    UserRole,
 )
-from app.utils.cache import cache_delete_pattern, cached
+from app.schemas.surveys import (
+    SurveyCreate,
+    SurveyDetail,
+    SurveyPageResponse,
+    SurveyQuestionResponse,
+    SurveyStatistics,
+    SurveySubmit,
+    SurveySummary,
+    SurveyUpdate,
+)
+from app.utils.cache import (
+    cache_delete,
+    cache_delete_pattern,
+    cache_get,
+    cache_set,
+    generate_cache_key,
+)
 
 router = APIRouter()
+SURVEY_CACHE_TTL_SECONDS = 60
+SURVEY_LIST_CACHE_PATTERN = "ctg:v1:surveys:list:*"
 
 
-def require_admin_or_root(current_user: User):
+def _survey_detail_cache_key(survey_id: int) -> str:
+    return f"ctg:v1:surveys:detail:{survey_id}"
+
+
+def _invalidate_survey_cache(survey_id: Optional[int] = None) -> None:
+    cache_delete_pattern(SURVEY_LIST_CACHE_PATTERN)
+    if survey_id is not None:
+        cache_delete(_survey_detail_cache_key(survey_id))
+
+
+def _survey_detail(
+    survey: Survey,
+    questions: Sequence[SurveyQuestion],
+    *,
+    has_submitted: bool = False,
+) -> SurveyDetail:
+    return SurveyDetail(
+        id=survey.id,
+        author_uid=survey.author_uid,
+        title=survey.title,
+        description=survey.description,
+        status=survey.status,
+        starts_at=survey.starts_at,
+        expires_at=survey.expires_at,
+        notification_sent=survey.notification_sent,
+        created_at=survey.created_at,
+        updated_at=survey.updated_at,
+        questions=[SurveyQuestionResponse.model_validate(question) for question in questions],
+        has_submitted=has_submitted,
+    )
+
+
+def require_admin_or_root(
+    current_user: User = Depends(get_current_active_user),
+):
     """验证用户是否为 Admin 或 Root"""
     if current_user.role not in [UserRole.ADMIN, UserRole.ROOT]:
         raise HTTPException(status_code=403, detail="只有管理员和 Root 用户可以创建问卷")
@@ -27,39 +86,69 @@ def require_admin_or_root(current_user: User):
 def list_surveys(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: str = "active",
+    status: Literal["active", "all"] = "active",
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """获取问卷列表"""
-    query = select(Survey)
-    
-    if status == "active":
+    """获取问卷列表，公共视图与管理视图使用隔离缓存。"""
+    is_manager = current_user.role in [UserRole.ADMIN, UserRole.ROOT]
+    effective_status = "all" if status == "all" and is_manager else "active"
+    scope = "manager" if effective_status == "all" else "public"
+    cache_key = generate_cache_key(
+        "surveys:list",
+        page=page,
+        page_size=page_size,
+        status=effective_status,
+        scope=scope,
+    )
+    cached_page = cache_get(cache_key)
+    if cached_page is not None:
+        try:
+            return SurveyPageResponse.model_validate(cached_page)
+        except (ValidationError, TypeError):
+            cache_delete(cache_key)
+
+    filters = []
+    if effective_status == "active":
         now = datetime.utcnow()
-        query = query.where(
+        filters.extend((
             Survey.status == "active",
             (Survey.starts_at == None) | (Survey.starts_at <= now),
-            (Survey.expires_at == None) | (Survey.expires_at > now)
-        )
-    elif status == "all":
-        if current_user.role not in [UserRole.ADMIN, UserRole.ROOT]:
-            query = query.where(Survey.status == "active")
-    
-    # 统计问题数量和回答数量
-    total_query = query
-    total = len(db.exec(total_query).all())
-    
+            (Survey.expires_at == None) | (Survey.expires_at > now),
+        ))
+
+    total_statement = select(func.count(Survey.id))
+    if filters:
+        total_statement = total_statement.where(*filters)
+    total = db.exec(total_statement).one()
+
+    question_count = (
+        select(func.count(SurveyQuestion.id))
+        .where(SurveyQuestion.survey_id == Survey.id)
+        .correlate(Survey)
+        .scalar_subquery()
+    )
+    response_count = (
+        select(func.count(SurveyResponse.id))
+        .where(SurveyResponse.survey_id == Survey.id)
+        .correlate(Survey)
+        .scalar_subquery()
+    )
+    query = select(
+        Survey,
+        question_count.label("question_count"),
+        response_count.label("response_count"),
+    )
+    if filters:
+        query = query.where(*filters)
     rows = db.exec(
         query.order_by(Survey.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    
-    items = []
-    for survey in rows:
-        question_count = len(db.exec(select(func.count()).where(SurveyQuestion.survey_id == survey.id)).all())
-        response_count = len(db.exec(select(func.count()).where(SurveyResponse.survey_id == survey.id)).all())
-        item = SurveySummary(
+
+    items = [
+        SurveySummary(
             id=survey.id,
             title=survey.title,
             description=survey.description,
@@ -69,18 +158,20 @@ def list_surveys(
             notification_sent=survey.notification_sent,
             created_at=survey.created_at,
             updated_at=survey.updated_at,
-            question_count=question_count[0] if question_count else 0,
-            response_count=response_count[0] if response_count else 0
+            question_count=question_total or 0,
+            response_count=response_total or 0,
         )
-        items.append(item)
-    
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size,
-    }
+        for survey, question_total, response_total in rows
+    ]
+    response = SurveyPageResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=(total + page_size - 1) // page_size,
+    )
+    cache_set(cache_key, response.model_dump(mode="json"), SURVEY_CACHE_TTL_SECONDS)
+    return response
 
 
 @router.get("/{survey_id}", response_model=SurveyDetail)
@@ -99,33 +190,38 @@ def get_survey(
         if survey.author_uid != current_user.uid:
             raise HTTPException(status_code=403, detail="无权查看此问卷")
     
-    questions = db.exec(
-        select(SurveyQuestion).where(SurveyQuestion.survey_id == survey_id)
-        .order_by(SurveyQuestion.sort_order)
-    ).all()
-    
-    return SurveyDetail(
-        id=survey.id,
-        author_uid=survey.author_uid,
-        title=survey.title,
-        description=survey.description,
-        status=survey.status,
-        starts_at=survey.starts_at,
-        expires_at=survey.expires_at,
-        notification_sent=survey.notification_sent,
-        created_at=survey.created_at,
-        updated_at=survey.updated_at,
-        questions=[SurveyQuestionResponse(
-            id=q.id,
-            survey_id=q.survey_id,
-            question_text=q.question_text,
-            question_type=q.question_type,
-            options=q.options,
-            required=q.required,
-            sort_order=q.sort_order,
-            created_at=q.created_at
-        ) for q in questions]
-    )
+    detail_key = _survey_detail_cache_key(survey_id)
+    common_detail = None
+    if survey.status == SurveyStatus.ACTIVE:
+        cached_detail = cache_get(detail_key)
+        if cached_detail is not None:
+            try:
+                common_detail = SurveyDetail.model_validate(cached_detail)
+            except (ValidationError, TypeError):
+                cache_delete(detail_key)
+
+    if common_detail is None:
+        questions = db.exec(
+            select(SurveyQuestion).where(SurveyQuestion.survey_id == survey_id)
+            .order_by(SurveyQuestion.sort_order)
+        ).all()
+        common_detail = _survey_detail(survey, questions)
+        if survey.status == SurveyStatus.ACTIVE:
+            cache_set(
+                detail_key,
+                common_detail.model_dump(mode="json"),
+                SURVEY_CACHE_TTL_SECONDS,
+            )
+
+    has_submitted = db.exec(
+        select(SurveyResponse.id).where(
+            SurveyResponse.survey_id == survey_id,
+            SurveyResponse.user_uid == current_user.uid,
+        )
+    ).first() is not None
+    payload = common_detail.model_dump()
+    payload["has_submitted"] = has_submitted
+    return SurveyDetail.model_validate(payload)
 
 
 @router.post("", response_model=SurveyDetail)
@@ -176,36 +272,14 @@ def create_survey(
         survey.notification_sent = True
         db.commit()
         
-        # 清除问卷列表缓存
-        cache_delete_pattern("soup:surveys:*")
+    _invalidate_survey_cache(survey.id)
     
     questions = db.exec(
         select(SurveyQuestion).where(SurveyQuestion.survey_id == survey.id)
         .order_by(SurveyQuestion.sort_order)
     ).all()
     
-    return SurveyDetail(
-        id=survey.id,
-        author_uid=survey.author_uid,
-        title=survey.title,
-        description=survey.description,
-        status=survey.status,
-        starts_at=survey.starts_at,
-        expires_at=survey.expires_at,
-        notification_sent=survey.notification_sent,
-        created_at=survey.created_at,
-        updated_at=survey.updated_at,
-        questions=[SurveyQuestionResponse(
-            id=q.id,
-            survey_id=q.survey_id,
-            question_text=q.question_text,
-            question_type=q.question_type,
-            options=q.options,
-            required=q.required,
-            sort_order=q.sort_order,
-            created_at=q.created_at
-        ) for q in questions]
-    )
+    return _survey_detail(survey, questions)
 
 
 @router.put("/{survey_id}", response_model=SurveyDetail)
@@ -229,34 +303,14 @@ def update_survey(
     
     db.commit()
     db.refresh(survey)
+    _invalidate_survey_cache(survey_id)
     
     questions = db.exec(
         select(SurveyQuestion).where(SurveyQuestion.survey_id == survey_id)
         .order_by(SurveyQuestion.sort_order)
     ).all()
     
-    return SurveyDetail(
-        id=survey.id,
-        author_uid=survey.author_uid,
-        title=survey.title,
-        description=survey.description,
-        status=survey.status,
-        starts_at=survey.starts_at,
-        expires_at=survey.expires_at,
-        notification_sent=survey.notification_sent,
-        created_at=survey.created_at,
-        updated_at=survey.updated_at,
-        questions=[SurveyQuestionResponse(
-            id=q.id,
-            survey_id=q.survey_id,
-            question_text=q.question_text,
-            question_type=q.question_type,
-            options=q.options,
-            required=q.required,
-            sort_order=q.sort_order,
-            created_at=q.created_at
-        ) for q in questions]
-    )
+    return _survey_detail(survey, questions)
 
 
 @router.post("/{survey_id}/submit")
@@ -315,6 +369,7 @@ def submit_survey(
         db.add(answer)
     
     db.commit()
+    _invalidate_survey_cache()
     return {"message": "问卷提交成功"}
 
 
@@ -332,9 +387,9 @@ def get_survey_statistics(
     if survey.author_uid != current_user.uid and current_user.role not in [UserRole.ADMIN, UserRole.ROOT]:
         raise HTTPException(status_code=403, detail="无权查看统计信息")
     
-    total_responses = len(db.exec(
-        select(func.count()).where(SurveyResponse.survey_id == survey_id)
-    ).all())
+    total_responses = db.exec(
+        select(func.count(SurveyResponse.id)).where(SurveyResponse.survey_id == survey_id)
+    ).one()
     
     questions = db.exec(select(SurveyQuestion).where(SurveyQuestion.survey_id == survey_id)).all()
     question_stats = []
@@ -362,6 +417,6 @@ def get_survey_statistics(
     
     return SurveyStatistics(
         survey_id=survey_id,
-        total_responses=total_responses[0] if total_responses else 0,
+        total_responses=total_responses,
         question_stats=question_stats
     )
