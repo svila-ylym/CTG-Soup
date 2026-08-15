@@ -68,14 +68,14 @@
           </p>
           <h1 class="banner-title text-4xl font-black leading-none text-sky-950 drop-shadow-sm sm:text-5xl dark:text-white">汤吧社区</h1>
           <Transition name="copy-swap" mode="out-in">
-            <p :key="homeLineIndex" class="banner-line mt-3 line-clamp-2 max-w-xl text-sm font-semibold leading-6 text-sky-950/80 sm:text-base dark:text-slate-100/85">{{ currentHomeLine }}</p>
+            <p :key="hitokotoText" class="banner-line mt-3 line-clamp-2 max-w-xl text-sm font-semibold leading-6 text-sky-950/80 sm:text-base dark:text-slate-100/85">{{ hitokotoText }}</p>
           </Transition>
           <div class="mt-5 flex flex-wrap gap-3">
-            <router-link to="/soups" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-sky-600">
+            <router-link to="/soups" class="liquid-primary inline-flex min-h-10 items-center gap-2 px-4 py-2 text-sm font-bold">
               去解一碗汤
               <ArrowRightIcon class="h-4 w-4" aria-hidden="true" />
             </router-link>
-            <router-link to="/soups/create" class="banner-secondary inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/60 bg-white/65 px-4 py-2 text-sm font-bold text-sky-950 backdrop-blur-md transition hover:bg-white/85 dark:border-white/15 dark:bg-black/35 dark:text-white dark:hover:bg-black/50">
+            <router-link to="/soups/create" class="banner-secondary glass-button inline-flex min-h-10 items-center gap-2 px-4 py-2 text-sm font-bold text-sky-950 dark:text-white">
               发布谜面
               <PencilSquareIcon class="h-4 w-4" aria-hidden="true" />
             </router-link>
@@ -204,18 +204,19 @@ import { genreBadgeClass, soupColorBadgeClass } from '@/utils/soupMetadata'
 import type { HomeCompetitionSummary, HomeDiscovery, SoupColor, SoupGenre } from '@/types'
 
 const authStore = useAuthStore()
-const DEFAULT_HOME_LINE = '一碗汤，一群人，一场从“为什么”开始的推理冒险。读故事、问线索、把藏起来的真相一点点拼完整。'
+const HITOKOTO_FALLBACK = '每一条线索都算数'
 const discovery = ref<HomeDiscovery | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
-const homeLineIndex = ref(0)
+const hitokotoText = ref(HITOKOTO_FALLBACK)
 const bannerRef = ref<HTMLElement | null>(null)
 type ScenePeriod = 'sunrise' | 'morning' | 'noon' | 'evening' | 'sunset' | 'night'
 const scenePeriod = ref<ScenePeriod>('noon')
 let sceneClock = 0
-let homeLineClock = 0
 let pointerFrame = 0
+let hitokotoTimeout = 0
+let hitokotoController: AbortController | null = null
 
 const latestCompetition = computed(() => discovery.value?.latest_competition ?? null)
 const randomSoups = computed(() => (discovery.value?.random_soups ?? []).map(soup => ({
@@ -223,8 +224,6 @@ const randomSoups = computed(() => (discovery.value?.random_soups ?? []).map(sou
   genre: soup.genre as SoupGenre,
   soup_color: soup.soup_color as SoupColor,
 })))
-const homeLines = computed(() => discovery.value?.lines?.length ? discovery.value.lines : [DEFAULT_HOME_LINE])
-const currentHomeLine = computed(() => homeLines.value[homeLineIndex.value % homeLines.value.length] || DEFAULT_HOME_LINE)
 const accountStatus = computed(() => (authStore.user?.status || authStore.restrictionStatus) === 'banned'
   ? { label: '已封禁', className: 'border-red-300 bg-red-50/90 text-red-700' }
   : (authStore.user?.status || authStore.restrictionStatus) === 'silenced'
@@ -239,12 +238,25 @@ function competitionFallback(color: string) {
   return { background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 35%, #0f172a))` }
 }
 
-function startHomeLineCarousel() {
-  window.clearInterval(homeLineClock)
-  if (homeLines.value.length < 2) return
-  homeLineClock = window.setInterval(() => {
-    homeLineIndex.value = (homeLineIndex.value + 1) % homeLines.value.length
-  }, 6000)
+async function loadHitokoto() {
+  hitokotoController?.abort()
+  const controller = new AbortController()
+  hitokotoController = controller
+  window.clearTimeout(hitokotoTimeout)
+  hitokotoTimeout = window.setTimeout(() => controller.abort(), 6000)
+  try {
+    const response = await fetch('https://v1.hitokoto.cn/?encode=json', { signal: controller.signal })
+    if (!response.ok) return
+    const payload = await response.json() as { hitokoto?: unknown }
+    if (typeof payload.hitokoto === 'string' && payload.hitokoto.trim()) {
+      hitokotoText.value = payload.hitokoto.trim()
+    }
+  } catch {
+    hitokotoText.value = HITOKOTO_FALLBACK
+  } finally {
+    window.clearTimeout(hitokotoTimeout)
+    if (hitokotoController === controller) hitokotoController = null
+  }
 }
 
 async function loadDiscovery(forceRefresh = false) {
@@ -254,8 +266,6 @@ async function loadDiscovery(forceRefresh = false) {
   error.value = ''
   try {
     discovery.value = (await homeApi.discovery(forceRefresh)).data
-    homeLineIndex.value = 0
-    startHomeLineCarousel()
   } catch (cause) {
     if (firstLoad) error.value = extractApiError(cause, '首页内容暂时无法加载')
   } finally {
@@ -313,13 +323,15 @@ function resetPointer() {
 onMounted(() => {
   updateScenePeriod()
   sceneClock = window.setInterval(updateScenePeriod, 60_000)
+  void loadHitokoto()
   void loadDiscovery()
 })
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(pointerFrame)
   window.clearInterval(sceneClock)
-  window.clearInterval(homeLineClock)
+  window.clearTimeout(hitokotoTimeout)
+  hitokotoController?.abort()
 })
 </script>
 
