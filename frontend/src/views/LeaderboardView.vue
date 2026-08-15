@@ -1,36 +1,36 @@
 <template>
   <main class="leaderboard-page page-shell overflow-hidden">
     <div class="page-container">
-      <header class="leaderboard-header relative -mx-4 overflow-hidden border-y border-slate-800 bg-slate-950 px-5 py-10 text-white sm:mx-0 sm:rounded-md sm:border sm:px-8 sm:py-12 dark:border-neutral-800 dark:bg-neutral-950">
+      <header class="leaderboard-header glass-panel relative -mx-4 overflow-hidden border-y px-5 py-10 text-slate-950 sm:mx-0 sm:rounded-md sm:border sm:px-8 sm:py-12 dark:text-white">
         <div class="relative z-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div class="max-w-2xl">
-            <p class="mb-3 inline-flex items-center gap-2 text-sm font-bold text-amber-300">
+            <p class="mb-3 inline-flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-300">
               <SparklesIcon class="h-5 w-5" aria-hidden="true" />
               {{ activeCopy.eyebrow }}
             </p>
-            <h1 class="text-3xl font-black text-white sm:text-5xl">{{ activeCopy.title }}</h1>
-            <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{{ activeCopy.description }}</p>
+            <h1 class="text-3xl font-black text-slate-950 sm:text-5xl dark:text-white">{{ activeCopy.title }}</h1>
+            <p class="mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base dark:text-slate-300">{{ activeCopy.description }}</p>
           </div>
-          <dl v-if="soupStore.leaderboard.length" class="grid grid-cols-2 gap-x-8 gap-y-3 border-l border-slate-700 pl-5 sm:flex sm:gap-9 sm:pl-7">
+          <dl v-if="soupStore.leaderboard.length" class="leaderboard-stats grid grid-cols-2 gap-3 sm:flex">
             <div>
-              <dt class="text-xs font-semibold text-slate-400">入榜作品</dt>
-              <dd class="mt-1 text-2xl font-black text-white">{{ soupStore.leaderboard.length }}</dd>
+              <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400">入榜作品</dt>
+              <dd class="mt-1 text-2xl font-black text-slate-950 dark:text-white">{{ soupStore.leaderboard.length }}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold text-slate-400">累计评分</dt>
-              <dd class="mt-1 text-2xl font-black text-amber-300">{{ totalRatings }}</dd>
+              <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400">累计评分</dt>
+              <dd class="mt-1 text-2xl font-black text-amber-700 dark:text-amber-300">{{ totalRatings }}</dd>
             </div>
           </dl>
         </div>
       </header>
 
       <nav class="mt-6 flex justify-center sm:justify-start" aria-label="社区排行榜分类">
-        <div class="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-neutral-800 dark:bg-neutral-950" role="tablist">
+        <div class="leaderboard-tabs glass-panel inline-flex rounded-lg p-1" role="tablist">
           <button
             v-for="option in scopeOptions"
             :key="option.value"
-            class="min-h-10 rounded-lg px-5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black"
-            :class="activeScope === option.value ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-neutral-900'"
+            class="min-h-10 rounded-md px-5 text-sm font-bold"
+            :class="activeScope === option.value ? 'liquid-primary text-white' : 'glass-button text-slate-600 dark:text-slate-300'"
             type="button"
             role="tab"
             :aria-selected="activeScope === option.value"
@@ -75,7 +75,7 @@
               v-for="(soup, index) in topThree"
               :key="soup.id"
               :to="`/soups/${soup.id}`"
-              class="competition-border-surface podium-card group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-white p-6 text-slate-900 shadow-[6px_8px_0_rgba(15,23,42,.08)] dark:bg-neutral-950 dark:text-white dark:shadow-[6px_8px_0_rgba(0,0,0,.3)]"
+              class="competition-border-surface podium-card glass-card group relative flex min-w-0 flex-col p-6 text-slate-900 dark:text-white"
               :class="podiumClass(index)"
               :style="{ ...competitionBorderStyle(soup.competition_colors), animationDelay: `${index * 100 + 80}ms` }"
             >
@@ -235,6 +235,18 @@ onMounted(loadLeaderboard)
 </script>
 
 <style scoped>
+.leaderboard-header {
+  border-color: rgba(148, 163, 184, .28);
+  background: rgba(255, 255, 255, .66);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92), 0 1.25rem 3.5rem rgba(15, 23, 42, .09);
+}
+
+:global(.dark) .leaderboard-header {
+  border-color: rgba(255, 255, 255, .11);
+  background: rgba(8, 8, 8, .7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 1.25rem 3.5rem rgba(0, 0, 0, .42);
+}
+
 .leaderboard-header::after {
   content: '';
   position: absolute;
@@ -249,6 +261,34 @@ onMounted(loadLeaderboard)
   animation: header-mark-float 8s ease-in-out infinite;
 }
 
+:global(.dark) .leaderboard-header::after {
+  opacity: .11;
+}
+
+.leaderboard-stats > div {
+  min-width: 7.5rem;
+  padding: .85rem 1rem;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: .5rem;
+  background: rgba(255, 255, 255, .44);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
+}
+
+:global(.dark) .leaderboard-stats > div {
+  border-color: rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
+}
+
+.leaderboard-tabs {
+  border-radius: .625rem;
+  background: rgba(255, 255, 255, .62);
+}
+
+:global(.dark) .leaderboard-tabs {
+  background: rgba(8, 8, 8, .7);
+}
+
 .podium-card,
 .ranking-row {
   opacity: 0;
@@ -256,8 +296,19 @@ onMounted(loadLeaderboard)
 }
 
 .podium-card {
+  --competition-card-bg: rgba(255, 255, 255, .78);
   min-height: 19rem;
+  border-color: rgba(148, 163, 184, .28);
+  background-color: rgba(255, 255, 255, .78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 6px 8px 0 rgba(15, 23, 42, .07), 0 1rem 2.5rem rgba(15, 23, 42, .08);
   transition: transform 280ms cubic-bezier(.2, .75, .25, 1), box-shadow 280ms ease, border-color 280ms ease;
+}
+
+:global(.dark) .podium-card {
+  --competition-card-bg: rgba(13, 13, 13, .8);
+  border-color: rgba(255, 255, 255, .12);
+  background-color: rgba(13, 13, 13, .8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 6px 8px 0 rgba(0, 0, 0, .3), 0 1rem 2.5rem rgba(0, 0, 0, .28);
 }
 
 .podium-card:hover {
