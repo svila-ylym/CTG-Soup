@@ -7,6 +7,8 @@ __pycache__/
 
 # Dependencies
 frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
 .venv/
 .worktrees/
 
