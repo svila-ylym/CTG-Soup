@@ -8,7 +8,7 @@ import { extractApiError } from '@/utils/auth'
 import { formatChinaDateTime } from '@/utils/datetime'
 import type { Announcement, Competition, PageResult, Tag } from '@/types'
 
-type AdminTab = 'reports' | 'users' | 'punishments' | 'competitions' | 'tags' | 'groups' | 'announcements' | 'updates' | 'logs'
+type AdminTab = 'reports' | 'users' | 'punishments' | 'competitions' | 'tags' | 'groups' | 'announcements' | 'hall-of-fame' | 'updates' | 'logs'
 type UserRole = 'user' | 'admin' | 'root'
 type UserStatus = 'pending_email' | 'active' | 'banned' | 'silenced'
 
@@ -104,6 +104,23 @@ interface UpdateTask {
   error?: string | null
 }
 
+interface HallSettings {
+  score_threshold: number
+  rating_coverage_ratio: number
+  active_user_count: number
+  newly_entered_count: number
+  updated_at: string
+  updated_by_uid?: number | null
+}
+
+interface HallSoup {
+  id: number
+  title: string
+  average_score: number
+  rating_count: number
+  entered_at?: string | null
+}
+
 const auth = useAuthStore()
 const activeTab = ref<AdminTab>('reports')
 const users = ref<AdminUser[]>([])
@@ -113,6 +130,8 @@ const competitions = ref<Competition[]>([])
 const tags = ref<Tag[]>([])
 const groups = ref<PermissionGroup[]>([])
 const announcements = ref<Announcement[]>([])
+const hallSettings = ref<HallSettings>({ score_threshold: 9.85, rating_coverage_ratio: 0.5, active_user_count: 0, newly_entered_count: 0, updated_at: '' })
+const hallSoups = ref<HallSoup[]>([])
 const logs = ref<OperationLog[]>([])
 const reportFilter = ref<'all' | 'pending' | 'processed' | 'rejected'>('pending')
 const reportDrafts = ref<Record<number, string>>({})
@@ -143,6 +162,7 @@ const tabs = computed<Array<{ key: AdminTab; label: string; count: number }>>(()
     { key: 'tags', label: '标签', count: tags.value.length },
     { key: 'groups', label: '用户组', count: groups.value.length },
     { key: 'announcements', label: '公告', count: announcements.value.length },
+    { key: 'hall-of-fame', label: '殿堂', count: hallSoups.value.length },
     { key: 'updates', label: '系统更新', count: updateInfo.value?.update_available ? 1 : 0 },
   ]
   if (auth.isRoot) items.push({ key: 'logs', label: '日志', count: logs.value.length })
@@ -278,7 +298,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [userItems, reportItems, punishmentItems, competitionItems, tagRes, groupRes, announcementItems] = await Promise.all([
+    const [userItems, reportItems, punishmentItems, competitionItems, tagRes, groupRes, announcementItems, hallSettingsRes, hallSoupItems] = await Promise.all([
       fetchAllPages<AdminUser>('/admin/users'),
       fetchAllPages<AdminReport>('/admin/reports'),
       fetchAllPages<AdminPunishment>('/admin/punishments'),
@@ -286,6 +306,8 @@ async function load() {
       http.get<Tag[]>('/admin/tags'),
       http.get<PermissionGroup[]>('/admin/permission-groups'),
       fetchAllPages<Announcement>('/admin/announcements'),
+      http.get<HallSettings>('/admin/hall-of-fame/settings'),
+      fetchAllPages<HallSoup>('/admin/hall-of-fame/soups'),
     ])
     users.value = userItems
     reports.value = reportItems
@@ -294,6 +316,8 @@ async function load() {
     tags.value = tagRes.data || []
     groups.value = (groupRes.data || []).map((group) => ({ ...group, permission_text: group.permissions.join(', ') }))
     announcements.value = announcementItems
+    hallSettings.value = hallSettingsRes.data
+    hallSoups.value = hallSoupItems
     logs.value = auth.isRoot
       ? await fetchAllPages<OperationLog>('/admin/logs')
       : []
@@ -304,6 +328,42 @@ async function load() {
     showError(cause, '管理数据加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function saveHallSettings() {
+  if (hallSettings.value.score_threshold < 0 || hallSettings.value.score_threshold > 10 || hallSettings.value.rating_coverage_ratio < 0 || hallSettings.value.rating_coverage_ratio > 1) {
+    error.value = '评分阈值需在 0-10 之间，人数比例需在 0%-100% 之间'
+    return
+  }
+  savingKey.value = 'hall:settings'
+  try {
+    const response = await http.put<HallSettings>('/admin/hall-of-fame/settings', {
+      score_threshold: hallSettings.value.score_threshold,
+      rating_coverage_ratio: hallSettings.value.rating_coverage_ratio,
+    })
+    hallSettings.value = response.data
+    message.value = `殿堂规则已保存，新增收录 ${response.data.newly_entered_count} 碗`
+    await load()
+  } catch (cause) {
+    showError(cause, '殿堂规则保存失败')
+  } finally {
+    savingKey.value = ''
+  }
+}
+
+async function removeHallSoup(item: HallSoup) {
+  const reason = window.prompt(`请输入移除“${item.title}”的理由`, '')?.trim() || ''
+  if (!reason) return
+  savingKey.value = `hall:${item.id}`
+  try {
+    await http.post(`/admin/hall-of-fame/soups/${item.id}/remove`, { reason })
+    message.value = `“${item.title}”已移出殿堂`
+    await load()
+  } catch (cause) {
+    showError(cause, '移除殿堂失败')
+  } finally {
+    savingKey.value = ''
   }
 }
 
@@ -784,6 +844,33 @@ onUnmounted(stopUpdatePolling)
             <h2 class="section-title">公告列表</h2>
             <div v-if="!announcements.length" class="py-8 text-center text-sm text-slate-500">暂无公告。</div>
             <div v-else class="mt-4 divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800"><div v-for="item in announcements" :key="item.id" class="py-4"><div class="grid gap-3 sm:grid-cols-[1fr_7rem]"><input v-model="item.title" class="form-control font-semibold" maxlength="200"><input v-model.number="item.priority" class="form-control" type="number" min="0" max="100" aria-label="优先级"></div><textarea v-model="item.content" class="form-control mt-3 min-h-24" maxlength="10000"></textarea><div class="mt-3 flex flex-wrap items-center gap-3"><span class="mr-auto text-xs text-slate-500">{{ item.status }} · {{ formatDate(item.updated_at) }}</span><button class="btn-secondary text-xs" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="saveAnnouncement(item)">保存</button><button v-if="item.status === 'draft'" class="text-sm font-medium text-blue-600" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="publish(item)">发布</button><button v-else class="text-sm font-medium text-amber-700" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="withdraw(item)">撤回</button><button class="inline-flex items-center gap-1 text-sm font-medium text-red-600" type="button" :disabled="savingKey === `announcement:${item.id}`" @click="deleteAnnouncement(item)"><TrashIcon class="h-4 w-4" aria-hidden="true" />删除</button></div></div></div>
+          </div>
+        </section>
+
+        <section v-else-if="activeTab === 'hall-of-fame'" class="grid gap-6 lg:grid-cols-[minmax(18rem,24rem)_1fr]">
+          <div class="surface-card p-5">
+            <h2 class="section-title">殿堂规则</h2>
+            <p class="mt-2 text-sm text-slate-500">规则只影响尚未入殿的作品，已入殿作品不会因阈值调整自动退出。</p>
+            <form class="mt-5 space-y-4" @submit.prevent="saveHallSettings">
+              <label class="block text-sm font-medium">最低评分
+                <input v-model.number="hallSettings.score_threshold" class="form-control mt-1" type="number" min="0" max="10" step="0.01">
+              </label>
+              <label class="block text-sm font-medium">评分人数占活跃用户比例
+                <input v-model.number="hallSettings.rating_coverage_ratio" class="form-control mt-1" type="number" min="0" max="1" step="0.01">
+              </label>
+              <p class="text-xs text-slate-500">当前活跃用户 {{ hallSettings.active_user_count }} 人，填写 0.5 代表 50%。</p>
+              <button class="btn-primary w-full" type="submit" :disabled="savingKey === 'hall:settings'">{{ savingKey === 'hall:settings' ? '保存中…' : '保存规则' }}</button>
+            </form>
+          </div>
+          <div class="surface-card p-5">
+            <h2 class="section-title">殿堂作品 <span class="text-sm font-normal text-slate-500">{{ hallSoups.length }} 碗</span></h2>
+            <div v-if="!hallSoups.length" class="py-10 text-center text-sm text-slate-500">暂无殿堂作品。</div>
+            <div v-else class="mt-4 divide-y divide-slate-200 border-y border-slate-200 dark:divide-neutral-800 dark:border-neutral-800">
+              <div v-for="item in hallSoups" :key="item.id" class="flex flex-wrap items-center gap-3 py-4">
+                <div class="min-w-0 flex-1"><router-link class="break-words font-semibold hall-title hover:brightness-110" :to="`/soups/${item.id}`">{{ item.title }}</router-link><p class="mt-1 text-xs text-slate-500">{{ item.average_score.toFixed(2) }} 分 · {{ item.rating_count }} 人评分</p></div>
+                <button class="btn-secondary text-xs text-red-600" type="button" :disabled="savingKey === `hall:${item.id}`" @click="removeHallSoup(item)">移除殿堂</button>
+              </div>
+            </div>
           </div>
         </section>
 

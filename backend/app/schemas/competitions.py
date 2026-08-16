@@ -98,6 +98,7 @@ class CompetitionEntryResponse(BaseModel):
     competition_id: int
     soup_id: int
     soup_title: str = ""
+    is_hall_of_fame: bool = False
     author_uid: int
     final_score: float | None
     rank: int | None = None
@@ -153,6 +154,7 @@ class CompetitionJudgingEntryResponse(BaseModel):
     entry_id: int
     soup_id: int
     soup_title: str
+    is_hall_of_fame: bool = False
     author_uid: int
     judge_score: float | None = None
     judged_by_uid: int | None = None

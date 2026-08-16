@@ -1,5 +1,4 @@
-import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from sqlalchemy.dialects import postgresql
@@ -169,17 +168,18 @@ def test_repeated_interactions_are_idempotent():
         assert (soup.like_count, soup.favorite_count) == (1, 1)
 
 
-def test_confirmed_rating_cannot_be_changed():
+def test_confirmed_rating_can_be_changed():
     client, engine, soup_id, users, _current = _test_app()
 
     first = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 8})
     repeated = client.put(f"/api/turtle-soups/{soup_id}/rating", json={"score": 9})
 
     assert first.status_code == 200
-    assert repeated.status_code == 409
-    assert repeated.json()["detail"] == {
-        "code": "RATING_ALREADY_SUBMITTED",
-        "message": "评分确认后不可修改",
+    assert repeated.status_code == 200
+    assert repeated.json() == {
+        "average_score": 9.0,
+        "rating_count": 1,
+        "my_rating": 9.0,
     }
     with Session(engine) as session:
         rating = session.exec(
@@ -189,8 +189,8 @@ def test_confirmed_rating_cannot_be_changed():
             )
         ).one()
         soup = session.get(Soup, soup_id)
-        assert rating.score == 8
-        assert (soup.rating_count, soup.avg_rating) == (1, 8)
+        assert rating.score == 9
+        assert (soup.rating_count, soup.avg_rating) == (1, 9)
 
 
 def test_rating_people_are_public_without_exposing_private_user_fields():
@@ -248,13 +248,12 @@ def test_rating_aggregate_refresh_locks_the_soup_row():
     assert "WHERE soups.id = %(id_1)s FOR UPDATE" in compiled
 
 
-def test_concurrent_duplicate_rating_returns_locked_conflict(tmp_path):
+def test_concurrent_duplicate_rating_updates_the_locked_rating(tmp_path):
     engine = create_engine(
         f"sqlite:///{tmp_path / 'concurrent-rating.db'}",
         connect_args={"check_same_thread": False},
     )
-    Soup.__table__.create(engine)
-    Rating.__table__.create(engine)
+    SQLModel.metadata.create_all(engine)
 
     with Session(engine) as setup_session:
         soup = Soup(
@@ -293,22 +292,21 @@ def test_concurrent_duplicate_rating_returns_locked_conflict(tmp_path):
 
         event.listen(session, "before_flush", insert_competing_rating)
         try:
-            with pytest.raises(HTTPException) as captured:
-                turtle_soups.rate_soup(
-                    soup_id,
-                    turtle_soups.RatingInput(score=9),
-                    current_user,
-                    session,
-                )
+            result = turtle_soups.rate_soup(
+                soup_id,
+                turtle_soups.RatingInput(score=9),
+                current_user,
+                session,
+            )
         finally:
             event.remove(session, "before_flush", insert_competing_rating)
 
-        assert captured.value.status_code == 409
-        assert captured.value.detail == {
-            "code": "RATING_ALREADY_SUBMITTED",
-            "message": "评分确认后不可修改",
+        assert result == {
+            "average_score": 9.0,
+            "rating_count": 1,
+            "my_rating": 9.0,
         }
 
     with Session(engine) as session:
         stored = session.exec(select(Rating)).one()
-        assert stored.score == 6.5
+        assert stored.score == 9

@@ -39,6 +39,7 @@ from app.services.easter_eggs import (
     has_rated_all_public_soups,
     safely_claim_and_attach,
 )
+from app.services.hall_of_fame import evaluate_soup
 
 router = APIRouter()
 
@@ -243,6 +244,7 @@ def _payload(
         "like_count": soup.like_count,
         "favorite_count": soup.favorite_count,
         "view_count": soup.view_count,
+        "is_hall_of_fame": soup.is_hall_of_fame and soup.genre != "鳖汤",
         "status": soup.status,
         "is_liked": liked,
         "is_favorited": favorited,
@@ -256,6 +258,18 @@ def _payload(
 
 def _get_soup(db: Session, soup_id: int) -> Soup:
     soup = db.get(Soup, soup_id)
+    if not soup or soup.status == "deleted":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SOUP_NOT_FOUND", "message": "海龟汤不存在"},
+        )
+    return soup
+
+
+def _get_soup_for_update(db: Session, soup_id: int) -> Soup:
+    soup = db.exec(
+        select(Soup).where(Soup.id == soup_id).with_for_update()
+    ).first()
     if not soup or soup.status == "deleted":
         raise HTTPException(
             status_code=404,
@@ -475,6 +489,43 @@ def list_soups(
     }
 
 
+@router.get("/hall-of-fame", response_model=SoupPageResponse)
+def list_hall_of_fame(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    query = select(Soup).where(
+        Soup.status.in_(["published", "revealed"]),
+        Soup.genre != "鳖汤",
+        Soup.is_hall_of_fame.is_(True),
+    )
+    total = len(db.exec(query).all())
+    rows = db.exec(
+        query.order_by(Soup.hall_of_fame_entered_at.desc(), Soup.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    comment_counts = _soup_comment_counts(db, [row.id for row in rows])
+    colors_by_soup = competition_colors_for_soups(db, [row.id for row in rows])
+    return {
+        "items": [
+            _payload(
+                row,
+                db,
+                None,
+                comment_count=comment_counts.get(row.id, 0),
+                competition_colors=colors_by_soup.get(row.id, []),
+            )
+            for row in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
 @router.post("", response_model=SoupResponse, status_code=status.HTTP_201_CREATED)
 def create_soup(
     data: SoupCreate,
@@ -510,6 +561,7 @@ def create_soup(
     _sync_tags(db, soup, tags)
     db.flush()
     evaluate_soup_competitions(db, soup)
+    evaluate_soup(db, soup)
     db.commit()
     db.refresh(soup)
     egg_candidates: list[tuple[int, str]] = []
@@ -542,7 +594,7 @@ def update_soup(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    soup = _get_soup(db, soup_id)
+    soup = _get_soup_for_update(db, soup_id)
     if soup.author_uid != current_user.uid:
         raise HTTPException(status_code=403, detail={"code": "SOUP_UPDATE_FORBIDDEN", "message": "无权更新此作品"})
     values = data.model_dump(exclude_unset=True)
@@ -604,6 +656,7 @@ def update_soup(
     soup.updated_at = datetime.utcnow()
     db.flush()
     evaluate_soup_competitions(db, soup)
+    evaluate_soup(db, soup)
     db.commit()
     db.refresh(soup)
     return _payload(soup, db, current_user, True)
@@ -798,6 +851,7 @@ def rate_soup(
             rating.score = data.score
             rating.updated_at = datetime.utcnow()
     _refresh_soup_rating(db, soup)
+    evaluate_soup(db, soup)
     refresh_soup_competition_scores(db, soup)
     db.commit()
     db.refresh(soup)
@@ -808,7 +862,11 @@ def rate_soup(
             response,
             [(6, "rated_all_public_soups")],
         )
-    return {"average_score": soup.avg_rating, "rating_count": soup.rating_count, "my_rating": data.score}
+    return {
+        "average_score": soup.avg_rating,
+        "rating_count": soup.rating_count,
+        "my_rating": data.score,
+    }
 
 
 @router.get("/{soup_id}/ratings")

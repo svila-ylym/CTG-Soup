@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '排行榜' },
   },
   {
+    path: '/hall-of-fame',
+    name: 'HallOfFame',
+    component: () => import('@/views/HallOfFameView.vue'),
+    meta: { title: '殿堂' },
+  },
+  {
     path: '/posts',
     name: 'Posts',
     component: () => import('@/views/PostListView.vue'),

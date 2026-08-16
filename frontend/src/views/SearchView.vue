@@ -242,7 +242,7 @@ watch(
                 class="competition-border-surface block rounded-md border border-slate-200 p-4 dark:border-neutral-800"
                 :style="competitionBorderStyle(soup.competition_colors)"
               >
-                <strong class="block break-words">{{ soup.title }}</strong>
+                <strong class="block break-words" :class="soup.is_hall_of_fame ? 'hall-title' : ''">{{ soup.title }}</strong>
                 <span class="mt-1 line-clamp-2 block break-words text-sm text-slate-500">{{ soup.puzzle_excerpt }}</span>
                 <small class="mt-1 block text-slate-400">
                   评分 {{ soup.rating_count ? soup.average_score.toFixed(1) : '暂无' }}
