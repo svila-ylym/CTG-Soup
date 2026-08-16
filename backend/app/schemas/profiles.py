@@ -49,6 +49,7 @@ class ProfileSoupSummary(BaseModel):
     like_count: int
     favorite_count: int
     competition_colors: list[str] = Field(default_factory=list)
+    is_hall_of_fame: bool = False
     created_at: datetime
 
 

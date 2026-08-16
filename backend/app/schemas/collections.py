@@ -52,6 +52,7 @@ class CollectionSoupSummary(BaseModel):
     rating_count: int
     like_count: int
     competition_colors: list[str] = Field(default_factory=list)
+    is_hall_of_fame: bool = False
     created_at: datetime
 
 

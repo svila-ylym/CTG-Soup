@@ -547,6 +547,35 @@ html {
   }
 }
 
+.hall-title {
+  color: #a16207;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
+}
+
+.dark .hall-title {
+  color: #facc15;
+  text-shadow: 0 1px 10px rgba(250, 204, 21, .2);
+}
+
+.hall-seal {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(217, 119, 6, .55);
+  border-radius: 999px;
+  padding: .25rem .65rem;
+  color: #92400e;
+  background: rgba(254, 243, 199, .78);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.dark .hall-seal {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, .55);
+  background: rgba(120, 53, 15, .45);
+}
+
 :where(.btn-primary, .btn-secondary, .liquid-primary, .nav-icon-button) {
   position: relative;
   isolation: isolate;

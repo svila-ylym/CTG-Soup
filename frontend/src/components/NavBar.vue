@@ -241,6 +241,7 @@ const browseLinks = [
   { path: '/', label: '首页', icon: HomeIcon },
   { path: '/soups', label: '海龟汤', icon: PuzzlePieceIcon },
   { path: '/leaderboard', label: '排行榜', icon: TrophyIcon },
+  { path: '/hall-of-fame', label: '殿堂', icon: SparklesIcon },
   { path: '/posts', label: '论坛', icon: RectangleStackIcon },
   { path: '/competitions', label: '比赛', icon: SparklesIcon },
 ]

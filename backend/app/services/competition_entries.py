@@ -471,6 +471,7 @@ def _ranking_payload(rows, top_n: int) -> list[dict]:
             "entry_id": entry.id,
             "soup_id": soup.id,
             "soup_title": soup.title,
+            "is_hall_of_fame": soup.is_hall_of_fame,
             "author_uid": entry.author_uid,
             "final_score": score,
             "rank": rank,

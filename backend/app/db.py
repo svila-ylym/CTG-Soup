@@ -61,6 +61,12 @@ def init_db() -> None:
     """Provision the local database when enabled, then create missing tables."""
     ensure_database_exists(DATABASE_URL, settings.AUTO_CREATE_DATABASE)
     SQLModel.metadata.create_all(bind=engine)
+    # Bring pre-existing tables up to the fields used by current models.
+    from app.migrations.competition_judging import ensure_competition_judging_schema
+    from app.migrations.hall_of_fame import ensure_hall_of_fame_schema
+
+    ensure_competition_judging_schema(engine)
+    ensure_hall_of_fame_schema(engine)
 
 
 def get_session() -> Generator[Session, None, None]:

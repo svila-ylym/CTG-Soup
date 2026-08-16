@@ -240,6 +240,7 @@ def get_collection(
                     "rating_count": soup.rating_count,
                     "like_count": soup.like_count,
                     "competition_colors": colors.get(soup.id, []),
+                    "is_hall_of_fame": soup.is_hall_of_fame,
                     "created_at": soup.created_at,
                 }
                 for soup in soups

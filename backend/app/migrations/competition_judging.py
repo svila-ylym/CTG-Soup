@@ -10,6 +10,9 @@ from sqlalchemy.engine import Engine
 
 from app.db import engine as default_engine
 
+MIGRATION_LOCK_NAMESPACE = 0x435447
+MIGRATION_LOCK_ID = 1001
+
 
 @dataclass(frozen=True)
 class CompetitionJudgingMigrationReport:
@@ -39,6 +42,32 @@ def ensure_competition_judging_schema(
     dry_run: bool = False,
 ) -> CompetitionJudgingMigrationReport:
     """Add independent-scoring storage without rewriting existing rows."""
+    if engine.dialect.name == "postgresql" and not dry_run:
+        with engine.connect() as lock_connection:
+            lock_connection.execute(
+                text("SELECT pg_advisory_lock(:namespace, :migration_id)"),
+                {
+                    "namespace": MIGRATION_LOCK_NAMESPACE,
+                    "migration_id": MIGRATION_LOCK_ID,
+                },
+            )
+            try:
+                return _ensure_competition_judging_schema(engine, dry_run=False)
+            finally:
+                lock_connection.execute(
+                    text("SELECT pg_advisory_unlock(:namespace, :migration_id)"),
+                    {
+                        "namespace": MIGRATION_LOCK_NAMESPACE,
+                        "migration_id": MIGRATION_LOCK_ID,
+                    },
+                )
+    return _ensure_competition_judging_schema(engine, dry_run=dry_run)
+
+
+def _ensure_competition_judging_schema(
+    engine: Engine,
+    dry_run: bool,
+) -> CompetitionJudgingMigrationReport:
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
     if not {"competitions", "competition_entries"} <= table_names:

@@ -12,7 +12,7 @@ from app.models.models import (
     Punishment, PunishmentType,
     Post, PostType,
     Comment, CommentTargetType,
-    Soup, SoupCollection, SoupImage, SoupTag, FeaturedSoup, Tag, TagAlias, TagKind, TagStatus, Announcement, AnnouncementStatus,
+    Soup, SoupCollection, SoupImage, SoupTag, FeaturedSoup, HallOfFameSettings, Tag, TagAlias, TagKind, TagStatus, Announcement, AnnouncementStatus,
     Rating,
     Like, LikeTargetType,
     Favorite, FavoriteTargetType,
@@ -70,6 +70,7 @@ __all__ = [
     "CommentTargetType",
     # 海龟汤系统
     "Soup",
+    "HallOfFameSettings",
     "SoupCollection",
     "SoupImage",
     "TurtleSoup",
