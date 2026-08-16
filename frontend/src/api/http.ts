@@ -1,6 +1,45 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { TokenResponse } from '@/types'
 
+interface EasterEggNotice {
+  first_discovery: boolean
+  message: string
+}
+
+function decodeEasterEggNotices(encoded: string): EasterEggNotice[] {
+  const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(base64.length + ((4 - base64.length % 4) % 4), '=')
+  const binary = window.atob(padded)
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+  const decoded: unknown = JSON.parse(new TextDecoder().decode(bytes))
+  if (!Array.isArray(decoded)) return []
+  return decoded.filter((notice): notice is EasterEggNotice => (
+    typeof notice === 'object'
+    && notice !== null
+    && typeof notice.first_discovery === 'boolean'
+    && typeof notice.message === 'string'
+    && notice.message.length > 0
+  ))
+}
+
+function showEasterEggNotices(response: AxiosResponse) {
+  const encoded = response.headers['x-easter-egg']
+  if (typeof encoded !== 'string' || !encoded) return
+  try {
+    for (const notice of decodeEasterEggNotices(encoded)) {
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: {
+          message: notice.message,
+          type: notice.first_discovery ? 'success' : 'info',
+          duration: notice.first_discovery ? 12000 : 6000,
+        },
+      }))
+    }
+  } catch (error) {
+    console.warn('Failed to decode easter egg notice', error)
+  }
+}
+
 class HttpClient {
   private instance: AxiosInstance
   private refreshPromise: Promise<RefreshOutcome> | null = null
@@ -27,7 +66,10 @@ class HttpClient {
     this.instance.interceptors.response.use(
       // Keep the Axios response envelope. The FastAPI endpoints return raw
       // JSON payloads, and callers consistently consume them through `.data`.
-      (response) => response,
+      (response) => {
+        showEasterEggNotices(response)
+        return response
+      },
       (error) => {
         const request = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined
         const refreshToken = localStorage.getItem('refresh_token')

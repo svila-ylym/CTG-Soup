@@ -93,7 +93,7 @@ watch(
             <router-link v-for="soup in collection.soups.items" :key="soup.id" :to="`/soups/${soup.id}`" class="competition-border-surface block rounded-md border border-slate-200 p-4 dark:border-neutral-800" :style="competitionBorderStyle(soup.competition_colors)">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
-                  <strong class="block break-words text-lg">{{ soup.title }}</strong>
+                  <strong class="block break-words text-lg" :class="soup.is_hall_of_fame ? 'hall-title' : ''">{{ soup.title }}</strong>
                   <p class="mt-2 line-clamp-2 break-words text-sm text-slate-600 dark:text-slate-300">{{ soup.puzzle_excerpt }}</p>
                   <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span>{{ soup.genre }}</span><span aria-hidden="true">·</span><span>{{ soup.soup_color }}</span><span aria-hidden="true">·</span><span>{{ soup.average_score.toFixed(1) }} 分 / {{ soup.rating_count }} 人评分</span><span aria-hidden="true">·</span><span>{{ soup.like_count }} 赞</span>

@@ -134,12 +134,17 @@ def _payload(
             soup.id: soup.title
             for soup in db.exec(select(Soup).where(Soup.id.in_(soup_ids))).all()
         } if soup_ids else {}
+        soup_hall = {
+            soup.id: soup.is_hall_of_fame
+            for soup in db.exec(select(Soup).where(Soup.id.in_(soup_ids))).all()
+        } if soup_ids else {}
         entries = [
             {
                 "id": entry.id,
                 "competition_id": entry.competition_id,
                 "soup_id": entry.soup_id,
                 "soup_title": soup_titles.get(entry.soup_id, "已删除作品"),
+                "is_hall_of_fame": soup_hall.get(entry.soup_id, False),
                 "author_uid": entry.author_uid,
                 "final_score": (
                     None
@@ -553,6 +558,7 @@ def get_competition_judging(
                 entry_id=entry.id,
                 soup_id=soup.id,
                 soup_title=soup.title,
+                is_hall_of_fame=soup.is_hall_of_fame,
                 author_uid=entry.author_uid,
                 judge_score=entry.judge_score,
                 judged_by_uid=entry.judged_by_uid,
@@ -623,6 +629,7 @@ def update_competition_judge_score(
         "entry_id": entry.id,
         "soup_id": soup.id,
         "soup_title": soup.title,
+        "is_hall_of_fame": soup.is_hall_of_fame,
         "author_uid": entry.author_uid,
         "judge_score": entry.judge_score,
         "judged_by_uid": entry.judged_by_uid,

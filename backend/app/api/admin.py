@@ -3,8 +3,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel, Field, field_validator
 
-from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, CompetitionScoreType, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
+from app.models.database import get_db, User, Punishment, OperationLog, Report, Post, Comment, TurtleSoup, Soup, HallOfFameSettings, PermissionGroup, UserPermissionGroup, Tag, TagAlias, SoupTag, TagKind, TagStatus, Announcement, AnnouncementStatus, Competition, CompetitionScoreType, EmailCampaign, ReusableUserUid, NotificationType, ReportStatus
 from app.schemas import AdminUserUpdate, PunishmentCreate, PunishmentRevoke, PunishmentResponse, OperationLogResponse, ReportResponse, ReportCreate, ReportDecision, PageResponse, MessageResponse
 from app.api.auth import get_current_admin_user, get_current_root_user, get_current_user
 from app.models.database import UserRole, UserStatus, PunishmentType
@@ -31,9 +32,138 @@ from app.services.email_campaigns import cancel_campaign, campaign_summary, crea
 from app.services.pending_accounts import delete_pending_account_dependencies, lock_uid_allocation
 from app.services.notification_dispatch import notify_user, notify_users
 from sqlmodel import select
+from app.services.hall_of_fame import evaluate_all, get_settings
 
 router = APIRouter()
 router.include_router(system_message_admin_router, prefix="/system-messages")
+
+
+class HallOfFameSettingsInput(BaseModel):
+    score_threshold: float = Field(ge=0, le=10)
+    rating_coverage_ratio: float = Field(ge=0, le=1)
+
+
+class HallOfFameRemovalInput(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def non_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("移除理由不能为空")
+        return value
+
+
+def _hall_settings_payload(settings: HallOfFameSettings, db: Session, added_count: int = 0) -> dict:
+    total_users = db.exec(select(User).where(User.status == UserStatus.ACTIVE)).all()
+    return {
+        "score_threshold": settings.score_threshold,
+        "rating_coverage_ratio": settings.rating_coverage_ratio,
+        "active_user_count": len(total_users),
+        "newly_entered_count": added_count,
+        "updated_at": settings.updated_at,
+        "updated_by_uid": settings.updated_by_uid,
+    }
+
+
+@router.get("/hall-of-fame/settings")
+def get_hall_of_fame_settings(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    return _hall_settings_payload(get_settings(db), db)
+
+
+@router.put("/hall-of-fame/settings")
+def update_hall_of_fame_settings(
+    data: HallOfFameSettingsInput,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    settings = get_settings(db)
+    previous = {
+        "score_threshold": settings.score_threshold,
+        "rating_coverage_ratio": settings.rating_coverage_ratio,
+    }
+    settings.score_threshold = data.score_threshold
+    settings.rating_coverage_ratio = data.rating_coverage_ratio
+    settings.updated_at = datetime.utcnow()
+    settings.updated_by_uid = current_user.uid
+    added_count = evaluate_all(db)
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="update",
+        target_type="hall_of_fame_settings",
+        target_id=1,
+        details={"previous": previous, "current": data.model_dump(), "newly_entered_count": added_count},
+    ))
+    db.commit()
+    db.refresh(settings)
+    return _hall_settings_payload(settings, db, added_count)
+
+
+@router.get("/hall-of-fame/soups")
+def list_hall_of_fame_soups(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=200),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    query = select(Soup).where(
+        Soup.is_hall_of_fame.is_(True),
+        Soup.genre != "鳖汤",
+    ).order_by(
+        Soup.hall_of_fame_entered_at.desc(), Soup.id.desc()
+    )
+    total = len(db.exec(query).all())
+    rows = db.exec(query.offset((page - 1) * page_size).limit(page_size)).all()
+    return {
+        "items": [
+            {
+                "id": soup.id,
+                "title": soup.title,
+                "average_score": soup.avg_rating,
+                "rating_count": soup.rating_count,
+                "entered_at": soup.hall_of_fame_entered_at,
+            }
+            for soup in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.post("/hall-of-fame/soups/{soup_id}/remove")
+def remove_hall_of_fame_soup(
+    soup_id: int,
+    data: HallOfFameRemovalInput,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    soup = db.exec(
+        select(Soup).where(Soup.id == soup_id).with_for_update()
+    ).first()
+    if soup is None or not soup.is_hall_of_fame:
+        raise HTTPException(status_code=404, detail={"code": "HALL_SOUP_NOT_FOUND", "message": "殿堂作品不存在"})
+    soup.is_hall_of_fame = False
+    soup.hall_of_fame_removed_at = datetime.utcnow()
+    soup.hall_of_fame_removal_reason = data.reason.strip()
+    soup.hall_of_fame_removed_by_uid = current_user.uid
+    soup.updated_at = datetime.utcnow()
+    db.add(OperationLog(
+        operator_uid=current_user.uid,
+        operator_roles=[current_user.role.value],
+        action_type="remove",
+        target_type="hall_of_fame_soup",
+        target_id=soup.id,
+        details={"title": soup.title, "reason": soup.hall_of_fame_removal_reason},
+    ))
+    db.commit()
+    return {"id": soup.id, "is_hall_of_fame": False, "reason": soup.hall_of_fame_removal_reason}
 
 
 @router.get("/email-campaigns", response_model=EmailCampaignPage)

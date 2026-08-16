@@ -14,7 +14,15 @@ from fastapi import Response
 from sqlalchemy import func, text
 from sqlmodel import Session, select
 
-from app.models.database import OperationLog, Rating, Soup, User
+from app.models.database import (
+    Notification,
+    NotificationType,
+    OperationLog,
+    Rating,
+    Soup,
+    User,
+    UserStatus,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +36,17 @@ COMMENT_PHRASE = "海龟汤吧万岁"
 SOUP_PHRASE = "吃什么"
 SEARCH_PHRASE = "如何拿到彩蛋"
 COMMENT_REQUEST_PHRASE = "我要彩蛋"
+
+TRIGGER_DESCRIPTIONS = {
+    "sunrise_login": "在北京时间 06:30 至 07:00 登录",
+    "five_turtle_soups": "发布至少 5 碗公开鳖汤",
+    "comment_phrase": f"在汤评论中发送“{COMMENT_PHRASE}”",
+    "message_phrase": f"在私信中发送“{MESSAGE_PHRASE}”",
+    "new_soup_phrase": f"发布标题、谜面或汤底包含“{SOUP_PHRASE}”的海龟汤",
+    "rated_all_public_soups": "为除自己作品外的所有公开海龟汤评分",
+    "exact_search": f"搜索“{SEARCH_PHRASE}”",
+    "comment_request_phrase": f"在汤评论中发送“{COMMENT_REQUEST_PHRASE}”",
+}
 
 
 def contains_phrase(content: str, phrase: str) -> bool:
@@ -105,6 +124,10 @@ def _discoverer_name(user: User) -> str:
     return user.nickname or user.username or f"UID {user.uid}"
 
 
+def _trigger_description(trigger: str) -> str:
+    return TRIGGER_DESCRIPTIONS.get(trigger, "完成隐藏条件")
+
+
 def _existing_notice(db: Session, discovery: OperationLog, egg_id: int) -> dict:
     details = discovery.details or {}
     discoverer = db.get(User, discovery.operator_uid)
@@ -118,8 +141,51 @@ def _existing_notice(db: Session, discovery: OperationLog, egg_id: int) -> dict:
         "discoverer_uid": discovery.operator_uid,
         "discoverer_name": discoverer_name,
         "prize": None,
+        "achievement_method": _trigger_description(details.get("trigger", "")),
         "message": f"彩蛋 #{egg_id} 已由 {discoverer_name} 发现",
     }
+
+
+def _queue_discovery_notifications(
+    db: Session,
+    discoverer: User,
+    notices: list[dict],
+) -> None:
+    first_discoveries = [notice for notice in notices if notice["first_discovery"]]
+    if not first_discoveries:
+        return
+
+    recipients = db.exec(
+        select(User)
+        .where(User.status == UserStatus.ACTIVE)
+        .order_by(User.uid)
+    ).all()
+    for notice in first_discoveries:
+        egg_id = notice["egg_id"]
+        broadcast_content = (
+            f"{notice['discoverer_name']}首次达成了彩蛋 #{egg_id}"
+        )
+        for recipient in recipients:
+            if recipient.uid == discoverer.uid:
+                title = f"首次达成彩蛋 #{egg_id}"
+                content = (
+                    f"你首次达成了彩蛋 #{egg_id}\n"
+                    f"达成方式：{notice['achievement_method']}\n"
+                    f"随机字符串：{notice['prize']}"
+                )
+            else:
+                title = "全服彩蛋首达"
+                content = broadcast_content
+            db.add(
+                Notification(
+                    recipient_uid=recipient.uid,
+                    notification_type=NotificationType.SYSTEM,
+                    title=title,
+                    content=content,
+                    related_entity_type="easter_egg",
+                    related_entity_id=egg_id,
+                )
+            )
 
 
 def claim_eggs(
@@ -150,6 +216,7 @@ def claim_eggs(
 
         prize = f"CTG-{secrets.token_urlsafe(12)}"
         discoverer_name = _discoverer_name(user)
+        achievement_method = _trigger_description(unique_candidates[egg_id])
         db.add(
             OperationLog(
                 operator_uid=user.uid,
@@ -161,6 +228,7 @@ def claim_eggs(
                     "prize": prize,
                     "discoverer_name": discoverer_name,
                     "trigger": unique_candidates[egg_id],
+                    "achievement_method": achievement_method,
                     "discovered_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -173,12 +241,14 @@ def claim_eggs(
                 "discoverer_uid": user.uid,
                 "discoverer_name": discoverer_name,
                 "prize": prize,
+                "achievement_method": achievement_method,
                 "message": (
                     f"发现彩蛋 #{egg_id}！你是全站第一位发现者，"
-                    f"随机字符串：{prize}"
+                    f"达成方式：{achievement_method}；随机字符串：{prize}"
                 ),
             }
         )
+    _queue_discovery_notifications(db, user, notices)
     db.commit()
     return notices
 
