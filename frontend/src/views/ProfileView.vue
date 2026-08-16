@@ -222,7 +222,7 @@ watch(
           <div class="space-y-2">
             <label v-for="soup in featuredChoices" :key="soup.id" class="flex items-center gap-3 py-2">
               <input type="checkbox" :checked="featuredIds.includes(soup.id)" :disabled="!featuredIds.includes(soup.id) && featuredIds.length >= 5" @change="toggleFeatured(soup.id)">
-              <span class="min-w-0 flex-1 truncate">{{ soup.title }}</span>
+              <span class="min-w-0 flex-1 truncate" :class="soup.is_hall_of_fame ? 'hall-title' : ''">{{ soup.title }}</span>
               <template v-if="featuredIds.includes(soup.id)">
                 <button class="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 hover:text-blue-600" type="button" aria-label="上移" title="上移" @click.prevent="moveFeatured(featuredIds.indexOf(soup.id), -1)"><ArrowUpIcon class="h-4 w-4" aria-hidden="true" /></button>
                 <button class="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 hover:text-blue-600" type="button" aria-label="下移" title="下移" @click.prevent="moveFeatured(featuredIds.indexOf(soup.id), 1)"><ArrowDownIcon class="h-4 w-4" aria-hidden="true" /></button>
@@ -240,7 +240,7 @@ watch(
             class="competition-border-surface border border-slate-200 p-4 dark:border-neutral-800"
             :style="competitionBorderStyle(soup.competition_colors)"
           >
-            <strong class="line-clamp-2 block text-sm">{{ soup.title }}</strong>
+            <strong class="line-clamp-2 block text-sm" :class="soup.is_hall_of_fame ? 'hall-title' : ''">{{ soup.title }}</strong>
             <span class="mt-2 block text-xs text-slate-500">{{ soup.genre }} · {{ soup.soup_color }}</span>
           </router-link>
         </div>
@@ -258,7 +258,7 @@ watch(
           <router-link v-for="soup in profile.soups.items" :key="soup.id" :to="`/soups/${soup.id}`" class="competition-border-surface block rounded-md border border-slate-200 p-4 dark:border-neutral-800" :style="competitionBorderStyle(soup.competition_colors)">
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0">
-                <strong class="block truncate">{{ soup.title }}</strong>
+                <strong class="block truncate" :class="soup.is_hall_of_fame ? 'hall-title' : ''">{{ soup.title }}</strong>
                 <p class="mt-1 line-clamp-2 text-sm text-slate-500">{{ soup.puzzle_excerpt }}</p>
               </div>
               <span class="shrink-0 text-xs text-slate-400">{{ formatDate(soup.created_at) }}</span>

@@ -193,6 +193,7 @@ class SoupResponse(BaseModel):
     like_count: int
     favorite_count: int
     view_count: int
+    is_hall_of_fame: bool = False
     status: str
     is_liked: bool
     is_favorited: bool

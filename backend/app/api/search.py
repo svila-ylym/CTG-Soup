@@ -167,6 +167,7 @@ def search_soups(
             "rating_count": row.rating_count,
             "favorite_count": row.favorite_count,
             "competition_colors": colors_by_soup.get(row.id, []),
+            "is_hall_of_fame": row.is_hall_of_fame,
             "created_at": row.created_at,
         }
         for row in rows

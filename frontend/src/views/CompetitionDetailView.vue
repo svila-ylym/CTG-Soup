@@ -124,7 +124,7 @@ onMounted(load)
           <div v-if="competition.entries?.length" class="mt-4 overflow-x-auto">
             <table class="min-w-full text-left text-sm">
               <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-3 py-2">作品</th><th class="px-3 py-2">作者 UID</th></tr></thead>
-              <tbody><tr v-for="entry in competition.entries" :key="entry.id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td></tr></tbody>
+              <tbody><tr v-for="entry in competition.entries" :key="entry.id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" :class="entry.is_hall_of_fame ? 'hall-title' : ''" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -141,7 +141,7 @@ onMounted(load)
           <div v-else class="mt-4 overflow-x-auto">
             <table class="min-w-full text-left text-sm">
               <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-3 py-2">名次</th><th class="px-3 py-2">作品</th><th class="px-3 py-2">作者 UID</th><th class="px-3 py-2 text-right">得分</th></tr></thead>
-              <tbody><tr v-for="entry in competition.rankings.total" :key="entry.entry_id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3 font-semibold">{{ entry.rank }}</td><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td><td class="px-3 py-3 text-right font-medium">{{ entry.final_score.toFixed(2) }}</td></tr></tbody>
+              <tbody><tr v-for="entry in competition.rankings.total" :key="entry.entry_id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3 font-semibold">{{ entry.rank }}</td><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" :class="entry.is_hall_of_fame ? 'hall-title' : ''" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td><td class="px-3 py-3 text-right font-medium">{{ entry.final_score.toFixed(2) }}</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -158,7 +158,7 @@ onMounted(load)
           <div v-else class="mt-4 overflow-x-auto">
             <table class="min-w-full text-left text-sm">
               <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-3 py-2">名次</th><th class="px-3 py-2">作品</th><th class="px-3 py-2">作者 UID</th><th class="px-3 py-2 text-right">得分</th></tr></thead>
-              <tbody><tr v-for="entry in group.entries" :key="entry.entry_id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3 font-semibold">{{ entry.rank }}</td><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td><td class="px-3 py-3 text-right font-medium">{{ entry.final_score.toFixed(2) }}</td></tr></tbody>
+              <tbody><tr v-for="entry in group.entries" :key="entry.entry_id" class="border-b border-slate-100 dark:border-neutral-900"><td class="px-3 py-3 font-semibold">{{ entry.rank }}</td><td class="px-3 py-3"><button class="text-left text-blue-600 hover:underline" :class="entry.is_hall_of_fame ? 'hall-title' : ''" @click="router.push(`/soups/${entry.soup_id}`)">{{ entry.soup_title || '已删除作品' }}</button></td><td class="px-3 py-3">{{ entry.author_uid }}</td><td class="px-3 py-3 text-right font-medium">{{ entry.final_score.toFixed(2) }}</td></tr></tbody>
             </table>
           </div>
         </section>

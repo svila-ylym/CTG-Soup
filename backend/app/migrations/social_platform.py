@@ -16,6 +16,7 @@ from app.migrations.competition_judging import ensure_competition_judging_schema
 from app.migrations.finalize_schema import finalize_schema
 from app.migrations.soup_collections import ensure_soup_collection_schema
 from app.migrations.soup_metadata import ensure_soup_metadata_schema
+from app.migrations.hall_of_fame import ensure_hall_of_fame_schema
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ def _upgrade_foundation(engine: Engine, dry_run: bool) -> PhaseUpgradeResult:
         engine,
         dry_run=dry_run,
     )
+    hall_actions = ensure_hall_of_fame_schema(engine, dry_run=dry_run)
     return PhaseUpgradeResult(
         actions=(
             root_actions
@@ -54,6 +56,7 @@ def _upgrade_foundation(engine: Engine, dry_run: bool) -> PhaseUpgradeResult:
             + schema_report.actions
             + competition_group_report.actions
             + competition_judging_report.actions
+            + hall_actions
         ),
         counts={"promoted_root_users": promoted_root_users},
     )

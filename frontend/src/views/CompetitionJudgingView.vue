@@ -122,7 +122,7 @@ onMounted(load)
             <thead><tr class="border-b border-slate-200 text-slate-500 dark:border-neutral-800"><th class="px-3 py-3">作品</th><th class="px-3 py-3">作者 UID</th><th class="w-40 px-3 py-3">比赛方评分</th><th class="px-3 py-3">最后保存</th><th class="w-32 px-3 py-3">操作</th></tr></thead>
             <tbody>
               <tr v-for="entry in judging.entries" :key="entry.entry_id" class="border-b border-slate-100 align-top last:border-0 dark:border-neutral-900">
-                <td class="px-3 py-4"><router-link class="font-medium text-blue-600 hover:underline" :to="`/soups/${entry.soup_id}`">{{ entry.soup_title }}</router-link></td>
+                <td class="px-3 py-4"><router-link class="font-medium text-blue-600 hover:underline" :class="entry.is_hall_of_fame ? 'hall-title' : ''" :to="`/soups/${entry.soup_id}`">{{ entry.soup_title }}</router-link></td>
                 <td class="px-3 py-4">{{ entry.author_uid }}</td>
                 <td class="px-3 py-3"><input v-model.number="entry.judge_score" class="form-control w-28" type="number" min="1" max="10" step="0.5" :disabled="!editable" :aria-label="`${entry.soup_title} 的评分`"></td>
                 <td class="px-3 py-4 text-xs text-slate-500"><template v-if="entry.judged_at">{{ formatChinaDateTime(entry.judged_at) }}<span class="block">UID {{ entry.judged_by_uid ?? '已删除用户' }}</span></template><span v-else>未评分</span></td>

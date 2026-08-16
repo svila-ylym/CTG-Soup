@@ -98,7 +98,7 @@
         </div>
 
         <div v-if="loading" class="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(20rem,5fr)]" aria-busy="true" aria-label="首页内容加载中">
-          <div class="glass-card min-h-[28rem] p-5">
+          <div class="glass-card h-[27rem] max-h-[27rem] p-5">
             <div class="skeleton-block aspect-[16/7] w-full"></div>
             <div class="skeleton-block mt-5 h-7 w-2/3"></div>
             <div class="skeleton-block mt-4 h-20 w-full"></div>
@@ -121,7 +121,7 @@
           <router-link
             v-if="latestCompetition"
             :to="`/competitions/${latestCompetition.id}`"
-            class="latest-competition glass-card glass-card-interactive group flex min-h-[28rem] flex-col overflow-hidden"
+            class="latest-competition glass-card glass-card-interactive group flex h-[27rem] max-h-[27rem] flex-col overflow-hidden"
           >
             <div class="relative min-h-52 flex-1 overflow-hidden bg-slate-200 dark:bg-neutral-900">
               <img v-if="latestCompetition.cover_url" :src="latestCompetition.cover_url" :alt="`${latestCompetition.name} 比赛封面`" class="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]" loading="eager" fetchpriority="high">
@@ -148,7 +148,7 @@
             </div>
           </router-link>
 
-          <div v-else class="glass-card flex min-h-[28rem] flex-col items-center justify-center p-8 text-center">
+          <div v-else class="glass-card flex h-[27rem] max-h-[27rem] flex-col items-center justify-center p-8 text-center">
             <FlagIcon class="h-10 w-10 text-slate-300" aria-hidden="true" />
             <h3 class="mt-4 text-xl font-bold">暂时没有比赛</h3>
             <p class="mt-2 text-sm text-slate-500">新比赛发布后会优先出现在这里。</p>
@@ -156,7 +156,7 @@
 
           <aside aria-labelledby="random-soups-heading">
             <div class="mb-3 flex items-center justify-between gap-3">
-              <h3 id="random-soups-heading" class="text-lg font-black">随机推荐</h3>
+              <h3 id="random-soups-heading" class="text-lg font-black">随机推荐 <span class="text-sm font-semibold text-slate-400">· {{ randomSoups.length }} 碗</span></h3>
               <button class="inline-flex items-center gap-1 text-xs font-bold text-sky-700 disabled:opacity-50 dark:text-sky-300" type="button" :disabled="refreshing" @click="loadDiscovery(true)">
                 <ArrowPathIcon class="h-4 w-4" :class="refreshing ? 'animate-spin' : ''" aria-hidden="true" />
                 换一批
@@ -174,7 +174,7 @@
                   <span class="inline-flex items-center gap-1 text-sm font-black text-amber-500"><StarIcon class="h-4 w-4" aria-hidden="true" />{{ soup.average_score.toFixed(1) }}</span>
                   <span class="text-xs text-slate-400">{{ soup.rating_count }} 人</span>
                 </div>
-                <h4 class="mt-3 line-clamp-2 break-words text-base font-black text-slate-900 dark:text-white">{{ soup.title }}</h4>
+                <h4 class="mt-3 line-clamp-2 break-words text-base font-black" :class="soup.is_hall_of_fame ? 'hall-title' : 'text-slate-900 dark:text-white'">{{ soup.title }}</h4>
                 <p class="mt-2 line-clamp-3 flex-1 break-words text-sm leading-5 text-slate-500 dark:text-slate-400">{{ soup.puzzle_excerpt }}</p>
                 <div class="mt-4 flex flex-wrap gap-1.5">
                   <span :class="genreBadgeClass(soup.genre)">{{ soup.genre }}</span>
