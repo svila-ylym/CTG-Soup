@@ -447,6 +447,7 @@ def _profile_soup_payload(
         "like_count": soup.like_count,
         "favorite_count": soup.favorite_count,
         "competition_colors": competition_colors or [],
+        "is_hall_of_fame": soup.is_hall_of_fame,
         "created_at": soup.created_at,
     }
 

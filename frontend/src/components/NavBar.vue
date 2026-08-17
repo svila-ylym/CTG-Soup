@@ -1,67 +1,114 @@
 <template>
-  <nav class="sticky top-0 z-50 border-b border-slate-200 bg-white dark:border-neutral-800 dark:bg-black" data-layout-region="navigation">
-    <div class="container mx-auto px-4">
-      <div class="flex min-h-16 items-center gap-5 py-2">
-        <router-link to="/" class="flex shrink-0 items-center gap-2 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
-          <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 object-contain" />
-          <span>汤吧社区</span>
-        </router-link>
-
-        <div class="hidden items-center gap-6 xl:flex">
-          <router-link v-for="item in browseLinks.slice(1)" :key="item.path" :to="item.path" class="text-gray-600 transition hover:text-blue-500 dark:text-gray-300">
-            {{ item.label }}
+  <nav class="sticky top-0 z-50 py-2 sm:py-3" data-layout-region="navigation">
+    <div class="mx-auto max-w-7xl px-3 sm:px-4">
+      <div class="glass-nav-floating rounded-2xl px-4 sm:px-5">
+        <div class="flex min-h-14 sm:min-h-16 items-center gap-5 py-2">
+          <router-link to="/" class="flex shrink-0 items-center gap-2 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
+            <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 object-contain" />
+            <span>汤吧社区</span>
           </router-link>
-        </div>
 
-        <div class="mx-4 hidden min-w-0 max-w-md flex-1 xl:block">
-          <form class="relative" @submit.prevent="handleSearch">
-            <input
-              v-model="searchQuery"
-              type="search"
-              placeholder="搜索海龟汤、帖子、用户..."
-              class="w-full rounded-md border border-gray-300 bg-white px-4 py-2 pl-10 text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
-            >
-            <MagnifyingGlassIcon class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" aria-hidden="true" />
-          </form>
-        </div>
+          <div class="hidden items-center gap-2 xl:flex">
+            <router-link v-for="item in browseLinks.slice(1)" :key="item.path" :to="item.path" class="rounded-xl px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-white/50 hover:text-blue-600 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-blue-400">
+              {{ item.label }}
+            </router-link>
+          </div>
+
+          <div class="mx-4 hidden min-w-0 max-w-md flex-1 xl:block">
+            <form class="relative" @submit.prevent="handleSearch">
+              <input
+                v-model="searchQuery"
+                type="search"
+                placeholder="搜索海龟汤、帖子、用户..."
+                class="glass-control w-full rounded-xl px-4 py-2 pl-10 text-gray-900 outline-none dark:text-white"
+              >
+              <MagnifyingGlassIcon class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" aria-hidden="true" />
+            </form>
+          </div>
 
         <div class="ml-auto hidden items-center gap-4 xl:flex">
           <template v-if="authStore.isAuthenticated">
-            <SigninControl />
-            <button class="relative flex h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300" type="button" aria-label="通知" title="通知" @click="$router.push('/notifications')">
+            <button class="nav-icon-button relative h-10 w-10 dark:text-gray-300" type="button" aria-label="通知" title="通知" @click="$router.push('/notifications')">
               <BellIcon class="h-6 w-6" aria-hidden="true" />
               <span v-if="unreadStore.hasNotifications" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读通知"></span>
             </button>
-            <button class="relative flex h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300" type="button" aria-label="系统消息" title="系统消息" @click="$router.push('/system-messages')">
+            <button class="nav-icon-button relative h-10 w-10 dark:text-gray-300" type="button" aria-label="系统消息" title="系统消息" @click="$router.push('/system-messages')">
               <InboxIcon class="h-6 w-6" aria-hidden="true" />
               <span v-if="unreadStore.hasSystemMessages" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读系统消息"></span>
             </button>
-            <button class="relative flex h-10 w-10 items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300" type="button" aria-label="私信" title="私信" @click="$router.push('/messages')">
+            <button class="nav-icon-button relative h-10 w-10 dark:text-gray-300" type="button" aria-label="私信" title="私信" @click="$router.push('/messages')">
               <ChatBubbleLeftRightIcon class="h-6 w-6" aria-hidden="true" />
               <span v-if="chatStore.hasUnreadMessages" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读私信"></span>
             </button>
-            <router-link to="/soups/create" class="rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700">发布</router-link>
+            <router-link to="/soups/create" class="liquid-primary inline-flex min-h-10 items-center px-4 py-2 text-sm font-bold">发布</router-link>
 
             <div class="relative">
-              <button class="flex items-center" type="button" aria-label="打开账号菜单" title="账号菜单" @click="showUserMenu = !showUserMenu">
-                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">{{ userInitial }}</span>
+              <button
+                class="nav-icon-button flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-md dark:border-neutral-700 dark:bg-neutral-900/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.3)]"
+                type="button"
+                aria-label="打开账号菜单"
+                title="账号菜单"
+                @click="showUserMenu = !showUserMenu"
+              >
+                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-sky-500 font-semibold text-white shadow-inner">
+                  {{ userInitial }}
+                </span>
               </button>
               <transition name="fade">
-                <div v-if="showUserMenu" class="absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white py-2 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-                  <router-link :to="`/profile/${authStore.user?.uid}`" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">个人主页</router-link>
-                  <router-link to="/settings" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">设置</router-link>
-                  <router-link v-if="authStore.isAdmin" to="/admin" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">管理后台</router-link>
-                  <router-link v-if="authStore.isRoot" :to="{ path: '/admin/broadcasts', query: { tab: 'email' } }" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">邮件群发</router-link>
-                  <hr class="my-2 border-gray-200 dark:border-neutral-800">
-                  <button class="w-full px-4 py-2 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-neutral-800" type="button" @click="handleLogout">退出登录</button>
+                <div v-if="showUserMenu" class="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_12px_32px rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-neutral-700 dark:bg-neutral-900/80 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_12px_32px rgba(0,0,0,0.4)]">
+                  <SigninControl />
+                  <hr class="my-2 border-slate-200/60 dark:border-neutral-700/60">
+                  <router-link
+                    :to="`/profile/${authStore.user?.uid}`"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <UserCircleIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>个人主页</span>
+                  </router-link>
+                  <router-link
+                    to="/settings"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <Cog6ToothIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>设置</span>
+                  </router-link>
+                  <router-link
+                    v-if="authStore.isAdmin"
+                    to="/admin"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <ShieldCheckIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>管理后台</span>
+                  </router-link>
+                  <router-link
+                    v-if="authStore.isRoot"
+                    :to="{ path: '/admin/broadcasts', query: { tab: 'email' } }"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <MegaphoneIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>邮件群发</span>
+                  </router-link>
+                  <hr class="my-2 border-slate-200/60 dark:border-neutral-700/60">
+                  <button
+                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    type="button"
+                    @click="handleLogout"
+                  >
+                    <ArrowLeftOnRectangleIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>退出登录</span>
+                  </button>
                 </div>
               </transition>
             </div>
           </template>
 
           <template v-else>
-            <router-link to="/login" class="px-4 py-2 text-gray-600 transition hover:text-blue-500 dark:text-gray-300">登录</router-link>
-            <router-link to="/register" class="rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700">注册</router-link>
+            <router-link to="/login" class="glass-button inline-flex min-h-10 items-center px-4 py-2 text-gray-600 dark:text-gray-300">登录</router-link>
+            <router-link to="/register" class="liquid-primary inline-flex min-h-10 items-center px-4 py-2 font-bold">注册</router-link>
           </template>
 
           <ThemeToggle id="theme-toggle-btn" :is-dark="isDark" @toggle="toggleDarkMode" />
@@ -69,7 +116,7 @@
 
         <button
           ref="mobileMenuButton"
-          class="mobile-menu-button ml-auto xl:hidden"
+          class="mobile-menu-button glass-button ml-auto xl:hidden"
           type="button"
           :aria-expanded="mobileOpen"
           :aria-label="mobileOpen ? '关闭导航侧栏' : '打开导航侧栏'"
@@ -78,6 +125,7 @@
         >
           <Bars3Icon class="h-6 w-6" aria-hidden="true" />
         </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -85,9 +133,9 @@
   <Teleport to="body">
     <Transition name="mobile-drawer">
       <div v-if="mobileOpen" class="fixed inset-0 z-[80] xl:hidden" role="dialog" aria-modal="true" aria-label="移动端导航">
-        <button class="mobile-drawer-backdrop absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]" type="button" aria-label="关闭导航侧栏" @click="closeMobileMenu"></button>
-        <aside class="mobile-drawer-panel glass-panel absolute bottom-2 right-2 top-2 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-[1.5rem] border-white/60 bg-white/90 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-black/88">
-          <header class="flex items-center justify-between gap-4 border-b border-slate-200/80 bg-gradient-to-br from-sky-50/90 to-white/60 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] dark:border-neutral-800 dark:from-sky-950/40 dark:to-black/50">
+        <button class="mobile-drawer-backdrop absolute inset-0" type="button" aria-label="关闭导航侧栏" @click="closeMobileMenu"></button>
+        <aside class="mobile-drawer-panel glass-drawer absolute bottom-2 right-2 top-2 flex w-[min(23rem,calc(100%-1rem))] flex-col overflow-hidden rounded-2xl">
+          <header class="drawer-glass-header flex items-center justify-between gap-4 border-b px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))]">
             <div class="flex min-w-0 items-center gap-2">
               <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 shrink-0 object-contain" />
               <div class="min-w-0">
@@ -95,23 +143,26 @@
                 <p class="mt-0.5 text-xs text-slate-500">完整导航</p>
               </div>
             </div>
-            <button ref="mobileCloseButton" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-neutral-800 dark:hover:text-white" type="button" aria-label="关闭导航侧栏" title="关闭" @click="closeMobileMenu">
+            <button ref="mobileCloseButton" class="glass-button flex h-10 w-10 shrink-0 items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white" type="button" aria-label="关闭导航侧栏" title="关闭" @click="closeMobileMenu">
               <XMarkIcon class="h-6 w-6" aria-hidden="true" />
             </button>
           </header>
 
           <div class="border-b border-slate-200 p-4 dark:border-neutral-800">
-            <form class="relative" @submit.prevent="handleMobileSearch">
-              <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400" aria-hidden="true" />
-              <input v-model="searchQuery" class="form-control h-11 py-2 pl-10 pr-12" type="search" placeholder="搜索海龟汤、帖子、用户" aria-label="搜索">
-              <button class="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white disabled:opacity-40" type="submit" :disabled="!searchQuery.trim()" aria-label="提交搜索" title="搜索">
+            <form class="drawer-search-panel" role="search" @submit.prevent="handleMobileSearch">
+              <div class="drawer-search-field">
+                <MagnifyingGlassIcon class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <input v-model="searchQuery" class="drawer-search-input form-control glass-control" type="search" placeholder="搜索海龟汤、帖子、用户" aria-label="搜索">
+              </div>
+              <button class="drawer-search-submit liquid-primary" type="submit" :disabled="!searchQuery.trim()" aria-label="提交搜索">
+                <span>搜索</span>
                 <ArrowRightIcon class="h-4 w-4" aria-hidden="true" />
               </button>
             </form>
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-            <div v-if="authStore.isAuthenticated" class="mt-4 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-800 dark:bg-neutral-900">
+            <div v-if="authStore.isAuthenticated" class="glass-card mt-4 flex items-center gap-3 p-3">
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 font-bold text-white">{{ userInitial }}</span>
               <div class="min-w-0">
                 <strong class="block truncate text-sm text-slate-900 dark:text-white">{{ authStore.user?.nickname }}</strong>
@@ -119,7 +170,7 @@
               </div>
             </div>
 
-            <section class="drawer-appearance mt-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50 to-indigo-50/70 p-3.5 dark:border-sky-950 dark:from-sky-950/45 dark:to-indigo-950/25" aria-labelledby="drawer-appearance-heading">
+            <section class="drawer-appearance glass-card mt-4 flex items-center justify-between gap-4 p-3.5" aria-labelledby="drawer-appearance-heading">
               <div class="min-w-0">
                 <h2 id="drawer-appearance-heading" class="text-sm font-bold text-slate-900 dark:text-white">外观主题</h2>
                 <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ isDark ? '深色模式' : '浅色模式' }}</p>
@@ -216,7 +267,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useUnreadStore } from '@/stores/unread'
-import { applyTheme, storedTheme } from '@/utils/theme'
+import { applyTheme } from '@/utils/theme'
 import SigninControl from '@/components/SigninControl.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 
@@ -228,7 +279,7 @@ const unreadStore = useUnreadStore()
 
 const searchQuery = ref('')
 const showUserMenu = ref(false)
-const isDark = ref(false)
+const isDark = ref(document.documentElement.classList.contains('dark'))
 const mobileOpen = ref(false)
 const mobileMenuButton = ref<HTMLButtonElement | null>(null)
 const mobileCloseButton = ref<HTMLButtonElement | null>(null)
@@ -238,7 +289,8 @@ const browseLinks = [
   { path: '/', label: '首页', icon: HomeIcon },
   { path: '/soups', label: '海龟汤', icon: PuzzlePieceIcon },
   { path: '/leaderboard', label: '排行榜', icon: TrophyIcon },
-  { path: '/posts', label: '论坛', icon: RectangleStackIcon },
+  { path: '/hall-of-fame', label: '殿堂', icon: SparklesIcon },
+  { path: '/posts', label: '公告', icon: RectangleStackIcon },
   { path: '/competitions', label: '比赛', icon: SparklesIcon },
 ]
 
@@ -288,7 +340,10 @@ function closeUserMenu(event: MouseEvent) {
 }
 
 function closeOnEscape(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeMobileMenu()
+  if (event.key === 'Escape') {
+    closeMobileMenu()
+    showUserMenu.value = false
+  }
 }
 
 watch(
@@ -337,7 +392,6 @@ onMounted(() => {
   document.addEventListener('click', closeUserMenu)
   window.addEventListener('keydown', closeOnEscape)
   window.addEventListener('themechange', syncThemeState)
-  applyTheme(storedTheme())
   syncThemeState()
 })
 
@@ -372,12 +426,78 @@ onUnmounted(() => {
   transform: translateX(calc(100% + 1rem));
 }
 
-.mobile-drawer-panel.glass-panel {
-  border-radius: 1.5rem;
-  box-shadow: -1.25rem 0 4rem rgba(15, 23, 42, .2), 0 1.5rem 4rem rgba(15, 23, 42, .18);
+.mobile-drawer-backdrop {
+  background: rgba(15, 23, 42, .42);
+  -webkit-backdrop-filter: blur(4px) saturate(110%);
+  backdrop-filter: blur(4px) saturate(110%);
 }
 
-:global(.dark) .mobile-drawer-panel {
-  box-shadow: -1.25rem 0 4rem rgba(0, 0, 0, .7), 0 1.5rem 4rem rgba(0, 0, 0, .55);
+:global(.dark .mobile-drawer-backdrop) {
+  background: rgba(0, 0, 0, .64);
+}
+
+.drawer-glass-header {
+  border-color: color-mix(in srgb, var(--border) 68%, transparent);
+  background: rgba(255, 255, 255, .24);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .3);
+}
+
+:global(.dark .drawer-glass-header) {
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05);
+}
+
+.drawer-search-panel {
+  display: grid;
+  gap: .625rem;
+  padding: .625rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 88%, var(--liquid-accent));
+  border-radius: .875rem;
+  background: color-mix(in srgb, var(--glass-card) 88%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 12px 30px rgba(15, 23, 42, .08);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(22px) saturate(145%);
+}
+
+.drawer-search-field {
+  position: relative;
+}
+
+.drawer-search-input {
+  width: 100%;
+  height: 2.875rem;
+  padding: .625rem .875rem .625rem 2.75rem;
+  border-radius: .625rem;
+  color: rgb(15 23 42);
+  outline: none;
+}
+
+.drawer-search-submit {
+  display: inline-flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .625rem 1rem;
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.drawer-search-submit:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+  transform: none;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 3px 9px rgba(15, 23, 42, .06);
+}
+
+:global(.dark .drawer-search-panel) {
+  background: color-mix(in srgb, var(--glass-card) 84%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 14px 34px rgba(0, 0, 0, .28);
+}
+
+:global(.dark .drawer-search-input) {
+  color: rgb(248 250 252);
 }
 </style>

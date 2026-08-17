@@ -26,6 +26,7 @@ function normalizeSoup(payload: LegacySoupPayload): TurtleSoup {
     puzzle_images: payload.puzzle_images ?? [],
     solution_images: payload.solution_images ?? [],
     comment_count: payload.comment_count ?? 0,
+    is_hall_of_fame: payload.is_hall_of_fame ?? false,
     can_edit: payload.can_edit ?? false,
   }
 }
@@ -98,7 +99,11 @@ export const soupApi = {
   },
 
   rate(id: number, score: number) {
-    return http.put<{ average_score: number; rating_count: number; my_rating: number }>(`/turtle-soups/${id}/rating`, { score })
+    return http.put<{ average_score: number; rating_count: number; my_rating: number; is_hall_of_fame: boolean }>(`/turtle-soups/${id}/rating`, { score })
+  },
+
+  getHallOfFame(params?: { page?: number; page_size?: number }) {
+    return http.get<PageResult<TurtleSoup>>('/turtle-soups/hall-of-fame', { params }).then(normalizeSoupPageResponse)
   },
 
   listRatings(id: number, params?: { page?: number; page_size?: number }) {

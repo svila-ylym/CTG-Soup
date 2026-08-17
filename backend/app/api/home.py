@@ -59,6 +59,7 @@ class HomeSoupSummary(BaseModel):
     rating_count: int
     author_name: str
     competition_colors: list[str] = Field(default_factory=list)
+    is_hall_of_fame: bool = False
     created_at: datetime
 
 
@@ -169,6 +170,7 @@ def _random_soups(db: Session) -> list[HomeSoupSummary]:
             rating_count=soup.rating_count,
             author_name=user.nickname or user.username,
             competition_colors=colors_by_soup.get(soup.id, []),
+            is_hall_of_fame=soup.is_hall_of_fame,
             created_at=_utc(soup.created_at),
         )
         for soup, user in rows
