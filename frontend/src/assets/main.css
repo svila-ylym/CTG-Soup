@@ -20,7 +20,7 @@
   --glass-card-fallback: rgba(255, 255, 255, 0.96);
   --glass-button: rgba(255, 255, 255, 0.72);
   --glass-button-hover: rgba(255, 255, 255, 0.9);
-  --glass-nav: rgba(255, 255, 255, 0.76);
+  --glass-nav: rgba(255, 255, 255, 0.78);
   --glass-control: rgba(255, 255, 255, 0.62);
   --glass-popover: rgba(255, 255, 255, 0.9);
   --glass-border: rgba(255, 255, 255, 0.58);
@@ -35,6 +35,33 @@
   --profile-hero-overlay: linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.74) 58%, rgba(255, 255, 255, 0.34));
   --transition-standard: 0.3s ease;
   color-scheme: light;
+
+  /* Banner seasonal theme — Summer default */
+  --banner-sky-top: #a7e2ff;
+  --banner-sky-mid: #d9f4ff;
+  --banner-sky-bot: #fff4d6;
+  --banner-far-mtn-0: #9acbd2;
+  --banner-far-mtn-1: #6b9fb4;
+  --banner-mid-mtn-0: #68ad91;
+  --banner-mid-mtn-1: #387b73;
+  --banner-lake-0: #83d8df;
+  --banner-lake-1: #3a8ec0;
+  --banner-front-0: #b4d85f;
+  --banner-front-1: #3c9b69;
+  --banner-sun-color: #ffe38b;
+  --banner-sun-glow: rgba(255, 227, 139, 0.13);
+  --banner-lotus-leaf: #4ade80;
+  --banner-lotus-flower: #f9a8d4;
+  --banner-village-roof: #8b4513;
+  --banner-village-wall: #d4a574;
+  --banner-willow-trunk: #5a3a1a;
+  --banner-willow-leaf: #4ade80;
+  --banner-maple-red: #dc2626;
+  --banner-maple-orange: #ea580c;
+  --banner-maple-gold: #d97706;
+  --banner-maple-trunk: #4a2f1a;
+  --banner-snow: transparent;
+  --banner-season-accent: #facc15;
 }
 
 .dark {
@@ -62,6 +89,111 @@
   --competition-card-bg: rgba(10, 10, 10, 0.96);
   --profile-hero-overlay: linear-gradient(90deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.78) 58%, rgba(0, 0, 0, 0.42));
   color-scheme: dark;
+}
+
+/* Seasonal banner themes */
+.banner-season-spring {
+  --banner-sky-top: #c1e2e9;
+  --banner-sky-mid: #e8f2ed;
+  --banner-sky-bot: #f6f6df;
+  --banner-far-mtn-0: #a8c8d0;
+  --banner-far-mtn-1: #6a9aa8;
+  --banner-mid-mtn-0: #7ab89a;
+  --banner-mid-mtn-1: #4a8a72;
+  --banner-front-0: #b8d468;
+  --banner-front-1: #5a9a4a;
+  --banner-sun-color: #ffe38b;
+  --banner-sun-glow: rgba(255, 227, 139, 0.13);
+  --banner-lotus-leaf: #4ade80;
+  --banner-lotus-flower: #f9a8d4;
+  --banner-village-roof: #8b4513;
+  --banner-village-wall: #d4a574;
+  --banner-willow-trunk: #5a3a1a;
+  --banner-willow-leaf: #86efac;
+  --banner-maple-red: #dc2626;
+  --banner-maple-orange: #ea580c;
+  --banner-maple-gold: #d97706;
+  --banner-maple-trunk: #4a2f1a;
+  --banner-snow: transparent;
+  --banner-season-accent: #f472b6;
+}
+
+.banner-season-summer {
+  --banner-sky-top: #a7e2ff;
+  --banner-sky-mid: #d9f4ff;
+  --banner-sky-bot: #fff4d6;
+  --banner-far-mtn-0: #9acbd2;
+  --banner-far-mtn-1: #6b9fb4;
+  --banner-mid-mtn-0: #68ad91;
+  --banner-mid-mtn-1: #387b73;
+  --banner-front-0: #b4d85f;
+  --banner-front-1: #3c9b69;
+  --banner-sun-color: #ffe38b;
+  --banner-sun-glow: rgba(255, 227, 139, 0.13);
+  --banner-lotus-leaf: #4ade80;
+  --banner-lotus-flower: #f9a8d4;
+  --banner-village-roof: #8b4513;
+  --banner-village-wall: #d4a574;
+  --banner-willow-trunk: #5a3a1a;
+  --banner-willow-leaf: #4ade80;
+  --banner-maple-red: #dc2626;
+  --banner-maple-orange: #ea580c;
+  --banner-maple-gold: #d97706;
+  --banner-maple-trunk: #4a2f1a;
+  --banner-snow: transparent;
+  --banner-season-accent: #facc15;
+}
+
+.banner-season-autumn {
+  --banner-sky-top: #d4a574;
+  --banner-sky-mid: #e8c49a;
+  --banner-sky-bot: #f5e0c3;
+  --banner-far-mtn-0: #b8a080;
+  --banner-far-mtn-1: #8a7050;
+  --banner-mid-mtn-0: #b8860b;
+  --banner-mid-mtn-1: #8b4513;
+  --banner-front-0: #c4953a;
+  --banner-front-1: #7a4a20;
+  --banner-sun-color: #ffb347;
+  --banner-sun-glow: rgba(255, 180, 70, 0.15);
+  --banner-lotus-leaf: #c4953a;
+  --banner-lotus-flower: #ff6b6b;
+  --banner-village-roof: #5a3020;
+  --banner-village-wall: #b8956a;
+  --banner-willow-trunk: #5a3a1a;
+  --banner-willow-leaf: #d4a017;
+  --banner-maple-red: #dc2626;
+  --banner-maple-orange: #ea580c;
+  --banner-maple-gold: #d97706;
+  --banner-maple-trunk: #4a2f1a;
+  --banner-snow: transparent;
+  --banner-season-accent: #f97316;
+}
+
+.banner-season-winter {
+  --banner-sky-top: #c8d6e5;
+  --banner-sky-mid: #dfe6e9;
+  --banner-sky-bot: #f5f6fa;
+  --banner-far-mtn-0: #c5cdd5;
+  --banner-far-mtn-1: #8a949e;
+  --banner-mid-mtn-0: #b0b8c0;
+  --banner-mid-mtn-1: #78828c;
+  --banner-front-0: #c8d0d8;
+  --banner-front-1: #88929c;
+  --banner-sun-color: #e8eef5;
+  --banner-sun-glow: rgba(232, 238, 245, 0.1);
+  --banner-lotus-leaf: #88929c;
+  --banner-lotus-flower: #d5dbe0;
+  --banner-village-roof: #5a5a5a;
+  --banner-village-wall: #a0a8b0;
+  --banner-willow-trunk: #5a5a5a;
+  --banner-willow-leaf: #a0a8b0;
+  --banner-maple-red: #991b1b;
+  --banner-maple-orange: #7c2d12;
+  --banner-maple-gold: #854d0e;
+  --banner-maple-trunk: #3a3a3a;
+  --banner-snow: #ffffff;
+  --banner-season-accent: #60a5fa;
 }
 
 * {
@@ -203,6 +335,20 @@ body {
 
 .dark .glass-nav {
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06), 0 10px 34px rgba(0, 0, 0, 0.38);
+}
+
+/* Floating glass nav — sticky, rounded, card-like */
+.glass-nav-floating {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 88%, var(--liquid-accent));
+  background: var(--glass-nav);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 32px rgba(15, 23, 42, 0.1);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(22px) saturate(145%);
+}
+
+.dark .glass-nav-floating {
+  border-color: color-mix(in srgb, var(--glass-border) 88%, var(--liquid-accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 36px rgba(0, 0, 0, 0.4);
 }
 
 .glass-drawer {
@@ -355,7 +501,7 @@ body {
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 240ms ease;
+  transition: opacity 300ms ease;
 }
 
 .liquid-cursor-trail.is-visible {
@@ -366,22 +512,47 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 1.1rem;
-  height: 1.1rem;
-  border: 1px solid rgba(255, 255, 255, 0.52);
-  border-radius: 54% 46% 58% 42%;
-  background: rgba(var(--trail-color), 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 1rem rgba(var(--trail-color), 0.22);
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, 
+    rgba(135, 206, 235, 0.9) 0%, 
+    rgba(70, 130, 180, 0.7) 40%, 
+    rgba(30, 60, 120, 0.4) 100%);
+  box-shadow: 
+    0 0 8px rgba(135, 206, 235, 0.6),
+    0 0 16px rgba(135, 206, 235, 0.3),
+    inset 0 0 4px rgba(255, 255, 255, 0.3);
   contain: layout style paint;
-  will-change: transform;
+  will-change: transform, opacity;
+  backdrop-filter: blur(1px);
 }
 
-.liquid-cursor-dot:nth-child(2) { opacity: .78; }
-.liquid-cursor-dot:nth-child(3) { opacity: .64; }
-.liquid-cursor-dot:nth-child(4) { opacity: .5; }
-.liquid-cursor-dot:nth-child(5) { opacity: .38; }
-.liquid-cursor-dot:nth-child(6) { opacity: .27; }
-.liquid-cursor-dot:nth-child(7) { opacity: .18; }
+/* Subtle shimmer on each dot */
+.liquid-cursor-dot::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 20%;
+  width: 30%;
+  height: 30%;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  filter: blur(1px);
+}
+
+.liquid-cursor-dot:nth-child(1) { opacity: 1; }
+.liquid-cursor-dot:nth-child(2) { opacity: 0.82; }
+.liquid-cursor-dot:nth-child(3) { opacity: 0.65; }
+.liquid-cursor-dot:nth-child(4) { opacity: 0.48; }
+.liquid-cursor-dot:nth-child(5) { opacity: 0.34; }
+.liquid-cursor-dot:nth-child(6) { opacity: 0.22; }
+.liquid-cursor-dot:nth-child(7) { opacity: 0.13; }
+.liquid-cursor-dot:nth-child(8) { opacity: 0.08; }
+.liquid-cursor-dot:nth-child(9) { opacity: 0.05; }
+.liquid-cursor-dot:nth-child(10) { opacity: 0.03; }
+.liquid-cursor-dot:nth-child(11) { opacity: 0.02; }
+.liquid-cursor-dot:nth-child(12) { opacity: 0.01; }
 
 @keyframes loader-float {
   0%, 100% { transform: translateY(0) scale(1); }
@@ -508,6 +679,10 @@ html {
 
   .btn-secondary {
     @apply inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 font-medium text-slate-700 disabled:pointer-events-none disabled:opacity-50 dark:text-slate-200;
+  }
+
+  .btn-danger {
+    @apply inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 font-medium text-red-700 border border-red-200 bg-red-50 disabled:pointer-events-none disabled:opacity-50 dark:text-red-400 dark:border-red-900 dark:bg-red-950/60;
   }
 
   .form-control {
