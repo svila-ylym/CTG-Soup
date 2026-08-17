@@ -419,9 +419,24 @@ class Soup(SQLModel, table=True):
     like_count: int = Field(default=0)
     favorite_count: int = Field(default=0)
     view_count: int = Field(default=0)
+    is_hall_of_fame: bool = Field(default=False, index=True)
+    hall_of_fame_entered_at: Optional[datetime] = None
+    hall_of_fame_removed_at: Optional[datetime] = None
+    hall_of_fame_removal_reason: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    hall_of_fame_removed_by_uid: Optional[int] = Field(default=None, foreign_key="users.uid")
     status: str = Field(default="published")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class HallOfFameSettings(SQLModel, table=True):
+    __tablename__ = "hall_of_fame_settings"
+
+    id: int = Field(default=1, primary_key=True)
+    score_threshold: float = Field(default=9.85)
+    rating_coverage_ratio: float = Field(default=0.5)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by_uid: Optional[int] = Field(default=None, foreign_key="users.uid")
 
 
 class SoupImage(SQLModel, table=True):

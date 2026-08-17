@@ -92,7 +92,7 @@
           <!-- 卡片头部 -->
           <div class="p-6">
             <!-- 标题 -->
-            <h3 class="mb-2 line-clamp-2 break-words text-xl font-semibold text-gray-900 dark:text-white">
+            <h3 class="mb-2 line-clamp-2 break-words text-xl font-semibold" :class="soup.is_hall_of_fame ? 'hall-title' : 'text-gray-900 dark:text-white'">
               <LinkifiedText :text="soup.title" />
             </h3>
 

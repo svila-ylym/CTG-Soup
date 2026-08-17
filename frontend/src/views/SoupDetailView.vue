@@ -8,7 +8,10 @@
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <p class="mb-2 break-words text-sm text-blue-500">海龟汤 · <router-link :to="`/profile/${soup.author_uid}`" class="font-medium hover:underline">{{ soup.author.nickname || soup.author.username || '未知作者' }}</router-link></p>
-              <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl"><LinkifiedText :text="soup.title" /></h1>
+              <div class="flex flex-wrap items-center gap-3">
+                <h1 class="break-words text-2xl font-bold sm:text-3xl" :class="soup.is_hall_of_fame ? 'hall-title' : 'text-gray-900 dark:text-white'"><LinkifiedText :text="soup.title" /></h1>
+                <span v-if="soup.is_hall_of_fame" class="hall-seal" aria-label="殿堂神汤">神汤</span>
+              </div>
               <p v-if="soup.collection" class="mt-2 break-words text-sm text-slate-500">
                 来源于
                 <router-link class="font-medium text-blue-600 hover:underline" :to="`/collections/${soup.collection.id}`">「{{ soup.collection.name }}」合集</router-link>

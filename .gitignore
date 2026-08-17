@@ -11,6 +11,7 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/test-results/
 frontend/playwright-report/
+backend/test-data/
 .venv/
 .worktrees/
 

@@ -135,6 +135,7 @@ export interface SoupCollectionSoupSummary {
   rating_count: number
   like_count: number
   competition_colors: string[]
+  is_hall_of_fame: boolean
   created_at: string
 }
 
@@ -175,6 +176,7 @@ export interface TurtleSoup {
   can_edit: boolean
   created_at: string
   updated_at: string
+  is_hall_of_fame: boolean
 }
 
 export interface SoupCreate {
@@ -317,6 +319,7 @@ export interface CompetitionEntry {
   competition_id: number
   soup_id: number
   soup_title: string
+  is_hall_of_fame: boolean
   final_score: number | null
   author_uid: number
   rank: number | null
@@ -327,6 +330,7 @@ export interface CompetitionRankingEntry {
   entry_id: number
   soup_id: number
   soup_title: string
+  is_hall_of_fame: boolean
   author_uid: number
   final_score: number
   rank: number
@@ -348,6 +352,7 @@ export interface CompetitionJudgingEntry {
   entry_id: number
   soup_id: number
   soup_title: string
+  is_hall_of_fame: boolean
   author_uid: number
   judge_score: number | null
   judged_by_uid: number | null
@@ -391,6 +396,7 @@ export interface HomeSoupSummary {
   rating_count: number
   author_name: string
   competition_colors: string[]
+  is_hall_of_fame: boolean
   created_at: string
 }
 
@@ -647,6 +653,7 @@ export interface SearchSoup {
   rating_count: number
   favorite_count: number
   competition_colors: string[]
+  is_hall_of_fame: boolean
   created_at: string
 }
 
@@ -700,6 +707,7 @@ export interface ProfileSoupSummary {
   like_count: number
   favorite_count: number
   competition_colors: string[]
+  is_hall_of_fame: boolean
   created_at: string
 }
 

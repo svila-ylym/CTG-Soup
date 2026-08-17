@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
-
 const props = defineProps<{
   id: string
   isDark: boolean
@@ -8,21 +6,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggle: []
 }>()
-const container = ref<HTMLElement | null>(null)
-
 function handleClick() {
-  document.documentElement.classList.add('is-animating')
   emit('toggle')
 }
-
-function handleTransitionEnd(event: TransitionEvent) {
-  if (event.target !== container.value || event.propertyName !== 'background-color') return
-  document.documentElement.classList.remove('is-animating')
-}
-
-onBeforeUnmount(() => {
-  document.documentElement.classList.remove('is-animating')
-})
 </script>
 
 <template>
@@ -35,7 +21,7 @@ onBeforeUnmount(() => {
     :aria-label="props.isDark ? '切换到浅色主题' : '切换到深色主题'"
     @click="handleClick"
   >
-    <div ref="container" class="theme-toggle__container" aria-hidden="true" @transitionend="handleTransitionEnd">
+    <div class="theme-toggle__container" aria-hidden="true">
       <div class="theme-toggle__clouds"></div>
       <div class="theme-toggle__stars">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 55" fill="none" aria-hidden="true">
