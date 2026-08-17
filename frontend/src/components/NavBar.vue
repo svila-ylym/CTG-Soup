@@ -1,33 +1,33 @@
 <template>
-  <nav class="glass-nav sticky top-0 z-50 border-b" data-layout-region="navigation">
-    <div class="container mx-auto px-4">
-      <div class="flex min-h-16 items-center gap-5 py-2">
-        <router-link to="/" class="flex shrink-0 items-center gap-2 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
-          <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 object-contain" />
-          <span>汤吧社区</span>
-        </router-link>
-
-        <div class="hidden items-center gap-6 xl:flex">
-          <router-link v-for="item in browseLinks.slice(1)" :key="item.path" :to="item.path" class="text-gray-600 transition hover:text-blue-500 dark:text-gray-300">
-            {{ item.label }}
+  <nav class="sticky top-0 z-50 py-2 sm:py-3" data-layout-region="navigation">
+    <div class="mx-auto max-w-7xl px-3 sm:px-4">
+      <div class="glass-nav-floating rounded-2xl px-4 sm:px-5">
+        <div class="flex min-h-14 sm:min-h-16 items-center gap-5 py-2">
+          <router-link to="/" class="flex shrink-0 items-center gap-2 text-lg font-bold text-gray-800 dark:text-white sm:text-xl">
+            <img src="/icon.ico" alt="汤吧社区图标" class="h-8 w-8 object-contain" />
+            <span>汤吧社区</span>
           </router-link>
-        </div>
 
-        <div class="mx-4 hidden min-w-0 max-w-md flex-1 xl:block">
-          <form class="relative" @submit.prevent="handleSearch">
-            <input
-              v-model="searchQuery"
-              type="search"
-              placeholder="搜索海龟汤、帖子、用户..."
-              class="glass-control w-full rounded-md px-4 py-2 pl-10 text-gray-900 outline-none dark:text-white"
-            >
-            <MagnifyingGlassIcon class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" aria-hidden="true" />
-          </form>
-        </div>
+          <div class="hidden items-center gap-2 xl:flex">
+            <router-link v-for="item in browseLinks.slice(1)" :key="item.path" :to="item.path" class="rounded-xl px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-white/50 hover:text-blue-600 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-blue-400">
+              {{ item.label }}
+            </router-link>
+          </div>
+
+          <div class="mx-4 hidden min-w-0 max-w-md flex-1 xl:block">
+            <form class="relative" @submit.prevent="handleSearch">
+              <input
+                v-model="searchQuery"
+                type="search"
+                placeholder="搜索海龟汤、帖子、用户..."
+                class="glass-control w-full rounded-xl px-4 py-2 pl-10 text-gray-900 outline-none dark:text-white"
+              >
+              <MagnifyingGlassIcon class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" aria-hidden="true" />
+            </form>
+          </div>
 
         <div class="ml-auto hidden items-center gap-4 xl:flex">
           <template v-if="authStore.isAuthenticated">
-            <SigninControl />
             <button class="nav-icon-button relative h-10 w-10 dark:text-gray-300" type="button" aria-label="通知" title="通知" @click="$router.push('/notifications')">
               <BellIcon class="h-6 w-6" aria-hidden="true" />
               <span v-if="unreadStore.hasNotifications" class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black" aria-label="有未读通知"></span>
@@ -43,17 +43,64 @@
             <router-link to="/soups/create" class="liquid-primary inline-flex min-h-10 items-center px-4 py-2 text-sm font-bold">发布</router-link>
 
             <div class="relative">
-              <button class="glass-button flex h-10 w-10 items-center justify-center p-1" type="button" aria-label="打开账号菜单" title="账号菜单" @click="showUserMenu = !showUserMenu">
-                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">{{ userInitial }}</span>
+              <button
+                class="nav-icon-button flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-md dark:border-neutral-700 dark:bg-neutral-900/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_8px_rgba(0,0,0,0.3)]"
+                type="button"
+                aria-label="打开账号菜单"
+                title="账号菜单"
+                @click="showUserMenu = !showUserMenu"
+              >
+                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-sky-500 font-semibold text-white shadow-inner">
+                  {{ userInitial }}
+                </span>
               </button>
               <transition name="fade">
-                <div v-if="showUserMenu" class="glass-popover absolute right-0 mt-2 w-48 overflow-hidden rounded-md py-2">
-                  <router-link :to="`/profile/${authStore.user?.uid}`" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">个人主页</router-link>
-                  <router-link to="/settings" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">设置</router-link>
-                  <router-link v-if="authStore.isAdmin" to="/admin" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">管理后台</router-link>
-                  <router-link v-if="authStore.isRoot" :to="{ path: '/admin/broadcasts', query: { tab: 'email' } }" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">邮件群发</router-link>
-                  <hr class="my-2 border-gray-200 dark:border-neutral-800">
-                  <button class="w-full px-4 py-2 text-left text-red-500 transition hover:bg-white/60 dark:hover:bg-white/10" type="button" @click="handleLogout">退出登录</button>
+                <div v-if="showUserMenu" class="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_12px_32px rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-neutral-700 dark:bg-neutral-900/80 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_12px_32px rgba(0,0,0,0.4)]">
+                  <SigninControl />
+                  <hr class="my-2 border-slate-200/60 dark:border-neutral-700/60">
+                  <router-link
+                    :to="`/profile/${authStore.user?.uid}`"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <UserCircleIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>个人主页</span>
+                  </router-link>
+                  <router-link
+                    to="/settings"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <Cog6ToothIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>设置</span>
+                  </router-link>
+                  <router-link
+                    v-if="authStore.isAdmin"
+                    to="/admin"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <ShieldCheckIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>管理后台</span>
+                  </router-link>
+                  <router-link
+                    v-if="authStore.isRoot"
+                    :to="{ path: '/admin/broadcasts', query: { tab: 'email' } }"
+                    class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 transition hover:bg-white/50 dark:text-slate-300 dark:hover:bg-white/10"
+                    @click="showUserMenu = false"
+                  >
+                    <MegaphoneIcon class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>邮件群发</span>
+                  </router-link>
+                  <hr class="my-2 border-slate-200/60 dark:border-neutral-700/60">
+                  <button
+                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    type="button"
+                    @click="handleLogout"
+                  >
+                    <ArrowLeftOnRectangleIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>退出登录</span>
+                  </button>
                 </div>
               </transition>
             </div>
@@ -78,6 +125,7 @@
         >
           <Bars3Icon class="h-6 w-6" aria-hidden="true" />
         </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -242,7 +290,7 @@ const browseLinks = [
   { path: '/soups', label: '海龟汤', icon: PuzzlePieceIcon },
   { path: '/leaderboard', label: '排行榜', icon: TrophyIcon },
   { path: '/hall-of-fame', label: '殿堂', icon: SparklesIcon },
-  { path: '/posts', label: '论坛', icon: RectangleStackIcon },
+  { path: '/posts', label: '公告', icon: RectangleStackIcon },
   { path: '/competitions', label: '比赛', icon: SparklesIcon },
 ]
 
@@ -292,7 +340,10 @@ function closeUserMenu(event: MouseEvent) {
 }
 
 function closeOnEscape(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeMobileMenu()
+  if (event.key === 'Escape') {
+    closeMobileMenu()
+    showUserMenu.value = false
+  }
 }
 
 watch(

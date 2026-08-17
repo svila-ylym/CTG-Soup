@@ -7,8 +7,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-const TRAIL_LENGTH = 7
-const IDLE_TIMEOUT = 620
+const TRAIL_LENGTH = 12
+const IDLE_TIMEOUT = 800
 const trailRoot = ref<HTMLElement | null>(null)
 const positions = Array.from({ length: TRAIL_LENGTH }, () => ({ x: 0, y: 0 }))
 const target = { x: 0, y: 0 }
@@ -29,13 +29,15 @@ function renderTrail(timestamp: number) {
   const velocity = Math.hypot(target.x - positions[0].x, target.y - positions[0].y)
   positions.forEach((position, index) => {
     const leader = index === 0 ? target : positions[index - 1]
-    const easing = Math.max(0.15, 0.38 - index * 0.032)
+    const easing = Math.max(0.08, 0.25 - index * 0.016)
     position.x += (leader.x - position.x) * easing
     position.y += (leader.y - position.y) * easing
-    const leadPulse = index === 0 ? Math.min(0.16, velocity / 180) : 0
-    const scale = 1 - index * 0.085 + leadPulse
+    const leadPulse = index === 0 ? Math.min(0.1, velocity / 240) : 0
+    const scale = 1 - index * 0.055 + leadPulse
     const dot = dots[index]
-    if (dot) dot.style.transform = `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -50%) scale(${scale})`
+    if (dot) {
+      dot.style.transform = `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -50%) scale(${scale})`
+    }
   })
 
   if (timestamp - lastPointerMove > IDLE_TIMEOUT) {
