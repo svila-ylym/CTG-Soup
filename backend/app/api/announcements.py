@@ -47,6 +47,19 @@ def list_announcements(
     return {"items": items, "total": total, "page": page, "page_size": page_size, "total_pages": (total + page_size - 1) // page_size}
 
 
+@router.get("/{announcement_id}", response_model=AnnouncementResponse)
+def get_announcement(
+    announcement_id: int,
+    db: Session = Depends(get_db),
+):
+    announcement = db.get(Announcement, announcement_id)
+    if not announcement:
+        raise HTTPException(404, "公告不存在")
+    if announcement.status != AnnouncementStatus.PUBLISHED:
+        raise HTTPException(404, "公告不存在或未发布")
+    return announcement
+
+
 @router.post("", response_model=AnnouncementResponse, status_code=status.HTTP_201_CREATED)
 def create_announcement(
     data: AnnouncementCreate,
